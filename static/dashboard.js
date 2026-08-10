@@ -71,16 +71,43 @@ function fmt2(value) {
     return num.toFixed(2);
 }
 
-/** Format a timestamp for display. */
+/** Format a timestamp for friendly display.
+ *  Converts ISO timestamps to "10 Aug 2026, 19:56" format. */
 function formatTimestamp(iso) {
     if (!iso) return "";
     try {
         var d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
         if (isNaN(d.getTime())) return iso;
-        return d.toLocaleString();
+        var day = d.getDate();
+        var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        var month = months[d.getMonth()];
+        var year = d.getFullYear();
+        var hh = d.getHours().toString().padStart(2, "0");
+        var mm = d.getMinutes().toString().padStart(2, "0");
+        return day + " " + month + " " + year + ", " + hh + ":" + mm;
     } catch (e) {
         return iso;
     }
+}
+
+/** Format a number as integer for display (Fix 3: token counts). */
+function fmtInt(value) {
+    if (value === null || value === undefined || value === "") return "\u2014";
+    var num = parseInt(value, 10);
+    if (isNaN(num)) return "\u2014";
+    return num.toString();
+}
+
+/** Format TTFT value: seconds if >= 1s, milliseconds if < 1s (Fix 7). */
+function formatTtft(value) {
+    if (value === null || value === undefined || value === "") return "\u2014";
+    var num = parseFloat(value);
+    if (isNaN(num)) return "\u2014";
+    if (num >= 1) {
+        return num.toFixed(2) + " s";
+    }
+    var ms = Math.round(num * 1000);
+    return ms + " ms";
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +121,7 @@ executionEnvSelect.addEventListener("change", function () {
     } else {
         connectionRow.classList.add("hidden");
         connectionTypeSelect.disabled = true;
-        connectionTypeSelect.value = "Local network";
+        connectionTypeSelect.value = "";
     }
 });
 
@@ -146,7 +173,31 @@ async function loadModels() {
             opt.value = m.key;
             opt.textContent = m.name || m.key;
             if (m.quantization) {
-                opt.textContent += " (" + m.quantization + ")";
+                // Fix 1: Handle object quantization metadata safely
+                var quantName = m.quantization;
+                if (typeof quantName === "object" && quantName !== null) {
+                    // Try multiple property names that LM Studio might use
+                    quantName = quantName.name || quantName.display_name || quantName.quant || null;
+                    // If still no name, try to extract something useful
+                    if (!quantName) {
+                        // Try to get the first meaningful string value
+                        var keys = Object.keys(quantName);
+                        for (var ki = 0; ki < keys.length; ki++) {
+                            var v = quantName[keys[ki]];
+                            if (typeof v === "string" && v) {
+                                quantName = v;
+                                break;
+                            }
+                        }
+                    }
+                    // Final fallback: don't show anything if we can't parse it
+                    if (typeof quantName === "object") {
+                        quantName = null;
+                    }
+                }
+                if (quantName) {
+                    opt.textContent += " (" + quantName + ")";
+                }
             }
             modelSelect.appendChild(opt);
         }
@@ -250,9 +301,9 @@ function renderRunResult(result, isLatest) {
             '<th>Itr</th>' +
             '<th>Type</th>' +
             '<th>tok/s</th>' +
-            '<th>TTFT (s)</th>' +
-            '<th>Input tok</th>' +
-            '<th>Output tok</th>' +
+            '<th>TTFT</th>' +
+            '<th>Input tokens</th>' +
+            '<th>Output tokens</th>' +
             '<th>Wall (s)</th>' +
         '</tr></thead>' +
         '<tbody></tbody>';
@@ -268,9 +319,9 @@ function renderRunResult(result, isLatest) {
             '<td>' + r.iteration + '</td>' +
             '<td>' + (iterType === "cold" ? '\u2744 Cold' : '\u2600 Warm') + '</td>' +
             '<td>' + fmt2(r.tokens_per_second) + '</td>' +
-            '<td>' + fmt2(r.ttft_seconds) + '</td>' +
-            '<td>' + fmt2(r.input_tokens) + '</td>' +
-            '<td>' + fmt2(r.output_tokens) + '</td>' +
+            '<td>' + formatTtft(r.ttft_seconds) + '</td>' +
+            '<td>' + fmtInt(r.input_tokens) + '</td>' +
+            '<td>' + fmtInt(r.output_tokens) + '</td>' +
             '<td>' + fmt2(r.wall_time_seconds) + '</td>';
         tbody.appendChild(tr);
     }
@@ -505,6 +556,8 @@ function createChartContainer(title, id) {
 /**
  * Chart A: Tokens/sec by iteration.
  * Shows cold (iteration 1) and warm (iterations 2+) points with a line.
+ * Fix 5: Auto-scale Y-axis around observed results instead of starting from zero.
+ * Fix 6: Increased margins to prevent label/badge clipping.
  */
 function renderTokensPerSecChart(runs) {
     if (!runs || runs.length === 0) return null;
@@ -512,27 +565,59 @@ function renderTokensPerSecChart(runs) {
     var validRuns = runs.filter(function (r) { return r.tokens_per_second > 0; });
     if (validRuns.length === 0) return null;
 
-    var chartW = 500, chartH = 260;
-    var margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    var chartW = 500, chartH = 280;
+    // Fix 6: Increased margins (bottom from 40->55, left from 60->70, top from 20->30)
+    var margin = { top: 30, right: 30, bottom: 55, left: 70 };
     var w = chartW - margin.left - margin.right;
     var h = chartH - margin.top - margin.bottom;
 
-    var maxTps = 0;
+    // Fix 5: Auto-scale around observed range (min and max)
+    var minTps = Infinity, maxTps = -Infinity;
     for (var i = 0; i < validRuns.length; i++) {
-        if (validRuns[i].tokens_per_second > maxTps) maxTps = validRuns[i].tokens_per_second;
+        var v = validRuns[i].tokens_per_second;
+        if (v < minTps) minTps = v;
+        if (v > maxTps) maxTps = v;
     }
-    maxTps = maxTps * 1.15 || 100;
+    // Ensure minTps is 0 only when all values are 0
+    if (minTps <= 0) minTps = 0;
+    
+    // Add 10% padding on both sides, but ensure minimum range of 10
+    var dataRange = maxTps - minTps;
+    if (dataRange < 10) {
+        dataRange = 10;
+        // Center around the midpoint if range is too small
+        minTps = Math.max(0, (maxTps + minTps) / 2 - 5);
+        maxTps = minTps + 10;
+    }
+    var padding = Math.max(dataRange * 0.10, 5);
+    minTps = Math.max(0, minTps - padding);
+    maxTps = maxTps + padding;
 
+    var yMax = maxTps;
+    var yMin = minTps;
+    
+    // Calculate nice Y-axis ticks
+    var yRange = yMax - yMin;
     var maxYTicks = 5;
-    var yStep = maxTps / maxYTicks;
-    if (yStep === 0) yStep = 10;
-    var yMax = Math.ceil(maxTps / yStep) * yStep;
+    var yStepRaw = yRange / maxYTicks;
+    // Round yStep to a nice number
+    var magnitude = Math.pow(10, Math.floor(Math.log10(yStepRaw)));
+    var residual = yStepRaw / magnitude;
+    var niceStep;
+    if (residual <= 1.5) niceStep = 1 * magnitude;
+    else if (residual <= 3) niceStep = 2 * magnitude;
+    else if (residual <= 7) niceStep = 5 * magnitude;
+    else niceStep = 10 * magnitude;
+    
+    var yMaxNice = Math.ceil(yMax / niceStep) * niceStep;
+    var yMinNice = Math.floor(yMin / niceStep) * niceStep;
 
     var points = [];
     for (var j = 0; j < validRuns.length; j++) {
         var r = validRuns[j];
         var x = margin.left + (r.iteration - 1) / Math.max(runs.length - 1, 1) * w;
-        var y = margin.top + h - (r.tokens_per_second / yMax) * h;
+        // Fix 5: Scale Y position around observed range
+        var y = margin.top + h - ((r.tokens_per_second - yMin) / (yMax - yMin)) * h;
         points.push({ x: x, y: y, run: r });
     }
 
@@ -547,10 +632,12 @@ function renderTokensPerSecChart(runs) {
         fill: "#1a1a2e", rx: 4
     }));
 
-    // Grid lines and Y labels
+    // Grid lines and Y labels (Fix 5: use auto-scaled range)
     for (var t = 0; t <= maxYTicks; t++) {
-        var val = t * yStep;
-        var gy = margin.top + h - (val / yMax) * h;
+        var val = yMin + t * niceStep;
+        var gy = margin.top + h - ((val - yMin) / (yMax - yMin)) * h;
+        // Clamp gy to stay within chart area
+        gy = Math.max(margin.top, Math.min(margin.top + h, gy));
         svg.appendChild(svgCreate("line", {
             x1: margin.left, y1: gy, x2: margin.left + w, y2: gy,
             stroke: "#333", "stroke-width": 0.5
@@ -559,7 +646,7 @@ function renderTokensPerSecChart(runs) {
             x: margin.left - 8, y: gy + 4,
             fill: "#999", "font-size": "10", "text-anchor": "end"
         });
-        yLabel.textContent = val.toFixed(0);
+        yLabel.textContent = Math.round(val);
         svg.appendChild(yLabel);
     }
 
@@ -650,6 +737,7 @@ function renderTokensPerSecChart(runs) {
 /**
  * Chart B: TTFT by iteration.
  * Uses bar chart since TTFT values are typically small.
+ * Fix 6: Increased margins to prevent Cold/Warm badge clipping.
  */
 function renderTtftChart(runs) {
     if (!runs || runs.length === 0) return null;
@@ -657,8 +745,9 @@ function renderTtftChart(runs) {
     var validRuns = runs.filter(function (r) { return r.ttft_seconds > 0; });
     if (validRuns.length === 0) return null;
 
-    var chartW = 500, chartH = 260;
-    var margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    var chartW = 500, chartH = 280;
+    // Fix 6: Increased margins (bottom from 40->55, left from 60->70, top from 20->30)
+    var margin = { top: 30, right: 30, bottom: 55, left: 70 };
     var w = chartW - margin.left - margin.right;
     var h = chartH - margin.top - margin.bottom;
 
@@ -782,6 +871,7 @@ function renderTtftChart(runs) {
 /**
  * Chart C: Historical comparison.
  * Shows warm avg tokens/sec and warm avg TTFT for each run.
+ * Fix 6: Increased left margin to prevent Y-axis label clipping.
  */
 function renderHistoricalComparison(groupedRuns) {
     if (!groupedRuns || groupedRuns.length === 0) return null;
@@ -814,7 +904,8 @@ function renderHistoricalComparison(groupedRuns) {
     if (runsWithWarm.length === 0) return null;
 
     var chartW = 520, chartH = 280;
-    var margin = { top: 25, right: 20, bottom: 50, left: 60 };
+    // Fix 6: Increased left margin from 60->70 to prevent Y-axis label clipping
+    var margin = { top: 30, right: 30, bottom: 55, left: 70 };
     var w = chartW - margin.left - margin.right;
     var h = chartH - margin.top - margin.bottom;
 
