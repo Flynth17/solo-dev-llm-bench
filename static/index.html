@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solo Dev LLM Bench</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Solo Dev LLM Bench</h1>
+        <p class="subtitle">Measure performance trade-offs when switching LLMs, hardware, or environments</p>
+
+        <!-- Configuration Panel -->
+        <section class="panel">
+            <h2>Configuration</h2>
+
+            <!-- Execution Environment -->
+            <div class="form-row">
+                <label for="execution-env">Execution Environment</label>
+                <select id="execution-env">
+                    <option value="Local" selected>Local</option>
+                    <option value="Self-hosted">Self-hosted</option>
+                    <option value="Cloud">Cloud</option>
+                </select>
+            </div>
+
+            <!-- Connection Type (shown when Self-hosted) -->
+            <div class="form-row hidden" id="connection-row">
+                <label for="connection-type">Connection</label>
+                <select id="connection-type">
+                    <option value="Local network" selected>Local network</option>
+                    <option value="Remote connection">Remote connection</option>
+                </select>
+            </div>
+
+            <!-- Hardware Label -->
+            <div class="form-row">
+                <label for="hardware-label">Hardware / Machine <span class="optional">(optional)</span></label>
+                <input type="text" id="hardware-label" placeholder="e.g. RTX 5090 Desktop, Work Laptop, Raspberry Pi 5">
+            </div>
+
+            <div class="form-row">
+                <label for="lm-studio-url">LM Studio URL</label>
+                <input type="text" id="lm-studio-url" placeholder="http://localhost:1234">
+            </div>
+
+            <div class="form-row">
+                <label for="model-select">Model</label>
+                <div class="model-select-wrapper">
+                    <select id="model-select">
+                        <option value="">— Select a model —</option>
+                    </select>
+                    <button id="refresh-models" title="Refresh model list">&#x21bb;</button>
+                </div>
+            </div>
+
+            <!-- Prompt Preset Selector -->
+            <div class="form-row">
+                <label for="prompt-preset">Prompt preset</label>
+                <div class="prompt-presets-wrapper">
+                    <select id="prompt-preset">
+                        <option value="">— Custom —</option>
+                    </select>
+                    <button id="save-prompt-btn" title="Save current prompt as preset">&#x1F4BE;</button>
+                    <button id="rename-prompt-btn" title="Rename selected preset">&#x270E;</button>
+                    <button id="delete-prompt-btn" title="Delete selected preset">&#x1F5D1;</button>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label for="prompt">Benchmark Prompt</label>
+                <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
+            </div>
+
+            <div class="form-row-inline">
+                <div class="form-row half">
+                    <label for="iterations">Iterations</label>
+                    <input type="number" id="iterations" value="5" min="1" max="100">
+                </div>
+                <div class="form-row half">
+                    <label for="max-tokens">Max Output Tokens</label>
+                    <input type="number" id="max-tokens" value="500" min="1" max="10000">
+                </div>
+                <div class="form-row half">
+                    <label for="temperature">Temperature</label>
+                    <input type="number" id="temperature" value="0" min="0" max="2" step="0.1">
+                </div>
+            </div>
+
+            <button id="run-benchmark" class="btn-primary">Run Benchmark</button>
+        </section>
+
+        <!-- Status -->
+        <section id="status" class="status hidden"></section>
+
+        <!-- Results Panel -->
+        <section id="results-panel" class="panel hidden">
+            <h2>Results</h2>
+            <div id="results-container"></div>
+            <div id="results-charts"></div>
+        </section>
+
+        <!-- Historical Runs -->
+        <section id="history-panel" class="panel hidden">
+            <h2>Historical Runs</h2>
+            <div id="history-container"></div>
+            <div id="history-charts"></div>
+        </section>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
