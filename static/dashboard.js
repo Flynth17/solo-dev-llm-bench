@@ -72,11 +72,21 @@ function fmt2(value) {
 }
 
 /** Format a timestamp for friendly display.
- *  Converts ISO timestamps to "10 Aug 2026, 19:56" format. */
+ *  Converts ISO timestamps to "10 Aug 2026, 19:56" format.
+ *  Fix v1.0.2: Handle Python ISO format with any timezone suffix (+00:00, -05:00, etc). */
 function formatTimestamp(iso) {
     if (!iso) return "";
     try {
-        var d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
+        // Normalize timezone suffix so Date() can parse it reliably
+        var normalized = iso;
+        // Replace any trailing +HH:MM or -HH:MM timezone offset with Z
+        // This handles Python's datetime.isoformat() output like 2026-08-10T19:22:08.817702+00:00
+        if (/[+-]\d{2}:\d{2}$/.test(normalized)) {
+            normalized = normalized.replace(/[+-]\d{2}:\d{2}$/, "Z");
+        } else if (!normalized.endsWith("Z")) {
+            normalized = normalized + "Z";
+        }
+        var d = new Date(normalized);
         if (isNaN(d.getTime())) return iso;
         var day = d.getDate();
         var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -268,6 +278,7 @@ function renderRunResult(result, isLatest) {
     }
     badgesHtml += '</div>';
 
+    // Fix v1.0.1: Use formatTimestamp for Latest Run timestamp (was showing raw ISO)
     var header = document.createElement("h3");
     header.innerHTML = label + ' \u2014 <code>' + escapeHtml(result.model || "") + '</code> <span class="timestamp">(' + formatTimestamp(result.timestamp) + ')</span>';
 
@@ -284,10 +295,11 @@ function renderRunResult(result, isLatest) {
     var warmAgg = result.warm_aggregate || {};
     var warmHtml = "";
     if (warmAgg.available) {
+        // Fix v1.0.1 screenshot: Warm TTFT uses formatTtft (shows ms for <1s)
         warmHtml = '<h4>Warm (iterations 2+)</h4>' +
             '<div class="warm-aggregate">' +
                 '<div class="aggregate-item"><div class="label">Avg</div><div class="value">' + fmt2(warmAgg.avg_tokens_per_second) + ' tok/s</div></div>' +
-                '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + fmt2(warmAgg.avg_ttft) + ' s</div></div>' +
+                '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(warmAgg.avg_ttft) + '</div></div>' +
             '</div>';
     } else {
         warmHtml = '<h4>Warm (iterations 2+)</h4>' +
@@ -411,9 +423,10 @@ function renderHistory(allRuns) {
         if (warmTps.length > 0) {
             var warmAvg = warmTps.reduce(function (a, b) { return a + b; }, 0) / warmTps.length;
             var warmAvgTtft = warmTtfts.reduce(function (a, b) { return a + b; }, 0) / warmTtfts.length;
+            // Fix v1.0.1 screenshot: Warm TTFT uses formatTtft (shows ms for <1s)
             warmHtml = '<div class="warm-aggregate" style="margin-top:0.5rem">' +
                 '<div class="aggregate-item"><div class="label">Warm Avg</div><div class="value">' + warmAvg.toFixed(2) + ' tok/s</div></div>' +
-                '<div class="aggregate-item"><div class="label">Warm TTFT</div><div class="value">' + warmAvgTtft.toFixed(2) + ' s</div></div>' +
+                '<div class="aggregate-item"><div class="label">Warm TTFT</div><div class="value">' + formatTtft(warmAvgTtft) + '</div></div>' +
             '</div>';
         } else {
             warmHtml = '<div class="warm-aggregate" style="margin-top:0.5rem"><span class="unavailable">Unavailable</span></div>';
@@ -557,7 +570,7 @@ function createChartContainer(title, id) {
  * Chart A: Tokens/sec by iteration.
  * Shows cold (iteration 1) and warm (iterations 2+) points with a line.
  * Fix 5: Auto-scale Y-axis around observed results instead of starting from zero.
- * Fix 6: Increased margins to prevent label/badge clipping.
+ * Fix v1.0.2: Internal horizontal inset so first/last points don't clip.
  */
 function renderTokensPerSecChart(runs) {
     if (!runs || runs.length === 0) return null;
@@ -566,10 +579,16 @@ function renderTokensPerSecChart(runs) {
     if (validRuns.length === 0) return null;
 
     var chartW = 500, chartH = 280;
-    // Fix 6: Increased margins (bottom from 40->55, left from 60->70, top from 20->30)
     var margin = { top: 30, right: 30, bottom: 55, left: 70 };
     var w = chartW - margin.left - margin.right;
     var h = chartH - margin.top - margin.bottom;
+
+    // Fix v1.0.2: Internal horizontal inset for data points so first/last points
+    // are never on the plot boundary. Points are spread across [margin.left+inset, margin.right+inset].
+    var pointInset = 18;
+    var plotLeft = margin.left + pointInset;
+    var plotRight = chartW - margin.right - pointInset;
+    var plotWidth = plotRight - plotLeft;
 
     // Fix 5: Auto-scale around observed range (min and max)
     var minTps = Infinity, maxTps = -Infinity;
@@ -615,7 +634,10 @@ function renderTokensPerSecChart(runs) {
     var points = [];
     for (var j = 0; j < validRuns.length; j++) {
         var r = validRuns[j];
-        var x = margin.left + (r.iteration - 1) / Math.max(runs.length - 1, 1) * w;
+        // Fix v1.0.2: Distribute points across the inset plot area [plotLeft, plotRight]
+        var totalSlots = runs.length - 1;
+        var slotWidth = totalSlots > 0 ? plotWidth / totalSlots : 0;
+        var x = plotLeft + (r.iteration - 1) * slotWidth;
         // Fix 5: Scale Y position around observed range
         var y = margin.top + h - ((r.tokens_per_second - yMin) / (yMax - yMin)) * h;
         points.push({ x: x, y: y, run: r });
@@ -650,10 +672,12 @@ function renderTokensPerSecChart(runs) {
         svg.appendChild(yLabel);
     }
 
-    // X labels
+    // X labels (use same inset x-coordinates as points)
     for (var k = 0; k < runs.length; k++) {
         var r = runs[k];
-        var px = margin.left + (r.iteration - 1) / Math.max(runs.length - 1, 1) * w;
+        var totalSlots = runs.length - 1;
+        var slotWidth = totalSlots > 0 ? plotWidth / totalSlots : 0;
+        var px = plotLeft + (r.iteration - 1) * slotWidth;
         var xLabel = svgCreate("text", {
             x: px, y: chartH - 5,
             fill: "#999", "font-size": "10", "text-anchor": "middle"
@@ -686,22 +710,23 @@ function renderTokensPerSecChart(runs) {
             fill: color, stroke: "#fff", "stroke-width": 1.5
         }));
 
-        // Value label above point
+        // Value label above point (shifted up to avoid overlap)
         var valLabel = svgCreate("text", {
-            x: pt.x, y: pt.y - 10,
+            x: pt.x, y: pt.y - 14,
             fill: "#fff", "font-size": "10", "text-anchor": "middle"
         });
         valLabel.textContent = pt.run.tokens_per_second.toFixed(1);
         svg.appendChild(valLabel);
 
-        // Cold/Warm badge below point
+        // Cold/Warm badge below point (shifted down to avoid overlap with value label)
+        var badgeY = pt.y + 14;
         var badgeRect = svgCreate("rect", {
-            x: pt.x - 16, y: pt.y + 10, width: 32, height: 14,
+            x: pt.x - 16, y: badgeY, width: 32, height: 14,
             fill: color, rx: 3, opacity: 0.8
         });
         svg.appendChild(badgeRect);
         var badgeText = svgCreate("text", {
-            x: pt.x, y: pt.y + 20,
+            x: pt.x, y: badgeY + 10,
             fill: "#fff", "font-size": "8", "text-anchor": "middle"
         });
         badgeText.textContent = label;
