@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Past Results — Solo Dev LLM Bench</title>
+    <title>Results — Solo Dev LLM Bench</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -15,8 +15,19 @@
             </div>
         </div>
 
-        <!-- Filter Bar -->
-        <section class="panel filter-panel">
+        <!-- Navigation Bar -->
+        <section class="panel" style="padding:0.75rem 1rem;">
+            <div class="tab-bar">
+                <button id="nav-raw-speed" class="tab-btn active" data-type="raw">Raw Speed</button>
+                <button id="nav-markdown" class="tab-btn" data-type="markdown">Markdown</button>
+                <button id="nav-python" class="tab-btn" data-type="python">Python</button>
+                <button id="nav-java" class="tab-btn" data-type="java">Java</button>
+                <button id="nav-unsolvable" class="tab-btn" data-type="unsolvable">Unsolvable</button>
+            </div>
+        </section>
+
+        <!-- Filter Bar (shown only for Raw Speed) -->
+        <section id="filter-bar" class="panel filter-panel hidden">
             <h2>Filter Results</h2>
             <div class="filter-row">
                 <div class="filter-group">
@@ -42,48 +53,29 @@
             </div>
         </section>
 
-        <!-- Tab Bar -->
-        <section class="panel" style="padding:0.75rem 1rem;">
-            <div class="tab-bar">
-                <button id="tab-tasks" class="tab-btn active">Task History</button>
-                <button id="tab-benchmarks" class="tab-btn">Raw Speed</button>
-            </div>
-        </section>
-
-        <!-- Task-Type Filter Bar (shown only under Task History) -->
-        <section id="task-type-filter" class="panel task-type-filter visible" style="padding:0.5rem 1rem;">
-            <div class="task-type-tabs">
-                <button class="task-type-btn active" data-type="all">All</button>
-                <button class="task-type-btn" data-type="markdown">Markdown</button>
-                <button class="task-type-btn" data-type="python">Python</button>
-                <button class="task-type-btn" data-type="java">Java</button>
-                <button class="task-type-btn" data-type="unsolvable">Unsolvable</button>
-            </div>
-        </section>
-
         <!-- Results Count -->
         <div id="results-count" class="results-count"></div>
 
-        <!-- Benchmark Results -->
-        <section id="results-panel" class="panel hidden">
-            <h2>Past Results</h2>
-            <div id="results-container"></div>
-        </section>
-
-        <!-- Task History -->
-        <section id="task-history-section" class="panel">
-            <h2>Task History</h2>
-            <div id="task-history-container"></div>
-            <div id="task-history-empty" class="empty-state hidden">No results for this type yet.</div>
-        </section>
-
-        <!-- Historical Comparison Chart -->
-        <section id="charts-panel" class="panel hidden">
+        <!-- Historical Comparison Chart (Raw Speed) -->
+        <section id="charts-panel" class="panel">
             <h2>Historical Comparison</h2>
             <div id="charts-container"></div>
         </section>
 
-        <!-- Empty State -->
+        <!-- Benchmark Runs (Raw Speed) -->
+        <section id="results-panel" class="panel">
+            <h2>Past Runs</h2>
+            <div id="results-container"></div>
+        </section>
+
+        <!-- Task Results (Markdown / Python / Java / Unsolvable) -->
+        <section id="task-history-section" class="panel hidden">
+            <h2>Results</h2>
+            <div id="task-history-container"></div>
+            <div id="task-history-empty" class="empty-state hidden">No results yet.</div>
+        </section>
+
+        <!-- Empty State (fallback) -->
         <section id="empty-state" class="panel hidden">
             <h2>No Results Found</h2>
             <p>There are no benchmark results to display. Run a benchmark from the main page to get started.</p>

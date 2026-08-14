@@ -105,8 +105,8 @@ var allRuns = [];
 var filteredRuns = [];
 var allTasks = [];
 
-// Active view — default to "all"
-var activeView = "all"; // "all", "raw", "markdown", "python", "java", "unsolvable"
+// Active view — default to "raw" (Raw Speed)
+var activeView = "raw"; // "raw", "markdown", "python", "java", "unsolvable"
 
 // ---------------------------------------------------------------------------
 // Load results from backend
@@ -842,10 +842,9 @@ resultsContainer.addEventListener("click", function (e) {
 });
 
 // ---------------------------------------------------------------------------
-// Unified navigation (All | Raw Speed | Markdown | Python | Java | Unsolvable)
+// Navigation (Raw Speed | Markdown | Python | Java | Unsolvable)
 // ---------------------------------------------------------------------------
 
-var navAll = document.getElementById("nav-all");
 var navRawSpeed = document.getElementById("nav-raw-speed");
 var navMarkdown = document.getElementById("nav-markdown");
 var navPython = document.getElementById("nav-python");
@@ -857,12 +856,11 @@ function switchView(view) {
     activeView = view;
 
     // Update active button
-    var allNav = [navAll, navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
-    for (var i = 0; i < allNav.length; i++) {
-        if (allNav[i]) allNav[i].classList.remove("active");
+    var navButtons2 = [navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
+    for (var i = 0; i < navButtons2.length; i++) {
+        if (navButtons2[i]) navButtons2[i].classList.remove("active");
     }
     switch (view) {
-        case "all": if (navAll) navAll.classList.add("active"); break;
         case "raw": if (navRawSpeed) navRawSpeed.classList.add("active"); break;
         case "markdown": if (navMarkdown) navMarkdown.classList.add("active"); break;
         case "python": if (navPython) navPython.classList.add("active"); break;
@@ -871,7 +869,7 @@ function switchView(view) {
     }
 
     if (view === "raw") {
-        // Raw Speed mode
+        // Raw Speed mode — show performance data, hide task results
         if (taskHistorySection) taskHistorySection.classList.add("hidden");
         if (filterBar) filterBar.classList.remove("hidden");
         resultsPanel.classList.remove("hidden");
@@ -881,10 +879,11 @@ function switchView(view) {
             renderHistoryCharts();
         }
     } else {
-        // Task results mode
+        // Task results mode — hide performance data, show task results
         if (filterBar) filterBar.classList.add("hidden");
         resultsPanel.classList.add("hidden");
         if (chartsPanel) chartsPanel.classList.add("hidden");
+        if (chartsPanel) chartsPanel.innerHTML = "";
         // Set active task type from view
         activeTaskType = view;
         // Load and render tasks
@@ -894,7 +893,6 @@ function switchView(view) {
 }
 
 // Attach click handlers to all nav buttons
-var navButtons = [navAll, navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
 for (var ni = 0; ni < navButtons.length; ni++) {
     (function (btn) {
         if (btn) {
@@ -1250,6 +1248,5 @@ for (var bi = 0; bi < taskTypeBtns.length; bi++) {
 // ---------------------------------------------------------------------------
 
 loadResults();
-// Initialize the page through the same function used when the user clicks All
-// This ensures first-load state and manual-click state use the same code path
-switchView("all");
+// Initialize the page in Raw Speed view by default
+switchView("raw");
