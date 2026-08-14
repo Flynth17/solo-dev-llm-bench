@@ -859,6 +859,8 @@ function switchTab(tab) {
         tabBenchmarks.classList.remove("active");
         resultsPanel.classList.add("hidden");
         if (taskHistorySection) taskHistorySection.classList.remove("hidden");
+        // Hide benchmark chart during task history
+        if (chartsPanel) chartsPanel.classList.add("hidden");
         // Load tasks if not yet loaded
         if (allTasks.length === 0) {
             loadTasks();
