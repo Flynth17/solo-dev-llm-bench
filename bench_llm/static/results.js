@@ -173,6 +173,11 @@ function clearFilters() {
 // ---------------------------------------------------------------------------
 
 function renderResults() {
+    // Only render Raw Speed content when Raw Speed view is active
+    if (activeView !== "raw") {
+        return;
+    }
+
     var runs = filteredRuns;
 
     // Update count
@@ -289,6 +294,10 @@ function renderResults() {
 // ---------------------------------------------------------------------------
 
 function renderHistoryCharts() {
+    // Only render chart when Raw Speed view is active
+    if (activeView !== "raw") {
+        return;
+    }
     if (filteredRuns.length === 0) {
         chartsPanel.classList.add("hidden");
         return;
