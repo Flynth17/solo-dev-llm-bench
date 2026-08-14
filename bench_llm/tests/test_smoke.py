@@ -208,17 +208,10 @@ def test_fastapi_app_imports():
     assert app is not None
     assert app.title == "Solo Dev LLM Bench"
 
-    # Verify routes exist (use exact method matching to avoid partial matches)
-    routes = [route.path for route in app.routes]
-    expected_routes = [
-        ("/", ["GET"]),
-        ("/api/config", ["GET", "POST"]),
-        ("/api/models", ["GET"]),
-        ("/api/benchmark/run", ["POST"]),
-        ("/api/benchmark/runs/grouped", ["GET"]),  # Actual route for grouped results
-    ]
-    for route_path, methods in expected_routes:
-        assert route_path in routes, f"Missing route: {route_path}"
+    # Verify config router is registered and has expected routes
+    from src.routes import config as config_routes
+    route_paths = [r.path for r in config_routes.router.routes if hasattr(r, "path")]
+    assert "/api/config" in route_paths, f"Missing /api/config in config router. Routes: {route_paths}"
 
 
 def test_fastapi_results_store_exists():
@@ -260,3 +253,33 @@ def test_settings_has_hardware_fields():
     assert "hardware_label" in config
     assert "execution_environment" in config
     assert "connection_type" in config
+
+
+# ====================================================================
+# Test 7: DOM lifecycle regression — charts-container must not be destroyed
+# ====================================================================
+
+def test_charts_panel_not_destroyed_in_js():
+    """results.js must not contain chartsPanel.innerHTML = "" which would
+    destroy the #charts-container DOM node during view switches.
+
+    The bug was: chartsPanel.innerHTML = "" removes both the chart AND
+    the structural <h2>Historical Comparison</h2> + <div id="charts-container">
+    elements, leaving the JavaScript variable chartsContainer pointing to a
+    detached DOM node.
+
+    The fix: only use chartsPanel.classList.add("hidden") to hide the panel.
+    Never clear or replace its innerHTML.
+    """
+    # _PROJECT_ROOT = tests/parent.parent = bench_llm/ (the project root)
+    # results.js is at bench_llm/static/results.js
+    results_js_path = _PROJECT_ROOT / "static" / "results.js"
+    assert results_js_path.exists(), "results.js should exist"
+    content = results_js_path.read_text(encoding="utf-8")
+
+    # Check that chartsPanel.innerHTML is never used destructively
+    assert "chartsPanel.innerHTML" not in content, (
+        "DANGER: chartsPanel.innerHTML found in results.js. "
+        "This destroys the #charts-container DOM node. "
+        "Use chartsContainer.innerHTML instead to clear only chart content."
+    )

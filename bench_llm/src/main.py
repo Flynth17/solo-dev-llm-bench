@@ -18,6 +18,7 @@ from src.task_markdown import run_markdown_task, TASK_DEFINITION as MD_TASK_DEF
 from src.config_loader import load_config, save_config
 from src.results import ResultsStore
 from src import task_manager
+from src.routes import config as config_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -33,6 +34,9 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Global results store
 results_store = ResultsStore()
+
+# Register config routes
+app.include_router(config_routes.router)
 
 # ---------------------------------------------------------------------------
 # Prompts storage helpers
@@ -126,23 +130,6 @@ async def delete_past_result(run_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Config endpoints
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/config")
-async def get_config():
-    """Return current configuration."""
-    return load_config()
-
-
-@app.post("/api/config")
-async def update_config(config: dict):
-    """Save updated configuration."""
-    save_config(config)
-    return {"status": "ok", "config": config}
-
-
 # ---------------------------------------------------------------------------
 # Models endpoint
 # ---------------------------------------------------------------------------
