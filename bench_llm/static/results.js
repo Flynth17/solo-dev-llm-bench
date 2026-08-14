@@ -405,9 +405,10 @@ function renderGroupedModelChart(groupedModels) {
     }
     maxTps = maxTps * 1.15 || 100;
 
-    // Nice X-axis scale
-    var chartW = 700;
+    // Compute chart width from container so it fills the card on any screen
+    var containerWidth = chartsContainer.clientWidth || 700;
     var margin = { top: 20, right: 100, bottom: 10, left: 200 };
+    var chartW = containerWidth - margin.left - margin.right;
     var chartH = 50 * groupedModels.length + 60;
     var rowHeight = 50;
     var w = chartW - margin.left - margin.right;
@@ -431,6 +432,9 @@ function renderGroupedModelChart(groupedModels) {
         viewBox: "0 0 " + chartW + " " + chartH,
         "aria-label": "Historical warm average tokens/sec comparison by model"
     });
+    svg.style.width = "100%";
+    svg.style.maxWidth = (chartW + margin.left + margin.right) + "px";
+    svg.style.display = "block";
     svg.style.pointerEvents = "none";
     svg.appendChild(svgCreate("rect", {
         x: 0, y: 0, width: chartW, height: chartH, fill: "transparent"
@@ -444,7 +448,7 @@ function renderGroupedModelChart(groupedModels) {
         }));
         var xLabel = svgCreate("text", {
             x: gx, y: chartH - 2,
-            fill: "#999", "font-size": "10", "text-anchor": "middle"
+            fill: "#111", "font-size": "10", "text-anchor": "middle"
         });
         xLabel.textContent = val.toFixed(0);
         svg.appendChild(xLabel);
@@ -516,25 +520,25 @@ function renderGroupedModelChart(groupedModels) {
             x: margin.left, y: barY, width: Math.max(barW, 4), height: 35,
             fill: "#50d890", rx: 4, opacity: 0.85
         }));
-        // Model name label (left of bar)
+        // Model name label (left of bar) — dark text for readability
         var nameLabel = svgCreate("text", {
             x: margin.left - 8, y: y + 30,
-            fill: "#ccc", "font-size": "11", "text-anchor": "end",
+            fill: "#111", "font-size": "11", "text-anchor": "end",
             "font-family": "monospace"
         });
         nameLabel.textContent = displayName;
         svg.appendChild(nameLabel);
-        // Value label (right of bar)
+        // Value label (right of bar) — dark text for readability
         var valLabel = svgCreate("text", {
             x: margin.left + Math.max(barW, 4) + 6, y: y + 30,
-            fill: "#fff", "font-size": "11", "font-family": "monospace"
+            fill: "#111", "font-size": "11", "font-family": "monospace"
         });
         valLabel.textContent = gm.best.avgWarmTps.toFixed(1) + " tok/s";
         svg.appendChild(valLabel);
-        // Date below
+        // Date below — dark text for readability
         var dateLabel = svgCreate("text", {
             x: margin.left - 8, y: y + 46,
-            fill: "#777", "font-size": "9", "text-anchor": "end"
+            fill: "#111", "font-size": "9", "text-anchor": "end"
         });
         dateLabel.textContent = formatTimestamp(gm.best.timestamp);
         svg.appendChild(dateLabel);
@@ -564,7 +568,7 @@ function renderGroupedModelChart(groupedModels) {
         }));
         var legText = svgCreate("text", {
             x: legendX + 11, y: legendY + 3,
-            fill: "#ccc", "font-size": "10"
+            fill: "#111", "font-size": "10"
         });
         legText.textContent = item.label;
         svg.appendChild(legText);
