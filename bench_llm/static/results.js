@@ -409,6 +409,8 @@ function renderGroupedModelChart(groupedModels) {
     var containerWidth = chartsContainer.clientWidth || 700;
     var margin = { top: 20, right: 100, bottom: 10, left: 200 };
     var chartW = containerWidth - margin.left - margin.right;
+    // Ensure minimum width so bars and labels fit
+    if (chartW < 400) chartW = 400;
     var chartH = 50 * groupedModels.length + 60;
     var rowHeight = 50;
     var w = chartW - margin.left - margin.right;
@@ -474,15 +476,12 @@ function renderGroupedModelChart(groupedModels) {
         var header = document.createElement("div");
         header.className = "grouped-model-header";
 
-        // Expand arrow (only if multi-run)
+        // Expand arrow (only if multi-run) — use data-* for delegated handler
         var arrow = document.createElement("span");
         arrow.className = "expand-arrow";
         arrow.textContent = "\u25B6"; // ▸
         if (hasChildren) {
-            arrow.setAttribute("data-model-index", mi);
-            arrow.addEventListener("click", function () {
-                toggleModelRows(this.getAttribute("data-model-index"));
-            });
+            arrow.setAttribute("data-model-key", displayName);
         } else {
             arrow.style.visibility = "hidden";
         }
@@ -581,6 +580,43 @@ function renderGroupedModelChart(groupedModels) {
     _currentMarginLeft = margin.left;
     _currentMarginRight = margin.right;
     _currentXMax = xMax;
+
+    // Attach delegated handler so clicks work after re-render
+    _initDelegatedExpand();
+}
+
+// ---------------------------------------------------------------------------
+// Delegated expand/collapse handler (robust across re-renders)
+// ---------------------------------------------------------------------------
+
+function _initDelegatedExpand() {
+    chartsContainer.removeEventListener("click", _onExpandClick);
+    chartsContainer.addEventListener("click", _onExpandClick);
+}
+
+function _onExpandClick(event) {
+    var toggle = event.target.closest(".expand-arrow");
+    if (!toggle || !toggle.hasAttribute("data-model-key")) {
+        return;
+    }
+    event.stopPropagation();
+    var modelKey = toggle.getAttribute("data-model-key");
+    _toggleByModelKey(modelKey);
+}
+
+function _toggleByModelKey(modelKey) {
+    var rows = chartsContainer.querySelectorAll(".grouped-model-row");
+    var foundIdx = -1;
+    for (var ri = 0; ri < rows.length; ri++) {
+        var arrow = rows[ri].querySelector(".expand-arrow[data-model-key]");
+        if (arrow && arrow.getAttribute("data-model-key") === modelKey) {
+            foundIdx = parseInt(rows[ri].id.replace("model-row-", ""), 10);
+            break;
+        }
+    }
+    if (foundIdx >= 0) {
+        toggleModelRows(foundIdx);
+    }
 }
 
 function toggleModelRows(modelIndex) {
