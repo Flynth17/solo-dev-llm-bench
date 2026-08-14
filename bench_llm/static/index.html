@@ -91,6 +91,23 @@
             <button id="run-benchmark" class="btn-primary">Run Benchmark</button>
         </section>
 
+        <!-- Task Manager -->
+        <section id="task-manager" class="panel">
+            <h2>Task Manager</h2>
+            <div class="task-toolbar">
+                <select id="task-type-select">
+                    <option value="markdown">Markdown Structure</option>
+                    <option value="python">Python Code Quality</option>
+                    <option value="java">Java Code Quality</option>
+                </select>
+                <input type="text" id="task-name-input" placeholder="Task name (optional)">
+                <button id="create-task-btn" class="btn-secondary">+ Create Task</button>
+            </div>
+            <div id="task-list-container">
+                <div id="task-list"></div>
+            </div>
+        </section>
+
         <!-- Status -->
         <section id="status" class="status hidden"></section>
 

@@ -608,6 +608,213 @@ tr.warm-row td {
 }
 
 /* ---------------------------------------------------------------------------
+   Task Manager styles
+   --------------------------------------------------------------------------- */
+
+/* Task toolbar */
+.task-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.task-toolbar select,
+.task-toolbar input {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.task-toolbar select {
+    min-width: 180px;
+}
+
+.task-toolbar input {
+    flex: 1;
+    min-width: 150px;
+}
+
+.task-toolbar select:focus,
+.task-toolbar input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Task list */
+#task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.task-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #fafbfc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    transition: background 0.1s ease;
+}
+
+.task-item:hover {
+    background: #f0f4f8;
+}
+
+.task-item.running {
+    background: #eff6ff;
+    border-color: #93c5fd;
+}
+
+.task-item.failed {
+    background: #fef2f2;
+    border-color: #fca5a5;
+}
+
+.task-item.completed {
+    background: #f0fdf4;
+    border-color: #86efac;
+}
+
+.task-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.95rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.task-type-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.task-type-badge.markdown {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.task-type-badge.python {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.task-type-badge.java {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.task-status {
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.task-status.pending { color: #6b7280; }
+.task-status.running { color: #2563eb; }
+.task-status.completed { color: #16a34a; }
+.task-status.failed { color: #dc2626; }
+
+.task-timestamp {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.task-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.task-actions button {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.1s ease;
+}
+
+.task-actions button:hover {
+    background: #f0f0f0;
+    border-color: #aaa;
+}
+
+.task-actions button.run-btn {
+    color: #16a34a;
+    border-color: #86efac;
+}
+
+.task-actions button.run-btn:hover {
+    background: #f0fdf4;
+}
+
+.task-actions button.delete-btn-task {
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.task-actions button.delete-btn-task:hover {
+    background: #fef2f2;
+}
+
+/* Task result display */
+.task-result {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.88rem;
+}
+
+.task-result-score {
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.task-result-score.pass {
+    color: #16a34a;
+}
+
+.task-result-score.fail {
+    color: #dc2626;
+}
+
+/* Loading spinner for running tasks */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.task-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #93c5fd;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+/* ---------------------------------------------------------------------------
    Modal overlay for delete confirmation
    --------------------------------------------------------------------------- */
 
