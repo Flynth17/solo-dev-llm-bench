@@ -368,10 +368,15 @@ function renderHistoryCharts() {
         groupedModels.push(modelGroups[modelOrder[gi]]);
     }
 
+    // Preserve expand state before clearing
+    var expandedModels = getExpandedModels();
+
     chartsPanel.classList.remove("hidden");
-    chartsContainer.innerHTML = "";
 
     renderGroupedModelChart(groupedModels);
+
+    // Restore expand state for models that were expanded
+    restoreExpandedModels(expandedModels);
 }
 
 function svgCreate(tag, attrs) {
@@ -419,13 +424,14 @@ function renderGroupedModelChart(groupedModels) {
     else niceXStep = 10 * magnitude;
     var xMax = Math.ceil(maxTps / niceXStep) * niceXStep;
 
-    // SVG background grid
+    // SVG background grid — pointer-events: none lets clicks pass through to model rows below
     var svg = svgCreate("svg", {
         width: "100%",
         height: chartH,
         viewBox: "0 0 " + chartW + " " + chartH,
         "aria-label": "Historical warm average tokens/sec comparison by model"
     });
+    svg.style.pointerEvents = "none";
     svg.appendChild(svgCreate("rect", {
         x: 0, y: 0, width: chartW, height: chartH, fill: "transparent"
     }));
@@ -621,6 +627,59 @@ var _currentChartW = 700;
 var _currentMarginLeft = 200;
 var _currentMarginRight = 100;
 var _currentXMax = 100;
+
+// ---------------------------------------------------------------------------
+// Expand state preservation across re-renders
+// ---------------------------------------------------------------------------
+
+function getExpandedModels() {
+    var expanded = [];
+    var rows = chartsContainer.querySelectorAll(".grouped-model-row");
+    for (var i = 0; i < rows.length; i++) {
+        var childrenId = rows[i].id; // "model-row-N"
+        var idx = childrenId.replace("model-row-", "");
+        var childrenDiv = document.getElementById("children-" + idx);
+        if (childrenDiv && childrenDiv.style.display !== "none") {
+            expanded.push(idx);
+        }
+    }
+    return expanded;
+}
+
+function restoreExpandedModels(expandedIndices) {
+    for (var i = 0; i < expandedIndices.length; i++) {
+        var idx = expandedIndices[i];
+        var childrenDiv = document.getElementById("children-" + idx);
+        var rowEl = document.getElementById("model-row-" + idx);
+        if (!childrenDiv || !rowEl) continue;
+
+        childrenDiv.style.display = "block";
+        var arrow = rowEl.querySelector(".expand-arrow");
+        if (arrow) {
+            arrow.classList.add("expanded");
+            arrow.textContent = "\u25C0"; // ◀
+        }
+
+        // Lazily render children (same logic as toggle)
+        var mi = parseInt(idx, 10);
+        var gm = _currentGroupedModels[mi];
+        if (gm && childrenDiv.children.length === 0) {
+            var innerWidth = _currentChartW - _currentMarginLeft - _currentMarginRight;
+            var xMax = _currentXMax;
+            for (var ci = 0; ci < gm.others.length; ci++) {
+                var child = gm.others[ci];
+                var childBarW = (child.avgWarmTps / xMax) * innerWidth;
+                var childRow = document.createElement("div");
+                childRow.className = "grouped-child-row";
+                childRow.innerHTML =
+                    '<span style="display:inline-block;width:' + Math.max(childBarW, 4) + 'px;height:14px;background:#50d890;border-radius:2px;opacity:0.7;"></span>' +
+                    '<span class="child-tok">' + child.avgWarmTps.toFixed(1) + ' tok/s</span>' +
+                    '<span class="child-date">' + formatTimestamp(child.timestamp) + '</span>';
+                childrenDiv.appendChild(childRow);
+            }
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Status display
