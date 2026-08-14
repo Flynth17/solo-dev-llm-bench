@@ -4,6 +4,7 @@
 // DOM references
 // ---------------------------------------------------------------------------
 var filterModelInput = document.getElementById("filter-model");
+var taskTypeFilterBar = document.getElementById("task-type-filter");
 var filterHardwareInput = document.getElementById("filter-hardware");
 var filterEnvSelect = document.getElementById("filter-env");
 var clearFiltersBtn = document.getElementById("clear-filters");
@@ -849,6 +850,8 @@ function switchTab(tab) {
         tabTasks.classList.remove("active");
         resultsPanel.classList.remove("hidden");
         if (taskHistorySection) taskHistorySection.classList.add("hidden");
+        // Hide task-type filters when switching to Benchmark History
+        if (taskTypeFilterBar) taskTypeFilterBar.classList.remove("visible");
         // Re-render chart if it was cleared by tab switch
         if (chartsPanel.classList.contains("hidden") && filteredRuns.length > 0) {
             chartsPanel.classList.remove("hidden");
@@ -861,6 +864,8 @@ function switchTab(tab) {
         if (taskHistorySection) taskHistorySection.classList.remove("hidden");
         // Hide benchmark chart during task history
         if (chartsPanel) chartsPanel.classList.add("hidden");
+        // Show task-type filters when Task History is active
+        if (taskTypeFilterBar) taskTypeFilterBar.classList.add("visible");
         // Load tasks if not yet loaded
         if (allTasks.length === 0) {
             loadTasks();
@@ -954,20 +959,22 @@ function renderTasks() {
             div.appendChild(modelSpan);
         }
 
-        // PASS/FAIL badge
-        if (passed !== null && passed !== undefined) {
+        // PASS/FAIL badge — PASS only when final_errors == 0
+        var effectivePass = (finalErrors !== null && finalErrors !== undefined && finalErrors === 0);
+        if (effectivePass || passed !== null) {
             var statusBadge = document.createElement("span");
-            statusBadge.className = passed ? "task-history-score pass" : "task-history-score fail";
-            statusBadge.textContent = passed ? "PASS" : "FAIL";
-            statusBadge.title = passed ? "Task passed" : "Task failed";
+            statusBadge.className = effectivePass ? "task-history-score pass" : "task-history-score fail";
+            statusBadge.textContent = effectivePass ? "PASS" : "FAIL";
+            statusBadge.title = effectivePass ? "Task passed (final_errors == 0)" : "Task failed (final_errors > 0)";
             div.appendChild(statusBadge);
         }
 
-        // Score
+        // Score as percentage (stored 0.0-1.0, displayed as 0-100%)
         if (score !== null && score !== undefined) {
             var scoreSpan = document.createElement("span");
-            scoreSpan.className = "task-history-score " + (passed ? "pass" : "fail");
-            scoreSpan.textContent = "Score: " + score.toFixed(4);
+            scoreSpan.className = "task-history-score " + (effectivePass ? "pass" : "fail");
+            scoreSpan.textContent = (score * 100).toFixed(0) + "%";
+            scoreSpan.title = "Score: " + score.toFixed(4) + " (stored)";
             div.appendChild(scoreSpan);
         }
 
