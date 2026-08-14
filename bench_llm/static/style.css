@@ -696,3 +696,196 @@ tr.warm-row td {
 .delete-btn:hover {
     opacity: 1;
 }
+
+/* ---------------------------------------------------------------------------
+   Past Results page — responsive wide layout
+   --------------------------------------------------------------------------- */
+
+/* Wider container for the Past Results page */
+.page-container-wide {
+    width: min(94vw, 2600px);
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+@media (min-width: 1920px) {
+    .page-container-wide {
+        padding: 0 2rem;
+    }
+}
+
+/* History run group */
+.history-run {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.history-run-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.history-run-header .timestamp {
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+/* Expand/collapse arrow */
+.expand-arrow {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    color: #64748b;
+    transition: transform 0.15s ease;
+    display: inline-block;
+    min-width: 1em;
+    text-align: center;
+}
+
+.expand-arrow:hover {
+    color: #2563eb;
+}
+
+.expand-arrow.expanded {
+    transform: rotate(90deg);
+}
+
+/* Child rows for expanded runs */
+.history-child-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.4rem 1.25rem 0.4rem 3rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.88rem;
+    color: #64748b;
+    border-left: 2px solid #e2e8f0;
+    margin-left: 1.5rem;
+    background: #fafbfc;
+    border-radius: 0 4px 4px 0;
+}
+
+.history-child-row .child-tok {
+    font-weight: 600;
+    color: #1e293b;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.history-child-row .child-date {
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+
+/* Chart container responsive */
+.chart-container {
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+}
+
+.chart-svg-wrap {
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+.chart-svg-wrap svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.chart-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+/* Best badge for grouped chart */
+.best-badge {
+    display: inline-block;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 0.5rem;
+}
+
+/* Grouped model row */
+.grouped-model-row {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.grouped-model-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s ease;
+}
+
+.grouped-model-header:hover {
+    background: #f8fafc;
+}
+
+.grouped-model-name {
+    font-family: monospace;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+
+.grouped-model-best {
+    font-family: monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #16a34a;
+    margin-left: auto;
+}
+
+/* Subordinate child row */
+.grouped-child-row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.35rem 1rem 0.35rem 2.5rem;
+    font-size: 0.85rem;
+    color: #64748b;
+    border-left: 2px solid #e2e8f0;
+    margin-left: 1rem;
+    background: #fafbfc;
+}
+
+.grouped-child-row .child-tok {
+    font-family: monospace;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.88rem;
+}
+
+.grouped-child-row .child-date {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    margin-left: auto;
+}

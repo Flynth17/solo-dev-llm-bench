@@ -329,13 +329,45 @@ function renderHistoryCharts() {
         return;
     }
 
-    // Sort fastest → slowest by Warm Avg tok/s
-    runsWithWarm.sort(function (a, b) { return b.avgWarmTps - a.avgWarmTps; });
+    // Group by model name, find best per model, sort fastest → slowest
+    var modelGroups = {};
+    var modelOrder = [];
+    for (var j = 0; j < runsWithWarm.length; j++) {
+        var rw = runsWithWarm[j];
+        var key = rw.model;
+        if (!modelGroups[key]) {
+            modelGroups[key] = { model: key, best: rw, others: [] };
+            modelOrder.push(key);
+        } else {
+            // Track best
+            if (rw.avgWarmTps > modelGroups[key].best.avgWarmTps) {
+                modelGroups[key].others.push(modelGroups[key].best);
+                modelGroups[key].best = rw;
+            } else {
+                modelGroups[key].others.push(rw);
+            }
+        }
+    }
+
+    // Sort others fastest → slowest within each group
+    for (var m in modelGroups) {
+        if (Object.prototype.hasOwnProperty.call(modelGroups, m)) {
+            modelGroups[m].others.sort(function (a, b) { return b.avgWarmTps - a.avgWarmTps; });
+        }
+    }
+
+    // Sort models by best avgWarmTps descending
+    modelOrder.sort(function (a, b) { return modelGroups[b].best.avgWarmTps - modelGroups[a].best.avgWarmTps; });
+
+    var groupedModels = [];
+    for (var gi = 0; gi < modelOrder.length; gi++) {
+        groupedModels.push(modelGroups[modelOrder[gi]]);
+    }
 
     chartsPanel.classList.remove("hidden");
     chartsContainer.innerHTML = "";
 
-    renderHistoricalComparisonChart(runsWithWarm);
+    renderGroupedModelChart(groupedModels);
 }
 
 function svgCreate(tag, attrs) {
@@ -350,24 +382,27 @@ function svgCreate(tag, attrs) {
     return el;
 }
 
-function renderHistoricalComparisonChart(runsWithWarm) {
-    // runsWithWarm is already sorted fastest → slowest by avgWarmTps
+/* ---------------------------------------------------------------------------
+   Grouped Model Chart — one row per model, expand/collapse
+   --------------------------------------------------------------------------- */
 
+function renderGroupedModelChart(groupedModels) {
+    chartsContainer.innerHTML = "";
+
+    // Compute global max TPS across all models' best results
     var maxTps = 0;
-    for (var j = 0; j < runsWithWarm.length; j++) {
-        if (runsWithWarm[j].avgWarmTps > maxTps) maxTps = runsWithWarm[j].avgWarmTps;
+    for (var gi = 0; gi < groupedModels.length; gi++) {
+        if (groupedModels[gi].best.avgWarmTps > maxTps) maxTps = groupedModels[gi].best.avgWarmTps;
     }
     maxTps = maxTps * 1.15 || 100;
 
-    // Dynamic height: 55px per row + top/bottom padding
-    var rowHeight = 55;
-    var chartH = rowHeight * runsWithWarm.length + 50; // 50px top/bottom padding
+    // Nice X-axis scale
     var chartW = 700;
     var margin = { top: 20, right: 100, bottom: 10, left: 200 };
+    var chartH = 50 * groupedModels.length + 60;
+    var rowHeight = 50;
     var w = chartW - margin.left - margin.right;
     var h = chartH - margin.top - margin.bottom;
-
-    // Nice X-axis scale
     var maxXTicks = 6;
     var xStep = maxTps / maxXTicks;
     if (xStep === 0) xStep = 10;
@@ -380,20 +415,16 @@ function renderHistoricalComparisonChart(runsWithWarm) {
     else niceXStep = 10 * magnitude;
     var xMax = Math.ceil(maxTps / niceXStep) * niceXStep;
 
+    // SVG background grid
     var svg = svgCreate("svg", {
         width: "100%",
         height: chartH,
         viewBox: "0 0 " + chartW + " " + chartH,
-        "aria-label": "Historical warm average tokens/sec comparison"
+        "aria-label": "Historical warm average tokens/sec comparison by model"
     });
-
-    // Background
     svg.appendChild(svgCreate("rect", {
-        x: 0, y: 0, width: chartW, height: chartH,
-        fill: "transparent"
+        x: 0, y: 0, width: chartW, height: chartH, fill: "transparent"
     }));
-
-    // Grid lines and X labels
     for (var t = 0; t <= maxXTicks; t++) {
         var val = t * niceXStep;
         var gx = margin.left + (val / xMax) * w;
@@ -408,36 +439,74 @@ function renderHistoricalComparisonChart(runsWithWarm) {
         xLabel.textContent = val.toFixed(0);
         svg.appendChild(xLabel);
     }
+    chartsContainer.appendChild(svg);
 
-    // Horizontal bars (one per run, sorted fastest → slowest)
-    for (var k = 0; k < runsWithWarm.length; k++) {
-        var group = runsWithWarm[k];
-        var y = margin.top + k * rowHeight;
+    // Model rows — best result first, expand/collapse for others
+    for (var mi = 0; mi < groupedModels.length; mi++) {
+        var gm = groupedModels[mi];
+        var y = margin.top + mi * rowHeight;
+        var barW = (gm.best.avgWarmTps / xMax) * w;
+        var displayName = gm.model;
+        var hasChildren = gm.others.length > 0;
+        var rowId = "model-row-" + mi;
+        var childrenId = "children-" + mi;
 
-        // Truncate model name for display on the bar
-        var displayName = group.model;
-        var barWidthForLabel = 140;
-        if (displayName.length > 22) {
-            displayName = displayName.substring(0, 20) + "\u2026";
+        // Model row div
+        var modelRow = document.createElement("div");
+        modelRow.className = "grouped-model-row";
+        modelRow.id = rowId;
+
+        // Header
+        var header = document.createElement("div");
+        header.className = "grouped-model-header";
+
+        // Expand arrow (only if multi-run)
+        var arrow = document.createElement("span");
+        arrow.className = "expand-arrow";
+        arrow.textContent = "\u25B6"; // ▸
+        if (hasChildren) {
+            arrow.setAttribute("data-model-index", mi);
+            arrow.addEventListener("click", function () {
+                toggleModelRows(this.getAttribute("data-model-index"));
+            });
+        } else {
+            arrow.style.visibility = "hidden";
         }
 
-        // Bar width proportional to avgWarmTps
-        var barW = (group.avgWarmTps / xMax) * w;
-        var barColor = "#50d890";
+        // Model name with tooltip for full name
+        var modelName = document.createElement("span");
+        modelName.className = "grouped-model-name";
+        modelName.textContent = displayName;
+        modelName.title = displayName;
 
-        // Bar background track
+        // BEST badge
+        var bestBadge = document.createElement("span");
+        bestBadge.className = "best-badge";
+        bestBadge.textContent = "BEST";
+
+        // Best tok/s value
+        var bestVal = document.createElement("span");
+        bestVal.className = "grouped-model-best";
+        bestVal.textContent = gm.best.avgWarmTps.toFixed(1) + " tok/s";
+
+        header.appendChild(arrow);
+        header.appendChild(modelName);
+        header.appendChild(bestBadge);
+        header.appendChild(bestVal);
+        modelRow.appendChild(header);
+
+        // SVG bar for this model's best result
+        var barY = y + 8;
+        // Track background
         svg.appendChild(svgCreate("rect", {
-            x: margin.left, y: y + 8, width: w, height: 35,
+            x: margin.left, y: barY, width: w, height: 35,
             fill: "#1a1a2e", rx: 4, opacity: 0.5
         }));
-
-        // Colored bar
         svg.appendChild(svgCreate("rect", {
-            x: margin.left, y: y + 8, width: Math.max(barW, 4), height: 35,
-            fill: barColor, rx: 4, opacity: 0.85
+            x: margin.left, y: barY, width: Math.max(barW, 4), height: 35,
+            fill: "#50d890", rx: 4, opacity: 0.85
         }));
-
-        // Model name to the left of the bar
+        // Model name label (left of bar)
         var nameLabel = svgCreate("text", {
             x: margin.left - 8, y: y + 30,
             fill: "#ccc", "font-size": "11", "text-anchor": "end",
@@ -445,26 +514,109 @@ function renderHistoricalComparisonChart(runsWithWarm) {
         });
         nameLabel.textContent = displayName;
         svg.appendChild(nameLabel);
-
-        // Exact tok/s value at the end of the bar
+        // Value label (right of bar)
         var valLabel = svgCreate("text", {
             x: margin.left + Math.max(barW, 4) + 6, y: y + 30,
             fill: "#fff", "font-size": "11", "font-family": "monospace"
         });
-        valLabel.textContent = group.avgWarmTps.toFixed(1) + " tok/s";
+        valLabel.textContent = gm.best.avgWarmTps.toFixed(1) + " tok/s";
         svg.appendChild(valLabel);
-
-        // Date badge below the bar
+        // Date below
         var dateLabel = svgCreate("text", {
             x: margin.left - 8, y: y + 46,
             fill: "#777", "font-size": "9", "text-anchor": "end"
         });
-        dateLabel.textContent = formatTimestamp(group.timestamp);
+        dateLabel.textContent = formatTimestamp(gm.best.timestamp);
         svg.appendChild(dateLabel);
+
+        // Children container (hidden by default, lazily rendered)
+        var childrenDiv = document.createElement("div");
+        childrenDiv.id = childrenId;
+        childrenDiv.className = "grouped-model-children";
+        childrenDiv.style.display = "none";
+        childrenDiv.setAttribute("data-model-index", mi);
+
+        modelRow.appendChild(childrenDiv);
+        chartsContainer.appendChild(modelRow);
     }
 
-    chartsContainer.appendChild(svg);
+    // Legend
+    var legendY = 14;
+    var legendItems = [
+        { color: "#50d890", label: "Warm Avg tok/s" }
+    ];
+    var legendX = margin.left;
+    for (var l = 0; l < legendItems.length; l++) {
+        var item = legendItems[l];
+        svg.appendChild(svgCreate("rect", {
+            x: legendX, y: legendY - 4, width: 8, height: 8,
+            fill: item.color, rx: 1
+        }));
+        var legText = svgCreate("text", {
+            x: legendX + 11, y: legendY + 3,
+            fill: "#ccc", "font-size": "10"
+        });
+        legText.textContent = item.label;
+        svg.appendChild(legText);
+        legendX += 14 + item.label.length * 6.5;
+    }
+
+    // Save global state for toggle
+    _currentGroupedModels = groupedModels;
+    _currentChartW = chartW;
+    _currentMarginLeft = margin.left;
+    _currentMarginRight = margin.right;
+    _currentXMax = xMax;
 }
+
+function toggleModelRows(modelIndex) {
+    var mi = parseInt(modelIndex, 10);
+    var childrenId = "children-" + mi;
+    var rowId = "model-row-" + mi;
+    var childrenDiv = document.getElementById(childrenId);
+    var rowEl = document.getElementById(rowId);
+    if (!childrenDiv || !rowEl) return;
+
+    var arrow = rowEl.querySelector(".expand-arrow");
+    var isHidden = childrenDiv.style.display === "none";
+    childrenDiv.style.display = isHidden ? "block" : "none";
+    if (arrow) {
+        if (isHidden) {
+            arrow.classList.add("expanded");
+            arrow.textContent = "\u25C0"; // ◀
+        } else {
+            arrow.classList.remove("expanded");
+            arrow.textContent = "\u25B6"; // ▸
+        }
+    }
+
+    // Render child bars if showing and not yet rendered
+    if (isHidden && childrenDiv.children.length === 0) {
+        var gm = _currentGroupedModels[mi];
+        if (gm) {
+            var innerWidth = _currentChartW - _currentMarginLeft - _currentMarginRight;
+            var xMax = _currentXMax;
+            for (var ci = 0; ci < gm.others.length; ci++) {
+                var child = gm.others[ci];
+                var childBarW = (child.avgWarmTps / xMax) * innerWidth;
+                var childRow = document.createElement("div");
+                childRow.className = "grouped-child-row";
+                childRow.innerHTML =
+                    '<span style="display:inline-block;width:' + Math.max(childBarW, 4) + 'px;height:14px;background:#50d890;border-radius:2px;opacity:0.7;"></span>' +
+                    '<span class="child-tok">' + child.avgWarmTps.toFixed(1) + ' tok/s</span>' +
+                    '<span class="child-date">' + formatTimestamp(child.timestamp) + '</span>';
+                childrenDiv.appendChild(childRow);
+            }
+        }
+    }
+}
+
+// Global state for grouped models (simple reference for toggle)
+var _currentGroupedModels = [];
+var _currentChartW = 700;
+var _currentMarginLeft = 200;
+var _currentMarginRight = 100;
+var _currentXMax = 100;
 
 // ---------------------------------------------------------------------------
 // Status display
