@@ -18,3 +18,9 @@ data/*.csv
 # OS
 .DS_Store
 Thumbs.db
+
+# Results (generated data)
+data/*.csv
+data/benchmark_results.db
+data/benchmark_results.db-wal
+data/benchmark_results.db-shm

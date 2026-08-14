@@ -75,11 +75,15 @@ def test_results_store_write_read():
 
     with tempfile.NamedTemporaryFile(
         suffix=".csv", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
+    ) as tmp_csv:
+        tmp_csv_path = Path(tmp_csv.name)
+    with tempfile.NamedTemporaryFile(
+        suffix=".db", delete=False
+    ) as tmp_db:
+        tmp_db_path = Path(tmp_db.name)
 
     try:
-        store = ResultsStore(csv_path=tmp_path)
+        store = ResultsStore(csv_path=tmp_csv_path, db_path=tmp_db_path)
         sample_run = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "run_id": "test-run-001",
@@ -110,10 +114,12 @@ def test_results_store_write_read():
         assert all_runs[0]["ttft_seconds"] == 1.23
 
         # Verify CSV file was written
-        assert tmp_path.exists()
-        assert tmp_path.stat().st_size > 0
+        assert tmp_csv_path.exists()
+        assert tmp_csv_path.stat().st_size > 0
     finally:
-        tmp_path.unlink()
+        tmp_csv_path.unlink()
+        if tmp_db_path.exists():
+            tmp_db_path.unlink()
 
 
 def test_results_store_load_from_disk():
@@ -122,14 +128,19 @@ def test_results_store_load_from_disk():
 
     with tempfile.NamedTemporaryFile(
         suffix=".csv", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
+    ) as tmp_csv:
+        tmp_csv_path = Path(tmp_csv.name)
+    with tempfile.NamedTemporaryFile(
+        suffix=".db", delete=False
+    ) as tmp_db:
+        tmp_db_path = Path(tmp_db.name)
 
     try:
-        # Create a CSV with known data
-        with open(tmp_path, "w", newline="", encoding="utf-8") as f:
+        # Create a CSV with known data (no DB file yet, so migration
+        # will import these rows on first open).
+        with open(tmp_csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(ResultsStore().path.parent / "benchmark_results.csv".split("/")[-1] if False else [
+            writer.writerow([
                 "timestamp", "run_id", "model_key", "model_display_name",
                 "hardware_label", "execution_environment", "connection_type",
                 "iteration", "cold_or_warm", "tokens_per_second", "ttft_seconds",
@@ -142,13 +153,15 @@ def test_results_store_load_from_disk():
                 "50.0", "0.5", 50, 100, "", 2.0, "Custom", 500, 0,
             ])
 
-        store = ResultsStore(csv_path=tmp_path)
+        store = ResultsStore(csv_path=tmp_csv_path, db_path=tmp_db_path)
         all_runs = store.get_all()
         assert len(all_runs) == 1
         assert all_runs[0]["run_id"] == "run-002"
         assert all_runs[0]["tokens_per_second"] == 50.0
     finally:
-        tmp_path.unlink()
+        tmp_csv_path.unlink()
+        if tmp_db_path.exists():
+            tmp_db_path.unlink()
 
 
 # ====================================================================
