@@ -104,8 +104,8 @@ var allRuns = [];
 var filteredRuns = [];
 var allTasks = [];
 
-// Active tab
-var activeTab = "benchmarks"; // "benchmarks" or "tasks"
+// Active tab — default to Task History
+var activeTab = "tasks"; // "benchmarks" or "tasks"
 
 // ---------------------------------------------------------------------------
 // Load results from backend
@@ -990,3 +990,7 @@ async function deleteTaskHistory(taskId) {
 // ---------------------------------------------------------------------------
 
 loadResults();
+// When defaulting to tasks, load tasks immediately
+if (activeTab === "tasks") {
+    loadTasks().then(function () { switchTab("tasks"); });
+}
