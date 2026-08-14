@@ -747,6 +747,11 @@ function switchTab(tab) {
         tabTasks.classList.remove("active");
         resultsPanel.classList.remove("hidden");
         if (taskHistorySection) taskHistorySection.classList.add("hidden");
+        // Re-render chart if it was cleared by tab switch
+        if (chartsPanel.classList.contains("hidden") && filteredRuns.length > 0) {
+            chartsPanel.classList.remove("hidden");
+            renderHistoryCharts();
+        }
     } else {
         tabTasks.classList.add("active");
         tabBenchmarks.classList.remove("active");
