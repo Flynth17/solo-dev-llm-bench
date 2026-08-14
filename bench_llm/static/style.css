@@ -210,6 +210,11 @@ h1 {
     display: none;
 }
 
+/* Ensure .hidden always wins over display:flex on modals */
+.modal-overlay.hidden {
+    display: none !important;
+}
+
 /* Results tables */
 .results-group {
     margin-bottom: 2rem;
