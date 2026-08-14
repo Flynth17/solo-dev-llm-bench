@@ -333,3 +333,34 @@ class ResultsStore:
         """Clear all results from memory, SQLite, and CSV."""
         self.runs = []
         self.save()
+
+    # ------------------------------------------------------------------
+    # Delete
+    # ------------------------------------------------------------------
+
+    def delete_run(self, run_id: str) -> bool:
+        """Delete all rows for a given run_id from SQLite and memory.
+
+        Uses a transaction for safety.  Returns True if any rows were
+        removed, False if the run_id was not found.
+        """
+        conn = self._get_connection()
+        try:
+            # Count rows before deletion (for return value)
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM runs WHERE run_id = ?",
+                (run_id,),
+            )
+            count = cursor.fetchone()[0]
+            if count == 0:
+                return False
+
+            # Delete rows in a transaction
+            conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Remove from in-memory list
+        self.runs = [r for r in self.runs if r.get("run_id") != run_id]
+        return True

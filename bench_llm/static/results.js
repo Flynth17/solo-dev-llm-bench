@@ -14,6 +14,17 @@ var chartsContainer = document.getElementById("charts-container");
 var emptyState = document.getElementById("empty-state");
 var resultsCountEl = document.getElementById("results-count");
 
+// Delete modal references
+var deleteModal = document.getElementById("delete-modal");
+var deleteModalBody = document.getElementById("delete-modal-body");
+var cancelDeleteBtn = document.getElementById("cancel-delete");
+var confirmDeleteBtn = document.getElementById("confirm-delete");
+
+// Current pending delete state
+var pendingDeleteRunId = null;
+var pendingDeleteModel = "";
+var pendingDeleteTimestamp = "";
+
 // ---------------------------------------------------------------------------
 // Helpers (reuse formatting from dashboard.js)
 // ---------------------------------------------------------------------------
@@ -221,7 +232,10 @@ function renderResults() {
             badges += '<span class="badge badge-conn">' + escapeHtml(group.connection_type) + '</span>';
         }
 
-        header.innerHTML = '<span>Run #' + (idx + 1) + ' <span class="timestamp">(' + formatTimestamp(group.timestamp) + ')</span></span>' + badges;
+        // Build delete button HTML
+        var deleteBtnHtml = '<button class="delete-btn" title="Delete this run" data-run-id="' + escapeHtml(rid) + '" data-model="' + escapeHtml(group.model) + '" data-timestamp="' + escapeHtml(group.timestamp) + '">&#x1F5D1;</button>';
+
+        header.innerHTML = '<span>Run #' + (idx + 1) + ' <span class="timestamp">(' + formatTimestamp(group.timestamp) + ')</span></span>' + badges + deleteBtnHtml;
         div.appendChild(header);
 
         // Compute aggregates
@@ -460,6 +474,58 @@ function showStatus(msg, type) {
 }
 
 // ---------------------------------------------------------------------------
+// Delete functionality
+// ---------------------------------------------------------------------------
+
+function openDeleteModal(runId, model, timestamp) {
+    pendingDeleteRunId = runId;
+    pendingDeleteModel = model;
+    pendingDeleteTimestamp = timestamp;
+
+    var tsDisplay = formatTimestamp(timestamp);
+    deleteModalBody.innerHTML =
+        '<p><strong>Model:</strong> ' + escapeHtml(model) + '</p>' +
+        '<p><strong>Run ID:</strong> <code>' + escapeHtml(runId) + '</code></p>' +
+        '<p><strong>Date:</strong> ' + tsDisplay + '</p>' +
+        '<p style="margin-top:0.75rem;color:#dc2626;">This permanently removes this result.</p>';
+
+    deleteModal.classList.remove("hidden");
+}
+
+function closeDeleteModal() {
+    pendingDeleteRunId = null;
+    pendingDeleteModel = "";
+    pendingDeleteTimestamp = "";
+    deleteModal.classList.add("hidden");
+}
+
+async function executeDelete() {
+    if (!pendingDeleteRunId) {
+        closeDeleteModal();
+        return;
+    }
+
+    var runId = pendingDeleteRunId;
+    closeDeleteModal();
+
+    try {
+        var resp = await fetch("/api/results/" + encodeURIComponent(runId), {
+            method: "DELETE"
+        });
+
+        if (!resp.ok) {
+            var err = await resp.json().catch(function () { return {}; });
+            throw new Error(err.detail || "HTTP " + resp.status);
+        }
+
+        // Reload results after deletion
+        await loadResults();
+    } catch (e) {
+        showStatus("Failed to delete run: " + e.message, "error");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Event listeners
 // ---------------------------------------------------------------------------
 
@@ -467,6 +533,39 @@ filterModelInput.addEventListener("input", applyFilters);
 filterHardwareInput.addEventListener("input", applyFilters);
 filterEnvSelect.addEventListener("change", applyFilters);
 clearFiltersBtn.addEventListener("click", clearFilters);
+
+// Delete modal event listeners
+cancelDeleteBtn.addEventListener("click", closeDeleteModal);
+confirmDeleteBtn.addEventListener("click", executeDelete);
+
+// Close modal on overlay click
+if (deleteModal) {
+    deleteModal.addEventListener("click", function (e) {
+        if (e.target === deleteModal) {
+            closeDeleteModal();
+        }
+    });
+}
+
+// Close modal on Escape key
+document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !deleteModal.classList.contains("hidden")) {
+        closeDeleteModal();
+    }
+});
+
+// Delegate delete button clicks on results container
+resultsContainer.addEventListener("click", function (e) {
+    var btn = e.target.closest(".delete-btn");
+    if (!btn) return;
+    e.stopPropagation();
+
+    var runId = btn.getAttribute("data-run-id");
+    var model = btn.getAttribute("data-model") || "";
+    var timestamp = btn.getAttribute("data-timestamp") || "";
+
+    openDeleteModal(runId, model, timestamp);
+});
 
 // ---------------------------------------------------------------------------
 // Init

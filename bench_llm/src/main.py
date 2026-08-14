@@ -96,6 +96,19 @@ async def get_past_results():
     return {"results": all_runs}
 
 
+@app.delete("/api/results/{run_id}")
+async def delete_past_result(run_id: str):
+    """Delete a single benchmark run by its run_id."""
+    # Validate: reject arbitrary SQL or database identifiers
+    if not run_id or "\x00" in run_id or "/" in run_id:
+        raise HTTPException(status_code=400, detail="Invalid run_id")
+
+    deleted = results_store.delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    return {"status": "ok", "run_id": run_id}
+
+
 # ---------------------------------------------------------------------------
 # Config endpoints
 # ---------------------------------------------------------------------------
