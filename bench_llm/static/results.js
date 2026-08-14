@@ -289,7 +289,7 @@ function renderHistoryCharts() {
         return;
     }
 
-    // Build grouped data for chart
+    // Build grouped data for chart — one entry per run (not per model)
     var groups = {};
     var order = [];
     for (var i = 0; i < filteredRuns.length; i++) {
@@ -311,19 +311,15 @@ function renderHistoryCharts() {
         if (warmRuns.length === 0) continue;
 
         var warmTps = warmRuns.map(function (r) { return parseFloat(r.tokens_per_second) || 0; }).filter(function (v) { return v > 0; });
-        var warmTtfts = warmRuns.map(function (r) { return parseFloat(r.ttft_seconds) || 0; });
-
         if (warmTps.length === 0) continue;
 
         var avgTps = warmTps.reduce(function (a, b) { return a + b; }, 0) / warmTps.length;
-        var avgTtft = warmTtfts.reduce(function (a, b) { return a + b; }, 0) / warmTtfts.length;
 
         runsWithWarm.push({
             id: rid,
             timestamp: group.timestamp,
             model: group.model,
             avgWarmTps: avgTps,
-            avgWarmTtft: avgTtft,
             warmCount: warmTps.length
         });
     }
@@ -332,6 +328,9 @@ function renderHistoryCharts() {
         chartsPanel.classList.add("hidden");
         return;
     }
+
+    // Sort fastest → slowest by Warm Avg tok/s
+    runsWithWarm.sort(function (a, b) { return b.avgWarmTps - a.avgWarmTps; });
 
     chartsPanel.classList.remove("hidden");
     chartsContainer.innerHTML = "";
@@ -352,10 +351,7 @@ function svgCreate(tag, attrs) {
 }
 
 function renderHistoricalComparisonChart(runsWithWarm) {
-    var chartW = 520, chartH = 280;
-    var margin = { top: 30, right: 30, bottom: 55, left: 70 };
-    var w = chartW - margin.left - margin.right;
-    var h = chartH - margin.top - margin.bottom;
+    // runsWithWarm is already sorted fastest → slowest by avgWarmTps
 
     var maxTps = 0;
     for (var j = 0; j < runsWithWarm.length; j++) {
@@ -363,105 +359,108 @@ function renderHistoricalComparisonChart(runsWithWarm) {
     }
     maxTps = maxTps * 1.15 || 100;
 
-    var maxYTicks = 5;
-    var yStep = maxTps / maxYTicks;
-    if (yStep === 0) yStep = 10;
-    var yMax = Math.ceil(maxTps / yStep) * yStep;
+    // Dynamic height: 55px per row + top/bottom padding
+    var rowHeight = 55;
+    var chartH = rowHeight * runsWithWarm.length + 50; // 50px top/bottom padding
+    var chartW = 700;
+    var margin = { top: 20, right: 100, bottom: 10, left: 200 };
+    var w = chartW - margin.left - margin.right;
+    var h = chartH - margin.top - margin.bottom;
 
-    var barGroupWidth = Math.min(60, (w / runsWithWarm.length) * 0.85);
-    var barWidth = Math.max(12, (barGroupWidth / 3));
+    // Nice X-axis scale
+    var maxXTicks = 6;
+    var xStep = maxTps / maxXTicks;
+    if (xStep === 0) xStep = 10;
+    var magnitude = Math.pow(10, Math.floor(Math.log10(xStep)));
+    var residual = xStep / magnitude;
+    var niceXStep;
+    if (residual <= 1.5) niceXStep = 1 * magnitude;
+    else if (residual <= 3) niceXStep = 2 * magnitude;
+    else if (residual <= 7) niceXStep = 5 * magnitude;
+    else niceXStep = 10 * magnitude;
+    var xMax = Math.ceil(maxTps / niceXStep) * niceXStep;
 
     var svg = svgCreate("svg", {
-        width: chartW, height: chartH, viewBox: "0 0 " + chartW + " " + chartH,
-        "aria-label": "Historical warm average comparison"
+        width: "100%",
+        height: chartH,
+        viewBox: "0 0 " + chartW + " " + chartH,
+        "aria-label": "Historical warm average tokens/sec comparison"
     });
 
     // Background
     svg.appendChild(svgCreate("rect", {
-        x: margin.left, y: margin.top, width: w, height: h,
-        fill: "#1a1a2e", rx: 4
+        x: 0, y: 0, width: chartW, height: chartH,
+        fill: "transparent"
     }));
 
-    // Grid lines and Y labels
-    for (var t = 0; t <= maxYTicks; t++) {
-        var val = t * yStep;
-        var gy = margin.top + h - (val / yMax) * h;
+    // Grid lines and X labels
+    for (var t = 0; t <= maxXTicks; t++) {
+        var val = t * niceXStep;
+        var gx = margin.left + (val / xMax) * w;
         svg.appendChild(svgCreate("line", {
-            x1: margin.left, y1: gy, x2: margin.left + w, y2: gy,
+            x1: gx, y1: margin.top, x2: gx, y2: margin.top + h,
             stroke: "#333", "stroke-width": 0.5
         }));
-        var yLabel = svgCreate("text", {
-            x: margin.left - 8, y: gy + 4,
-            fill: "#999", "font-size": "10", "text-anchor": "end"
+        var xLabel = svgCreate("text", {
+            x: gx, y: chartH - 2,
+            fill: "#999", "font-size": "10", "text-anchor": "middle"
         });
-        yLabel.textContent = val.toFixed(0);
-        svg.appendChild(yLabel);
+        xLabel.textContent = val.toFixed(0);
+        svg.appendChild(xLabel);
     }
 
-    // Bars (grouped by run)
+    // Horizontal bars (one per run, sorted fastest → slowest)
     for (var k = 0; k < runsWithWarm.length; k++) {
         var group = runsWithWarm[k];
-        var groupX = margin.left + (k + 0.5) / runsWithWarm.length * w - barGroupWidth / 2;
+        var y = margin.top + k * rowHeight;
 
-        // TPS bar (green)
-        var tpsH = (group.avgWarmTps / yMax) * h;
-        svg.appendChild(svgCreate("rect", {
-            x: groupX, y: margin.top + h - tpsH,
-            width: barWidth, height: tpsH,
-            fill: "#50d890", rx: 2, opacity: 0.85
-        }));
-
-        // TTFT bar (blue, scaled)
-        var maxTtft = 0;
-        for (var m = 0; m < runsWithWarm.length; m++) {
-            if (runsWithWarm[m].avgWarmTtft > maxTtft) maxTtft = runsWithWarm[m].avgWarmTtft;
+        // Truncate model name for display on the bar
+        var displayName = group.model;
+        var barWidthForLabel = 140;
+        if (displayName.length > 22) {
+            displayName = displayName.substring(0, 20) + "\u2026";
         }
-        maxTtft = maxTtft * 1.15 || 1;
-        var ttftH = (group.avgWarmTtft / maxTtft) * h * 0.5;
+
+        // Bar width proportional to avgWarmTps
+        var barW = (group.avgWarmTps / xMax) * w;
+        var barColor = "#50d890";
+
+        // Bar background track
         svg.appendChild(svgCreate("rect", {
-            x: groupX + barWidth + 2, y: margin.top + h - ttftH,
-            width: barWidth, height: ttftH,
-            fill: "#4a90d9", rx: 2, opacity: 0.85
+            x: margin.left, y: y + 8, width: w, height: 35,
+            fill: "#1a1a2e", rx: 4, opacity: 0.5
         }));
 
-        // Model label
-        var label = group.model.length > 12 ? group.model.substring(0, 10) + "\u2026" : group.model;
-        var xLabel = svgCreate("text", {
-            x: groupX + barGroupWidth / 2, y: chartH - 10,
-            fill: "#ccc", "font-size": "9", "text-anchor": "middle"
-        });
-        xLabel.textContent = label;
-        svg.appendChild(xLabel);
-
-        // Warm count
-        var countLabel = svgCreate("text", {
-            x: groupX + barGroupWidth / 2, y: chartH - 2,
-            fill: "#999", "font-size": "8", "text-anchor": "middle"
-        });
-        countLabel.textContent = "(" + group.warmCount + ")";
-        svg.appendChild(countLabel);
-    }
-
-    // Legend
-    var legendY = 14;
-    var legendItems = [
-        { color: "#50d890", label: "Warm Avg tok/s" },
-        { color: "#4a90d9", label: "Warm Avg TTFT" }
-    ];
-    var legendX = margin.left;
-    for (var l = 0; l < legendItems.length; l++) {
-        var item = legendItems[l];
+        // Colored bar
         svg.appendChild(svgCreate("rect", {
-            x: legendX, y: legendY - 4, width: 8, height: 8,
-            fill: item.color, rx: 1
+            x: margin.left, y: y + 8, width: Math.max(barW, 4), height: 35,
+            fill: barColor, rx: 4, opacity: 0.85
         }));
-        var legText = svgCreate("text", {
-            x: legendX + 11, y: legendY + 3,
-            fill: "#ccc", "font-size": "10"
+
+        // Model name to the left of the bar
+        var nameLabel = svgCreate("text", {
+            x: margin.left - 8, y: y + 30,
+            fill: "#ccc", "font-size": "11", "text-anchor": "end",
+            "font-family": "monospace"
         });
-        legText.textContent = item.label;
-        svg.appendChild(legText);
-        legendX += 14 + item.label.length * 6.5;
+        nameLabel.textContent = displayName;
+        svg.appendChild(nameLabel);
+
+        // Exact tok/s value at the end of the bar
+        var valLabel = svgCreate("text", {
+            x: margin.left + Math.max(barW, 4) + 6, y: y + 30,
+            fill: "#fff", "font-size": "11", "font-family": "monospace"
+        });
+        valLabel.textContent = group.avgWarmTps.toFixed(1) + " tok/s";
+        svg.appendChild(valLabel);
+
+        // Date badge below the bar
+        var dateLabel = svgCreate("text", {
+            x: margin.left - 8, y: y + 46,
+            fill: "#777", "font-size": "9", "text-anchor": "end"
+        });
+        dateLabel.textContent = formatTimestamp(group.timestamp);
+        svg.appendChild(dateLabel);
     }
 
     chartsContainer.appendChild(svg);
