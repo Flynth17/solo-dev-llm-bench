@@ -893,7 +893,8 @@ function switchView(view) {
 }
 
 // Attach click handlers to all nav buttons
-for (var ni = 0; ni < navButtons.length; ni++) {
+var _navBtns = [navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
+for (var ni = 0; ni < _navBtns.length; ni++) {
     (function (btn) {
         if (btn) {
             btn.addEventListener("click", function () {
@@ -901,7 +902,7 @@ for (var ni = 0; ni < navButtons.length; ni++) {
                 switchView(type);
             });
         }
-    })(navButtons[ni]);
+    })(_navBtns[ni]);
 }
 
 // ---------------------------------------------------------------------------
