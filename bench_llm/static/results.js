@@ -883,7 +883,6 @@ function switchView(view) {
         if (filterBar) filterBar.classList.add("hidden");
         resultsPanel.classList.add("hidden");
         if (chartsPanel) chartsPanel.classList.add("hidden");
-        if (chartsPanel) chartsPanel.innerHTML = "";
         // Set active task type from view
         activeTaskType = view;
         // Load and render tasks
