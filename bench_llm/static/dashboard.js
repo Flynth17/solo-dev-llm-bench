@@ -144,7 +144,7 @@ async function loadConfig() {
         lmStudioUrlInput.value = config.lm_studio_url || "http://localhost:1234";
         promptInput.value = config.prompt || "";
         iterationsInput.value = config.iterations || 5;
-        maxTokensInput.value = config.max_tokens || 500;
+maxTokensInput.value = config.max_tokens || 1024;
         temperatureInput.value = config.temperature != null ? config.temperature : 0;
         // New fields
         if (config.hardware_label) {
