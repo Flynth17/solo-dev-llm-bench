@@ -79,17 +79,20 @@ function formatTimestamp(iso) {
 
 function escapeHtml(str) {
     if (!str) return "";
+    var AMP = String.fromCharCode(38) + "amp" + String.fromCharCode(59);
+    var LT = String.fromCharCode(60) + "lt" + String.fromCharCode(59);
+    var GT = String.fromCharCode(62) + "gt" + String.fromCharCode(59);
+    var QUOT = String.fromCharCode(34) + "quot" + String.fromCharCode(59);
+    var APOS = String.fromCharCode(39) + "39" + String.fromCharCode(59);
     var result = "";
     for (var i = 0; i < str.length; i++) {
         var ch = str.charAt(i);
-        switch (ch) {
-            case "&": result += String.fromCharCode(38) + "amp;" + String.fromCharCode(59); break;
-            case "<": result += String.fromCharCode(60) + "lt;" + String.fromCharCode(59); break;
-            case ">": result += String.fromCharCode(62) + "gt;" + String.fromCharCode(59); break;
-            case '"': result += String.fromCharCode(34) + "quot;" + String.fromCharCode(59); break;
-            case "'": result += String.fromCharCode(39) + "39;" + String.fromCharCode(59); break;
-            default: result += ch;
-        }
+        if (ch === "&") { result += AMP; }
+        else if (ch === "<") { result += LT; }
+        else if (ch === ">") { result += GT; }
+        else if (ch === '"') { result += QUOT; }
+        else if (ch === "'") { result += APOS; }
+        else { result += ch; }
     }
     return result;
 }
@@ -469,7 +472,7 @@ function renderHistoricalComparisonChart(runsWithWarm) {
 // ---------------------------------------------------------------------------
 
 function showStatus(msg, type) {
-    // Simple status — could add a status element if needed
+    // Simple status - could add a status element if needed
     if (!msg) return;
 }
 
