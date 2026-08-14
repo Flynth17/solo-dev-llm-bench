@@ -102,6 +102,10 @@ function escapeHtml(str) {
 // ---------------------------------------------------------------------------
 var allRuns = [];
 var filteredRuns = [];
+var allTasks = [];
+
+// Active tab
+var activeTab = "benchmarks"; // "benchmarks" or "tasks"
 
 // ---------------------------------------------------------------------------
 // Load results from backend
@@ -727,6 +731,155 @@ resultsContainer.addEventListener("click", function (e) {
 
     openDeleteModal(runId, model, timestamp);
 });
+
+// ---------------------------------------------------------------------------
+// Tab switching
+// ---------------------------------------------------------------------------
+
+var tabBenchmarks = document.getElementById("tab-benchmarks");
+var tabTasks = document.getElementById("tab-tasks");
+var taskHistorySection = document.getElementById("task-history-section");
+
+function switchTab(tab) {
+    activeTab = tab;
+    if (tab === "benchmarks") {
+        tabBenchmarks.classList.add("active");
+        tabTasks.classList.remove("active");
+        resultsPanel.classList.remove("hidden");
+        if (taskHistorySection) taskHistorySection.classList.add("hidden");
+    } else {
+        tabTasks.classList.add("active");
+        tabBenchmarks.classList.remove("active");
+        resultsPanel.classList.add("hidden");
+        if (taskHistorySection) taskHistorySection.classList.remove("hidden");
+        // Load tasks if not yet loaded
+        if (allTasks.length === 0) {
+            loadTasks();
+        }
+        renderTasks();
+    }
+}
+
+if (tabBenchmarks) {
+    tabBenchmarks.addEventListener("click", function () { switchTab("benchmarks"); });
+}
+if (tabTasks) {
+    tabTasks.addEventListener("click", function () { switchTab("tasks"); });
+}
+
+// ---------------------------------------------------------------------------
+// Task History
+// ---------------------------------------------------------------------------
+
+async function loadTasks() {
+    try {
+        var resp = await fetch("/api/tasks-with-results");
+        if (!resp.ok) return;
+        var data = await resp.json();
+        allTasks = data.tasks || [];
+    } catch (_) {
+        allTasks = [];
+    }
+}
+
+function renderTasks() {
+    var container = document.getElementById("task-history-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (allTasks.length === 0) {
+        taskHistorySection.classList.add("hidden");
+        return;
+    }
+
+    taskHistorySection.classList.remove("hidden");
+
+    for (var i = 0; i < allTasks.length; i++) {
+        var t = allTasks[i];
+        var result = t.result || {};
+        var aggregate = result.aggregate || {};
+        var taskType = t.task_type || "";
+        var scoreKey = taskType + "_score";
+        var score = aggregate["avg_" + scoreKey] || aggregate[scoreKey] || null;
+        var meetsMin = result["meets_minimum"] || aggregate[taskType + "_meets_minimum"] || false;
+        var tps = aggregate["avg_tokens_per_second"] || null;
+
+        var div = document.createElement("div");
+        div.className = "task-history-row";
+        div.setAttribute("data-task-id", t.task_id);
+
+        // Name
+        var nameSpan = document.createElement("span");
+        nameSpan.className = "task-history-name";
+        nameSpan.textContent = t.name || "Unnamed";
+        nameSpan.title = t.name || "Unnamed";
+        div.appendChild(nameSpan);
+
+        // Type badge
+        var typeSpan = document.createElement("span");
+        typeSpan.className = "task-history-type " + taskType;
+        typeSpan.textContent = taskType.toUpperCase();
+        div.appendChild(typeSpan);
+
+        // Score
+        if (score !== null) {
+            var scoreSpan = document.createElement("span");
+            scoreSpan.className = "task-history-score " + (meetsMin ? "pass" : "fail");
+            scoreSpan.textContent = "Score: " + score;
+            scoreSpan.title = meetsMin ? "Meets minimum threshold" : "Does not meet minimum threshold";
+            div.appendChild(scoreSpan);
+        }
+
+        // TPS
+        if (tps !== null) {
+            var tpsSpan = document.createElement("span");
+            tpsSpan.className = "task-history-tps";
+            tpsSpan.textContent = fmt2(tps) + " tok/s";
+            div.appendChild(tpsSpan);
+        }
+
+        // Timestamp
+        var tsSpan = document.createElement("span");
+        tsSpan.className = "task-history-timestamp";
+        tsSpan.textContent = formatTimestamp(t.completed_at || t.created_at);
+        div.appendChild(tsSpan);
+
+        // Actions
+        var actionsDiv = document.createElement("div");
+        actionsDiv.className = "task-history-actions";
+
+        var delBtn = document.createElement("button");
+        delBtn.className = "delete-task-btn";
+        delBtn.title = "Delete task";
+        delBtn.textContent = "\u2716";
+        delBtn.addEventListener("click", (function (taskId) {
+            return function () { deleteTaskHistory(taskId); };
+        })(t.task_id));
+        actionsDiv.appendChild(delBtn);
+
+        div.appendChild(actionsDiv);
+        container.appendChild(div);
+    }
+}
+
+async function deleteTaskHistory(taskId) {
+    if (!confirm("Delete this task?")) return;
+
+    try {
+        var resp = await fetch("/api/tasks/" + encodeURIComponent(taskId), {
+            method: "DELETE"
+        });
+        if (!resp.ok) {
+            var err = await resp.json().catch(function () { return {}; });
+            throw new Error(err.detail || "HTTP " + resp.status);
+        }
+        // Reload
+        allTasks = [];
+        loadTasks().then(function () { renderTasks(); });
+    } catch (e) {
+        alert("Failed to delete task: " + e.message);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Init

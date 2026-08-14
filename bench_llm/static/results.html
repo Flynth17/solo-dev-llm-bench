@@ -42,13 +42,27 @@
             </div>
         </section>
 
+        <!-- Tab Bar -->
+        <section class="panel" style="padding:0.75rem 1rem;">
+            <div class="tab-bar">
+                <button id="tab-benchmarks" class="tab-btn active">Benchmark History</button>
+                <button id="tab-tasks" class="tab-btn">Task History</button>
+            </div>
+        </section>
+
         <!-- Results Count -->
         <div id="results-count" class="results-count"></div>
 
-        <!-- Past Results -->
+        <!-- Benchmark Results -->
         <section id="results-panel" class="panel hidden">
             <h2>Past Results</h2>
             <div id="results-container"></div>
+        </section>
+
+        <!-- Task History -->
+        <section id="task-history-section" class="panel hidden">
+            <h2>Task History</h2>
+            <div id="task-history-container"></div>
         </section>
 
         <!-- Historical Comparison Chart -->
