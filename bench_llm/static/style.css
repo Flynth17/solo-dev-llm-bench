@@ -1290,3 +1290,155 @@ tr.warm-row td {
 #task-history-section.visible {
     display: block;
 }
+
+/* ---------------------------------------------------------------------------
+   Task-Type Filter Bar
+   --------------------------------------------------------------------------- */
+
+.task-type-filter {
+    padding: 0.4rem 1rem !important;
+    margin-bottom: 0.5rem;
+}
+
+.task-type-tabs {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.task-type-btn {
+    padding: 0.35rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.task-type-btn:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+.task-type-btn.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #1d4ed8;
+}
+
+/* ---------------------------------------------------------------------------
+   Markdown Result Card
+   --------------------------------------------------------------------------- */
+
+.markdown-result-card {
+    margin-top: 0.75rem;
+    margin-left: 1rem;
+    padding: 0.75rem 1rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 4px;
+    font-size: 0.88rem;
+}
+
+.markdown-result-card.fail {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.markdown-result-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.markdown-result-header .pass-badge,
+.markdown-result-header .fail-badge {
+    padding: 0.15rem 0.6rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.pass-badge {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.fail-badge {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.markdown-result-score {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #166534;
+}
+
+.fail .markdown-result-score {
+    color: #991b1b;
+}
+
+.markdown-result-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.4rem 1.5rem;
+}
+
+.markdown-result-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.markdown-result-item .label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.markdown-result-item .value {
+    font-size: 0.95rem;
+    color: #111827;
+    font-weight: 500;
+}
+
+.markdown-result-errors {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.markdown-result-expand {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: #2563eb;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.markdown-result-expand:hover {
+    color: #1d4ed8;
+}
+
+.markdown-result-extra {
+    display: none;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #d1d5db;
+}
+
+.markdown-result-extra.visible {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.3rem 1.5rem;
+}

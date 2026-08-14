@@ -50,6 +50,17 @@
             </div>
         </section>
 
+        <!-- Task-Type Filter Bar (inside Task History) -->
+        <section id="task-type-filter" class="panel task-type-filter" style="padding:0.5rem 1rem;">
+            <div class="task-type-tabs">
+                <button class="task-type-btn active" data-type="all">All</button>
+                <button class="task-type-btn" data-type="markdown">Markdown</button>
+                <button class="task-type-btn" data-type="python">Python</button>
+                <button class="task-type-btn" data-type="java">Java</button>
+                <button class="task-type-btn" data-type="unsolvable">Unsolvable</button>
+            </div>
+        </section>
+
         <!-- Results Count -->
         <div id="results-count" class="results-count"></div>
 
@@ -60,9 +71,10 @@
         </section>
 
         <!-- Task History -->
-        <section id="task-history-section" class="panel hidden">
+        <section id="task-history-section" class="panel">
             <h2>Task History</h2>
             <div id="task-history-container"></div>
+            <div id="task-history-empty" class="empty-state hidden">No results for this type yet.</div>
         </section>
 
         <!-- Historical Comparison Chart -->

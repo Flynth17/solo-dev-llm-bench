@@ -14,6 +14,7 @@ from src.benchmark import fetch_models, run_benchmark
 from src.benchmark_markdown import run_markdown_benchmark, DEFAULT_PROMPTS as MD_PROMPTS
 from src.benchmark_python import run_python_benchmark, DEFAULT_PROMPTS as PY_PROMPTS
 from src.benchmark_java import run_java_benchmark, DEFAULT_PROMPTS as JA_PROMPTS
+from src.task_markdown import run_markdown_task, TASK_DEFINITION as MD_TASK_DEF
 from src.config_loader import load_config, save_config
 from src.results import ResultsStore
 from src import task_manager
@@ -384,13 +385,15 @@ async def run_task(task_id: str, config: dict):
 
     try:
         if task["task_type"] == "markdown":
-            result = await run_markdown_benchmark(
+            result = await run_markdown_task(
                 lm_studio_url=lm_studio_url,
                 model=model,
-                prompt=task["prompt"] or MD_PROMPTS[0]["prompt"],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                iterations=iterations,
+                fixture_name=MD_TASK_DEF["fixture_dir"] + "/broken.md",
+                max_output_tokens=int(config.get("max_output_tokens", MD_TASK_DEF["max_output_tokens"])),
+                temperature=float(config.get("temperature", MD_TASK_DEF["temperature"])),
+                hardware_label=config.get("hardware_label", ""),
+                execution_environment=config.get("execution_environment", "Local"),
+                connection_type=config.get("connection_type", ""),
             )
         elif task["task_type"] == "python":
             result = await run_python_benchmark(
@@ -413,8 +416,30 @@ async def run_task(task_id: str, config: dict):
         else:
             raise HTTPException(status_code=400, detail=f"Unknown task type: {task['task_type']}")
 
-        # Save result
+        # Save result to task table (last result)
         task_manager.set_task_result(task_id, result)
+
+        # Persist as historical task run
+        passed_val = result.get("passed", None)
+        score_val = result.get("score", None)
+        task_manager.create_task_run(
+            task_id=task_id,
+            task_name=result.get("task_name", task["name"]),
+            task_type=result.get("task_type", task["task_type"]),
+            model=model,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            passed=passed_val,
+            score=score_val,
+            initial_errors=result.get("initial_errors"),
+            final_errors=result.get("final_errors"),
+            errors_fixed=result.get("errors_fixed"),
+            output_tokens=result.get("output_tokens"),
+            input_tokens=result.get("input_tokens"),
+            tokens_per_second=result.get("tokens_per_second"),
+            ttft_seconds=result.get("ttft_seconds"),
+            wall_time_seconds=result.get("wall_time_seconds"),
+            result=result,
+        )
 
         # Also persist to results store
         run_id = f"task-{task_id}-run"
@@ -461,6 +486,29 @@ async def delete_task(task_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
     return {"status": "ok", "task_id": task_id}
+
+
+# ---------------------------------------------------------------------------
+# Task History API (historical task runs)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tasks-with-results")
+async def get_tasks_with_results(task_type: str | None = None):
+    """Return persistent historical task runs for Task History.
+
+    Supports optional ?task_type=markdown|python|java|unsolvable filter.
+    """
+    runs = task_manager.get_task_runs(task_type=task_type)
+    return {"tasks": runs}
+
+
+@app.delete("/api/task-runs/{run_id}")
+async def delete_task_run(run_id: int):
+    """Delete a single historical task run."""
+    deleted = task_manager.delete_task_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Task run {run_id} not found")
+    return {"status": "ok", "run_id": run_id}
 
 
 # ---------------------------------------------------------------------------
