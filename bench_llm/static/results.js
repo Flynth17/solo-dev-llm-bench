@@ -4,7 +4,7 @@
 // DOM references
 // ---------------------------------------------------------------------------
 var filterModelInput = document.getElementById("filter-model");
-var taskTypeFilterBar = document.getElementById("task-type-filter");
+var filterBar = document.getElementById("filter-bar");
 var filterHardwareInput = document.getElementById("filter-hardware");
 var filterEnvSelect = document.getElementById("filter-env");
 var clearFiltersBtn = document.getElementById("clear-filters");
@@ -105,11 +105,8 @@ var allRuns = [];
 var filteredRuns = [];
 var allTasks = [];
 
-// Active tab — default to Task History
-var activeTab = "tasks"; // "benchmarks" or "tasks"
-
-// Active task-type filter
-var activeTaskType = "all";
+// Active view — default to "all"
+var activeView = "all"; // "all", "raw", "markdown", "python", "java", "unsolvable"
 
 // ---------------------------------------------------------------------------
 // Load results from backend
@@ -836,49 +833,68 @@ resultsContainer.addEventListener("click", function (e) {
 });
 
 // ---------------------------------------------------------------------------
-// Tab switching
+// Unified navigation (All | Raw Speed | Markdown | Python | Java | Unsolvable)
 // ---------------------------------------------------------------------------
 
-var tabBenchmarks = document.getElementById("tab-benchmarks");
-var tabTasks = document.getElementById("tab-tasks");
+var navAll = document.getElementById("nav-all");
+var navRawSpeed = document.getElementById("nav-raw-speed");
+var navMarkdown = document.getElementById("nav-markdown");
+var navPython = document.getElementById("nav-python");
+var navJava = document.getElementById("nav-java");
+var navUnsolvable = document.getElementById("nav-unsolvable");
 var taskHistorySection = document.getElementById("task-history-section");
 
-function switchTab(tab) {
-    activeTab = tab;
-    if (tab === "benchmarks") {
-        tabBenchmarks.classList.add("active");
-        tabTasks.classList.remove("active");
-        resultsPanel.classList.remove("hidden");
+function switchView(view) {
+    activeView = view;
+
+    // Update active button
+    var allNav = [navAll, navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
+    for (var i = 0; i < allNav.length; i++) {
+        if (allNav[i]) allNav[i].classList.remove("active");
+    }
+    switch (view) {
+        case "all": if (navAll) navAll.classList.add("active"); break;
+        case "raw": if (navRawSpeed) navRawSpeed.classList.add("active"); break;
+        case "markdown": if (navMarkdown) navMarkdown.classList.add("active"); break;
+        case "python": if (navPython) navPython.classList.add("active"); break;
+        case "java": if (navJava) navJava.classList.add("active"); break;
+        case "unsolvable": if (navUnsolvable) navUnsolvable.classList.add("active"); break;
+    }
+
+    if (view === "raw") {
+        // Raw Speed mode
         if (taskHistorySection) taskHistorySection.classList.add("hidden");
-        // Hide task-type filters when switching to Benchmark History
-        if (taskTypeFilterBar) taskTypeFilterBar.classList.remove("visible");
-        // Re-render chart if it was cleared by tab switch
-        if (chartsPanel.classList.contains("hidden") && filteredRuns.length > 0) {
-            chartsPanel.classList.remove("hidden");
+        if (filterBar) filterBar.classList.remove("hidden");
+        resultsPanel.classList.remove("hidden");
+        if (chartsPanel) chartsPanel.classList.remove("hidden");
+        // Re-render chart
+        if (filteredRuns.length > 0) {
             renderHistoryCharts();
         }
     } else {
-        tabTasks.classList.add("active");
-        tabBenchmarks.classList.remove("active");
+        // Task results mode
+        if (filterBar) filterBar.classList.add("hidden");
         resultsPanel.classList.add("hidden");
-        if (taskHistorySection) taskHistorySection.classList.remove("hidden");
-        // Hide benchmark chart during task history
         if (chartsPanel) chartsPanel.classList.add("hidden");
-        // Show task-type filters when Task History is active
-        if (taskTypeFilterBar) taskTypeFilterBar.classList.add("visible");
-        // Load tasks if not yet loaded
-        if (allTasks.length === 0) {
-            loadTasks();
-        }
-        renderTasks();
+        // Set active task type from view
+        activeTaskType = view;
+        // Load and render tasks
+        allTasks = [];
+        loadTasks().then(function () { renderTasks(); });
     }
 }
 
-if (tabBenchmarks) {
-    tabBenchmarks.addEventListener("click", function () { switchTab("benchmarks"); });
-}
-if (tabTasks) {
-    tabTasks.addEventListener("click", function () { switchTab("tasks"); });
+// Attach click handlers to all nav buttons
+var navButtons = [navAll, navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
+for (var ni = 0; ni < navButtons.length; ni++) {
+    (function (btn) {
+        if (btn) {
+            btn.addEventListener("click", function () {
+                var type = btn.getAttribute("data-type");
+                switchView(type);
+            });
+        }
+    })(navButtons[ni]);
 }
 
 // ---------------------------------------------------------------------------
@@ -959,13 +975,13 @@ function renderTasks() {
             div.appendChild(modelSpan);
         }
 
-        // PASS/FAIL badge — PASS only when final_errors == 0
-        var effectivePass = (finalErrors !== null && finalErrors !== undefined && finalErrors === 0);
-        if (effectivePass || passed !== null) {
+        // PASS/FAIL badge — use the stored passed value from the validator/task runner
+        var effectivePass = (passed !== null && passed !== undefined) ? passed : false;
+        if (effectivePass) {
             var statusBadge = document.createElement("span");
-            statusBadge.className = effectivePass ? "task-history-score pass" : "task-history-score fail";
-            statusBadge.textContent = effectivePass ? "PASS" : "FAIL";
-            statusBadge.title = effectivePass ? "Task passed (final_errors == 0)" : "Task failed (final_errors > 0)";
+            statusBadge.className = "task-history-score pass";
+            statusBadge.textContent = "PASS";
+            statusBadge.title = "Task passed";
             div.appendChild(statusBadge);
         }
 
@@ -1007,6 +1023,18 @@ function renderTasks() {
 
         div.appendChild(actionsDiv);
         container.appendChild(div);
+
+        // Empty state messages for types with no results
+        if (allTasks.length === 0 && activeTaskType !== "all" && activeTaskType !== "markdown") {
+            var emptyMsg = "";
+            if (activeTaskType === "python") emptyMsg = "No Python results yet.";
+            else if (activeTaskType === "java") emptyMsg = "No Java results yet.";
+            else if (activeTaskType === "unsolvable") emptyMsg = "No Unsolvable results yet.";
+            if (emptyEl && emptyMsg) {
+                emptyEl.textContent = emptyMsg;
+                emptyEl.classList.remove("hidden");
+            }
+        }
 
         // Markdown result card (expandable detail)
         if (taskType === "markdown") {
@@ -1213,7 +1241,6 @@ for (var bi = 0; bi < taskTypeBtns.length; bi++) {
 // ---------------------------------------------------------------------------
 
 loadResults();
-// When defaulting to tasks, load tasks immediately
-if (activeTab === "tasks") {
-    loadTasks().then(function () { switchTab("tasks"); });
-}
+// Initialize the page through the same function used when the user clicks All
+// This ensures first-load state and manual-click state use the same code path
+switchView("all");
