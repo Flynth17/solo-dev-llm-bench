@@ -538,7 +538,10 @@ filterEnvSelect.addEventListener("change", applyFilters);
 clearFiltersBtn.addEventListener("click", clearFilters);
 
 // Delete modal event listeners
-cancelDeleteBtn.addEventListener("click", closeDeleteModal);
+cancelDeleteBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    closeDeleteModal();
+});
 confirmDeleteBtn.addEventListener("click", executeDelete);
 
 // Close modal on overlay click

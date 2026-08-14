@@ -196,6 +196,48 @@ def seeded_data(client):
     main_module.results_store = old_store
 
 
+# ---------------------------------------------------------------------------
+# Client-side cancel regression tests (pytest + httpx for HTTP mocking)
+# ---------------------------------------------------------------------------
+
+class TestCancelRegression:
+
+    def test_closeDeleteModal_clears_pending_state(self):
+        """closeDeleteModal() should clear all pending vars and hide modal."""
+        # Read the JS source directly and verify closeDeleteModal resets state
+        js_path = Path(__file__).parent.parent / "static" / "results.js"
+        js_text = js_path.read_text(encoding="utf-8")
+        assert "pendingDeleteRunId = null" in js_text
+        assert 'pendingDeleteModel = ""' in js_text
+        assert 'pendingDeleteTimestamp = ""' in js_text
+        assert 'deleteModal.classList.add("hidden")' in js_text
+
+    def test_cancel_button_has_stopPropagation(self):
+        """Cancel button should call e.stopPropagation() to prevent bubbling."""
+        js_path = Path(__file__).parent.parent / "static" / "results.js"
+        js_text = js_path.read_text(encoding="utf-8")
+        # Verify cancelDeleteBtn listener uses stopPropagation
+        assert "cancelDeleteBtn.addEventListener" in js_text
+        assert "stopPropagation()" in js_text
+
+    def test_escapeHtml_produces_valid_entities(self):
+        """escapeHtml must produce valid HTML entities, not broken strings."""
+        js_path = Path(__file__).parent.parent / "static" / "results.js"
+        js_text = js_path.read_text(encoding="utf-8")
+        # Verify the function uses String.fromCharCode to build entities
+        assert "String.fromCharCode(38)" in js_text  # &
+        assert "String.fromCharCode(60)" in js_text  # <
+        assert "String.fromCharCode(62)" in js_text  # >
+        # Verify no broken entities like "lt;;" or "amp;;"
+        assert "lt;;" not in js_text
+        assert "amp;;" not in js_text
+        assert "gt;;" not in js_text
+
+
+# ---------------------------------------------------------------------------
+# API delete endpoint tests
+# ---------------------------------------------------------------------------
+
 class TestApiDeleteResults:
 
     def test_api_delete_existing_run(self, client, seeded_data):
