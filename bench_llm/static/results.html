@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Past Results — Solo Dev LLM Bench</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <h1>Solo Dev LLM Bench</h1>
+            <div class="page-actions">
+                <a href="/" class="btn-primary">← Back to Benchmark</a>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <section class="panel filter-panel">
+            <h2>Filter Results</h2>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="filter-model">Model</label>
+                    <input type="text" id="filter-model" placeholder="Filter by model name...">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-hardware">Hardware</label>
+                    <input type="text" id="filter-hardware" placeholder="Filter by hardware...">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-env">Environment</label>
+                    <select id="filter-env">
+                        <option value="">All</option>
+                        <option value="Local">Local</option>
+                        <option value="Self-hosted">Self-hosted</option>
+                        <option value="Cloud">Cloud</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button id="clear-filters" class="btn-secondary">Clear Filters</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Count -->
+        <div id="results-count" class="results-count"></div>
+
+        <!-- Past Results -->
+        <section id="results-panel" class="panel hidden">
+            <h2>Past Results</h2>
+            <div id="results-container"></div>
+        </section>
+
+        <!-- Historical Comparison Chart -->
+        <section id="charts-panel" class="panel hidden">
+            <h2>Historical Comparison</h2>
+            <div id="charts-container"></div>
+        </section>
+
+        <!-- Empty State -->
+        <section id="empty-state" class="panel hidden">
+            <h2>No Results Found</h2>
+            <p>There are no benchmark results to display. Run a benchmark from the main page to get started.</p>
+            <a href="/" class="btn-primary">Run Benchmark</a>
+        </section>
+    </div>
+
+    <script src="/static/results.js"></script>
+</body>
+</html>

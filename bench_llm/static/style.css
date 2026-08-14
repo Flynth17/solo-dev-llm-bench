@@ -467,3 +467,137 @@ tr.warm-row td {
         min-width: 100%;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Past Results page styles
+   --------------------------------------------------------------------------- */
+
+/* Page header with action buttons */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.page-actions a.btn-primary {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* Filter panel */
+.filter-panel {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 180px;
+}
+
+.filter-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #444;
+}
+
+.filter-group input,
+.filter-group select {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Results count */
+.results-count {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+/* View all past results link */
+.view-all-link {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.view-all-link a {
+    display: inline-block;
+    padding: 0.6rem 1.5rem;
+    background: #fff;
+    color: #2563eb;
+    border: 2px solid #2563eb;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.15s ease;
+}
+
+.view-all-link a:hover {
+    background: #2563eb;
+    color: #fff;
+}
+
+/* Empty state */
+#empty-state p {
+    color: #64748b;
+    margin-bottom: 1rem;
+}
+
+#empty-state .btn-primary {
+    display: inline-block;
+}
+
+/* Secondary button */
+.btn-secondary {
+    background: #fff;
+    color: #444;
+    border: 1px solid #ccc;
+    padding: 0.5rem 1.25rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-secondary:hover {
+    background: #f0f0f0;
+    border-color: #aaa;
+}
+
+.btn-secondary:active {
+    background: #e0e0e0;
+}

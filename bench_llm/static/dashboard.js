@@ -22,8 +22,6 @@ var runBtn = document.getElementById("run-benchmark");
 var statusEl = document.getElementById("status");
 var resultsPanel = document.getElementById("results-panel");
 var resultsContainer = document.getElementById("results-container");
-var historyPanel = document.getElementById("history-panel");
-var historyContainer = document.getElementById("history-container");
 
 // Track the currently loaded preset name (empty if custom)
 var currentPresetName = "";
@@ -347,96 +345,6 @@ function renderRunResult(result, isLatest) {
     return group;
 }
 
-/** Render historical runs grouped by run_id. */
-function renderHistory(allRuns) {
-    if (!allRuns || allRuns.length === 0) {
-        hideHistory();
-        return;
-    }
-
-    historyPanel.classList.remove("hidden");
-    historyContainer.innerHTML = "";
-
-    // Group by run_id (newest first)
-    var groups = {};
-    var order = [];
-    for (var i = allRuns.length - 1; i >= 0; i--) {
-        var run = allRuns[i];
-        var rid = run.run_id || run.runId || "";
-        if (!rid) continue;
-        if (!groups[rid]) {
-            groups[rid] = { runs: [], timestamp: run.timestamp || "", model: run.model_key || run.model || "" };
-            order.push(rid);
-        }
-        groups[rid].runs.push(run);
-    }
-
-    // Sort groups by timestamp descending
-    order.sort(function (a, b) {
-        var ta = groups[a].timestamp || "";
-        var tb = groups[b].timestamp || "";
-        return tb.localeCompare(ta);
-    });
-
-    for (var idx = 0; idx < order.length; idx++) {
-        var rid = order[idx];
-        var group = groups[rid];
-        var div = document.createElement("div");
-        div.className = "history-run";
-
-        var header = document.createElement("div");
-        header.className = "history-run-header";
-
-        var badges = "";
-        if (group.model) {
-            badges += '<span class="badge badge-model">' + escapeHtml(group.model) + '</span>';
-        }
-        var firstRun = group.runs[0] || {};
-        if (firstRun.hardware_label) {
-            badges += '<span class="badge badge-hardware">' + escapeHtml(firstRun.hardware_label) + '</span>';
-        }
-        if (firstRun.execution_environment) {
-            badges += '<span class="badge badge-env">' + escapeHtml(firstRun.execution_environment) + '</span>';
-        }
-
-        header.innerHTML = '<span>Run #' + (order.length - idx) + ' <span class="timestamp">(' + formatTimestamp(group.timestamp) + ')</span></span>' + badges;
-        div.appendChild(header);
-
-        // Compute aggregates for this group
-        var tpsValues = group.runs.filter(function (r) { return r.tokens_per_second > 0; }).map(function (r) { return r.tokens_per_second; });
-        var warmRuns = group.runs.filter(function (r) { return r.cold_or_warm === "warm"; });
-        var warmTps = warmRuns.filter(function (r) { return r.tokens_per_second > 0; }).map(function (r) { return r.tokens_per_second; });
-        var warmTtfts = warmRuns.map(function (r) { return parseFloat(r.ttft_seconds) || 0; });
-
-        var aggHtml = '<div class="aggregate" style="margin-top:0.5rem">';
-        if (tpsValues.length > 0) {
-            var avg = tpsValues.reduce(function (a, b) { return a + b; }, 0) / tpsValues.length;
-            aggHtml += '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + avg.toFixed(2) + '</div></div>';
-            aggHtml += '<div class="aggregate-item"><div class="label">Min tok/s</div><div class="value">' + Math.min.apply(null, tpsValues).toFixed(2) + '</div></div>';
-            aggHtml += '<div class="aggregate-item"><div class="label">Max tok/s</div><div class="value">' + Math.max.apply(null, tpsValues).toFixed(2) + '</div></div>';
-        } else {
-            aggHtml += '<span class="unavailable">No data</span>';
-        }
-        aggHtml += '</div>';
-
-        var warmHtml = "";
-        if (warmTps.length > 0) {
-            var warmAvg = warmTps.reduce(function (a, b) { return a + b; }, 0) / warmTps.length;
-            var warmAvgTtft = warmTtfts.reduce(function (a, b) { return a + b; }, 0) / warmTtfts.length;
-            // Fix v1.0.1 screenshot: Warm TTFT uses formatTtft (shows ms for <1s)
-            warmHtml = '<div class="warm-aggregate" style="margin-top:0.5rem">' +
-                '<div class="aggregate-item"><div class="label">Warm Avg</div><div class="value">' + warmAvg.toFixed(2) + ' tok/s</div></div>' +
-                '<div class="aggregate-item"><div class="label">Warm TTFT</div><div class="value">' + formatTtft(warmAvgTtft) + '</div></div>' +
-            '</div>';
-        } else {
-            warmHtml = '<div class="warm-aggregate" style="margin-top:0.5rem"><span class="unavailable">Unavailable</span></div>';
-        }
-
-        div.insertAdjacentHTML("beforeend", aggHtml);
-        div.insertAdjacentHTML("beforeend", warmHtml);
-        historyContainer.appendChild(div);
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Run benchmark
@@ -487,7 +395,6 @@ async function runBenchmark() {
     disableRun(true);
     showStatus("Running benchmark\u2026", "info");
     hideResults();
-    hideHistory();
 
     try {
         var resp = await fetch("/api/benchmark/run", {
@@ -513,13 +420,6 @@ async function runBenchmark() {
 
         // Render charts for this run
         renderResultsCharts(data.result.runs);
-
-        // Also load previous runs
-        var loadResultsAndCharts = (allRuns) => {
-            renderHistory(allRuns);
-            renderHistoryCharts(allRuns);
-        };
-        loadResults().then(loadResultsAndCharts);
 
     } catch (e) {
         showStatus("Benchmark failed: " + e.message, "error");
@@ -1063,19 +963,6 @@ function renderResultsCharts(runs) {
     if (ttftChart) chartsDiv.appendChild(ttftChart);
 }
 
-/** Render charts for historical runs. */
-function renderHistoryCharts(groupedRuns) {
-    var chartsDiv = document.getElementById("history-charts");
-    if (!chartsDiv) return;
-    chartsDiv.innerHTML = "";
-
-    if (!groupedRuns || groupedRuns.length < 2) return;
-
-    // Historical comparison chart
-    var histChart = renderHistoricalComparison(groupedRuns);
-    if (histChart) chartsDiv.appendChild(histChart);
-}
-
 // ---------------------------------------------------------------------------
 // Prompt preset management
 // ---------------------------------------------------------------------------
@@ -1346,8 +1233,6 @@ deletePromptBtn.addEventListener("click", deletePrompt);
 loadConfig().then(function () {
     // Auto-load models after config is loaded
     loadModels();
-    // Load any previous results
-    loadResults();
     // Initialize prompt presets
     initPromptPresets();
 });

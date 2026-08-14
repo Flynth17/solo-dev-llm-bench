@@ -74,6 +74,28 @@ async def dashboard():
     return index_file.read_text(encoding="utf-8")
 
 
+@app.get("/results", response_class=HTMLResponse)
+async def past_results():
+    """Serve the Past Results HTML page."""
+    results_file = STATIC_DIR / "results.html"
+    return results_file.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Past Results API endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/api/results")
+async def get_past_results():
+    """Return all benchmark results as individual rows, newest first."""
+    all_runs = results_store.get_all()
+
+    # Sort by timestamp descending (newest first)
+    all_runs.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+
+    return {"results": all_runs}
+
+
 # ---------------------------------------------------------------------------
 # Config endpoints
 # ---------------------------------------------------------------------------
