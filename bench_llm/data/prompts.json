@@ -1,0 +1,8 @@
+{
+  "prompts": [
+    {
+      "name": "Bench 1",
+      "prompt": "You are completing a controlled LLM performance benchmark.\n\nWrite a concise technical design for a local-first AI assistant used by a solo software developer.\n\nThe system must include:\n- a local LLM\n- persistent Markdown-based knowledge\n- semantic search\n- a coding agent\n- optional remote access to the local AI machine\n- clear separation between canonical knowledge and derived indexes\n- human approval for important decisions\n\nCover exactly these six sections:\n\n1. Architecture\n2. Data Flow\n3. Knowledge Persistence\n4. Agent Governance\n5. Failure Recovery\n6. Security Boundaries\n\nRequirements:\n- Explain concrete component interactions, not generic AI concepts.\n- Include at least three realistic failure scenarios and how the system recovers.\n- Explain what happens if the vector/index database is completely deleted.\n- Explain how a remote coding client can use the local LLM without making the local knowledge store publicly accessible.\n- Distinguish facts, generated suggestions, and human-approved decisions.\n- Do not use tables.\n- Do not include code.\n- Do not mention this benchmark.\n- Do not reveal chain-of-thought.\n- Aim for approximately 500 output tokens.\n- Finish the response naturally rather than adding filler merely to reach the target length."
+    }
+  ]
+}
