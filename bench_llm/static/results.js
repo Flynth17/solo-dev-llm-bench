@@ -508,7 +508,11 @@ async function executeDelete() {
         return;
     }
 
+    // Save runId BEFORE closing modal — closeDeleteModal() clears pending state
     var runId = pendingDeleteRunId;
+    var model = pendingDeleteModel;
+    var timestamp = pendingDeleteTimestamp;
+
     closeDeleteModal();
 
     try {
