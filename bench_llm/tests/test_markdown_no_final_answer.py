@@ -335,5 +335,34 @@ class TestStatusRenderingLogic(TestCase):
         self.assertIsNone(status_label)
 
 
+class TestMarkdownPayloadStructure(TestCase):
+    """Verify the exact outgoing LM Studio payload in task_markdown.py."""
+
+    def test_payload_contains_correct_keys_and_not_max_tokens(self):
+        """The Markdown request must use max_output_tokens (not max_tokens) and include store=False."""
+        # Import the function that builds the payload
+        from src.task_markdown import run_markdown_task, TASK_DEFINITION
+
+        # We verify by inspecting the source code directly since we can't
+        # actually call LM Studio in a unit test.
+        import inspect
+        source = inspect.getsource(run_markdown_task)
+
+        # Must contain max_output_tokens
+        self.assertIn('"max_output_tokens"', source, "Payload must use 'max_output_tokens' key")
+
+        # Must NOT contain the old wrong key
+        self.assertNotIn('"max_tokens"', source, "Payload must not contain 'max_tokens' key")
+
+        # Must contain store: False
+        self.assertIn('"store": False', source, "Payload must include 'store': False")
+
+        # Must contain required keys
+        self.assertIn('"model"', source)
+        self.assertIn('"input"', source)
+        self.assertIn('"temperature"', source)
+        self.assertIn('"stream": False', source)
+
+
 if __name__ == "__main__":
     main()

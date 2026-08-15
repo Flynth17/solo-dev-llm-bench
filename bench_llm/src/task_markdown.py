@@ -186,8 +186,9 @@ async def run_markdown_task(
         "model": model,
         "input": prompt,
         "temperature": temperature,
-        "max_tokens": max_output_tokens,
+        "max_output_tokens": max_output_tokens,
         "stream": False,
+        "store": False,
     }
 
     start_time = time.perf_counter()
