@@ -10,7 +10,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.benchmark import run_benchmark
 from src.benchmark_markdown import run_markdown_benchmark, DEFAULT_PROMPTS as MD_PROMPTS
 from src.benchmark_python import run_python_benchmark, DEFAULT_PROMPTS as PY_PROMPTS
 from src.benchmark_java import run_java_benchmark, DEFAULT_PROMPTS as JA_PROMPTS
@@ -81,99 +80,6 @@ async def past_results():
     """Serve the Past Results HTML page."""
     results_file = STATIC_DIR / "results.html"
     return results_file.read_text(encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# Benchmark endpoints
-# ---------------------------------------------------------------------------
-
-
-@app.post("/api/benchmark/run")
-async def run_benchmark_endpoint(config: dict):
-    """Run a benchmark and append results."""
-    model = config.get("model", "").strip()
-    if not model:
-        raise HTTPException(status_code=400, detail="Model must be specified")
-
-    prompt = config.get("prompt", "")
-    prompt_name = config.get("prompt_name", config.get("prompt_label", ""))
-
-    # Validate iterations with safe bounds
-    try:
-        iterations = int(config.get("iterations", 5))
-        if iterations < 1 or iterations > 100:
-            raise ValueError
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Iterations must be an integer between 1 and 100")
-
-    # Validate max_tokens
-    try:
-        max_tokens = int(config.get("max_tokens", 500))
-        if max_tokens < 1 or max_tokens > 10000:
-            raise ValueError
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="max_tokens must be an integer between 1 and 10000")
-
-    # Validate temperature
-    try:
-        temperature = float(config.get("temperature", 0))
-        if temperature < 0 or temperature > 2:
-            raise ValueError
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="temperature must be a number between 0 and 2")
-
-    lm_studio_url = config.get("lm_studio_url", "http://localhost:1234")
-    hardware_label = config.get("hardware_label", "")
-    execution_environment = config.get("execution_environment", "Local")
-    connection_type = config.get("connection_type", "")
-
-    try:
-        benchmark_result = await run_benchmark(
-            lm_studio_url=lm_studio_url,
-            model=model,
-            prompt=prompt,
-            iterations=iterations,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            hardware_label=hardware_label,
-            execution_environment=execution_environment,
-            connection_type=connection_type,
-            prompt_name=prompt_name,
-        )
-    except Exception as e:
-        logger.error("Benchmark failed for model %s: %s — %s", model, type(e).__name__, e)
-        raise HTTPException(status_code=502, detail=f"Benchmark failed: {e}")
-
-    # Persist each iteration as a separate CSV row
-    run_id = benchmark_result["run_id"]
-    timestamp = benchmark_result["timestamp"]
-    model_key = benchmark_result["model"]
-    model_display_name = benchmark_result.get("model", model_key)
-
-    for run in benchmark_result["runs"]:
-        row = {
-            "timestamp": timestamp,
-            "run_id": run_id,
-            "model_key": model_key,
-            "model_display_name": model_display_name,
-            "hardware_label": hardware_label,
-            "execution_environment": execution_environment,
-            "connection_type": connection_type,
-            "iteration": run["iteration"],
-            "cold_or_warm": run["cold_or_warm"],
-            "tokens_per_second": run["tokens_per_second"],
-            "ttft_seconds": run["ttft_seconds"],
-            "input_tokens": run["input_tokens"],
-            "output_tokens": run["output_tokens"],
-            "model_load_time_seconds": run.get("model_load_time_seconds"),
-            "wall_time_seconds": run["wall_time_seconds"],
-            "prompt_name": prompt_name,
-            "max_output_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        results_store.add_run(row)
-
-    return {"status": "ok", "result": benchmark_result}
 
 
 # Task endpoints
