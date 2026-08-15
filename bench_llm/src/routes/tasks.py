@@ -14,6 +14,7 @@ _CANONICAL_EVALUATION_TASKS = frozenset({
     ("Markdownlint Default", "markdown"),
     ("Python Correctness", "python"),
     ("Java Correctness", "java"),
+    ("Unsolvable Recognition", "unsolvable"),
 })
 
 from src.benchmark_markdown import run_markdown_benchmark, DEFAULT_PROMPTS as MD_PROMPTS
@@ -21,6 +22,7 @@ from src.benchmark_java import run_java_benchmark, DEFAULT_PROMPTS as JA_PROMPTS
 from src.task_markdown import run_markdown_task, TASK_DEFINITION as MD_TASK_DEF
 from src.task_python import run_python_correctness_task, TASK_DEFINITION as PY_TASK_DEF
 from src.task_java import run_java_correctness_task
+from src.task_unsolvable import run_unsolvable_task, TASK_DEFINITION as US_TASK_DEF
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -51,7 +53,7 @@ async def create_task(body: dict):
 
     if not name or not task_type:
         raise HTTPException(status_code=400, detail="name and task_type are required")
-    if task_type not in ("markdown", "python", "java"):
+    if task_type not in ("markdown", "python", "java", "unsolvable"):
         raise HTTPException(status_code=400, detail=f"Invalid task_type: {task_type}")
 
     task = task_manager.create_task(name=name, task_type=task_type, prompt=prompt)
@@ -72,7 +74,16 @@ async def get_tasks_with_results(task_type: str | None = None):
     """Return persistent historical task runs for Task History.
 
     Supports optional ?task_type=markdown|python|java|unsolvable filter.
+
+    Java normalization: both "java" and the legacy "java_correctness" values
+    are treated as the same Java Correctness category so that existing
+    historical rows (stored as java_correctness) appear when the UI filters
+    by task_type=java.
     """
+    if task_type == "java":
+        # Match both current and legacy Java task_type values
+        runs = task_manager.get_task_runs(task_type="java") + task_manager.get_task_runs(task_type="java_correctness")
+        return {"tasks": runs}
     runs = task_manager.get_task_runs(task_type=task_type)
     return {"tasks": runs}
 
@@ -140,6 +151,19 @@ async def run_task(task_id: str, config: dict):
             )
             # Convert to dict-compatible result format
             result = java_result.to_dict()
+
+        elif task["task_type"] == "unsolvable":
+            us_result = await run_unsolvable_task(
+                lm_studio_url=lm_studio_url,
+                model=model,
+                temperature=float(config.get("temperature", US_TASK_DEF["temperature"])),
+                max_output_tokens=int(config.get("max_output_tokens", US_TASK_DEF["max_output_tokens"])),
+                hardware_label=config.get("hardware_label", ""),
+                connection_type=config.get("connection_type", ""),
+            )
+            # Serialize to dict for consistency
+            result = us_result.to_dict()
+
         else:
             raise HTTPException(status_code=400, detail=f"Unknown task type: {task['task_type']}")
 
