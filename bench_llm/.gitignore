@@ -1,26 +1,32 @@
-# Python
+# Generated files
 __pycache__/
-*.py[cod]
-*.so
-*.egg-info/
-dist/
-build/
-venv/
-.env
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
 
-# Results (generated data)
-data/*.csv
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Data files
+data/*.db
+data/*.sqlite
+data/*.json
+
+# Runtime outputs (model-generated content)
+runtime/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Results (generated data)
-data/*.csv
-data/benchmark_results.db
-data/benchmark_results.db-wal
-data/benchmark_results.db-shm
+# Logs
+*.log

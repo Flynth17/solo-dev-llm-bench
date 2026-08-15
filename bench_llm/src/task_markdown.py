@@ -7,6 +7,7 @@ Runs the Markdownlint Default benchmark:
 4. Score and save to Task History
 """
 
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,7 @@ TASK_DEFINITION = {
 # ------------------------------------------------------------------
 # Fixture loading
 # ------------------------------------------------------------------
+
 
 def get_fixture_path(fixture_name: str) -> Path:
     """Get the path to a fixture file."""
@@ -67,6 +69,21 @@ def build_benchmark_prompt(document: str) -> str:
     """
     instructions = _load_prompt()
     return f"{instructions}\n\n{document}"
+
+
+# ------------------------------------------------------------------
+# Runtime output persistence
+# ------------------------------------------------------------------
+
+def _save_latest_markdown_output(content: str) -> None:
+    """Write the exact generated Markdown to runtime/markdown/latest_output.md.
+
+    Creates parent directories if missing. Always overwrites (never appends).
+    """
+    output_dir = Path(__file__).parent.parent / "runtime" / "markdown"
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = output_dir / "latest_output.md"
+    output_file.write_text(content, encoding="utf-8")
 
 
 # ------------------------------------------------------------------
@@ -149,6 +166,9 @@ async def run_markdown_task(
     # Output tokens
     output_tokens = stats.get("total_output_tokens", len(generated_text.split()))
     input_tokens = stats.get("input_tokens", 0)
+
+    # Save exact generated output to runtime file for inspection.
+    _save_latest_markdown_output(generated_text)
 
     # Validate with markdownlint
     validator = MarkdownLintValidator()
