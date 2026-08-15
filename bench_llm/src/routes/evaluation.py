@@ -514,7 +514,9 @@ async def run_evaluation_endpoint(config: dict):
     # Compute correctness score (average of selected correctness scores)
     correctness_score = None
     if correctness_scores:
-        correctness_score = round(sum(correctness_scores) / len(correctness_scores), 4)
+        valid_scores = [s for s in correctness_scores if s is not None]
+        if valid_scores:
+            correctness_score = round(sum(valid_scores) / len(valid_scores), 4)
 
     return {
         "status": "completed",
