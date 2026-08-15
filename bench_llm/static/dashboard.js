@@ -509,24 +509,30 @@ async function runEvaluation() {
         var summaryDiv = document.createElement("div");
         summaryDiv.className = "results-group";
 
-        // Correctness score and tests passed count
-        var correctnessHtml = "";
-        if (summary.correctness_score !== null && summary.correctness_score !== undefined) {
-            var pct = Math.round(summary.correctness_score * 100);
-            // Count passed correctness results separately
-            var allCorrectnessResults = data.correctness_results || [];
-            var passedCount = 0;
-            for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
-                if (allCorrectnessResults[ci].passed) {
-                    passedCount++;
-                }
+        // Per-test correctness summary rows (data-driven, not hardcoded)
+        var allCorrectnessResults = data.correctness_results || [];
+        var passedCount = 0;
+        var perTestSummaryHtml = "";
+        for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
+            var cr = allCorrectnessResults[ci];
+            var testPct = Math.round((cr.score || 0) * 100);
+            var testStatus = cr.passed ? 'PASS' : 'FAIL';
+            var testColor = cr.passed ? '#22c55e' : '#ef4444';
+            if (cr.passed) {
+                passedCount++;
             }
-            var totalCount = allCorrectnessResults.length;
-            correctnessHtml =
+            perTestSummaryHtml +=
                 '<div class="aggregate-item">' +
-                    '<div class="label">Correctness Score</div>' +
-                    '<div class="value">' + pct + '%</div>' +
-                '</div>' +
+                    '<div class="label">' + escapeHtml(cr.test_label || cr.test_type).toUpperCase() + '</div>' +
+                    '<div class="value" style="color:' + testColor + '; font-weight:bold;">' + testPct + '% ' + testStatus + '</div>' +
+                '</div>';
+        }
+
+        // Tests Passed metric (only if there are correctness results)
+        var totalCount = allCorrectnessResults.length;
+        var testsPassedHtml = "";
+        if (totalCount > 0) {
+            testsPassedHtml =
                 '<div class="aggregate-item">' +
                     '<div class="label">Tests Passed</div>' +
                     '<div class="value">' + passedCount + ' / ' + totalCount + '</div>' +
@@ -541,7 +547,8 @@ async function runEvaluation() {
                 '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + fmt2(summary.avg_tokens_per_second) + '</div></div>' +
                 '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(summary.avg_ttft_seconds) + '</div></div>' +
                 '<div class="aggregate-item"><div class="label">Total Wall (s)</div><div class="value">' + fmt2(summary.total_wall_time_seconds) + '</div></div>' +
-                correctnessHtml +
+                perTestSummaryHtml +
+                testsPassedHtml +
             '</div>';
         resultsContainer.appendChild(summaryDiv);
 
