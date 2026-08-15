@@ -6,6 +6,16 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from src import task_manager
+
+# Canonical Evaluation Suite tasks — these belong to the evaluation pipeline
+# and must NOT appear in Advanced Task Manager (user-facing task list).
+# This set is kept in sync with CANONICAL_TASKS from routes/evaluation.py.
+_CANONICAL_EVALUATION_TASKS = frozenset({
+    ("Markdownlint Default", "markdown"),
+    ("Python Correctness", "python"),
+    ("Java Correctness", "java"),
+})
+
 from src.benchmark_markdown import run_markdown_benchmark, DEFAULT_PROMPTS as MD_PROMPTS
 from src.benchmark_java import run_java_benchmark, DEFAULT_PROMPTS as JA_PROMPTS
 from src.task_markdown import run_markdown_task, TASK_DEFINITION as MD_TASK_DEF
@@ -19,9 +29,17 @@ router = APIRouter()
 
 @router.get("/api/tasks")
 async def get_tasks():
-    """Return all benchmark tasks, newest first."""
-    tasks = task_manager.get_tasks()
-    return {"tasks": tasks}
+    """Return user-created benchmark tasks for Advanced Task Manager.
+
+    Filters out internal canonical Evaluation Suite definitions so that
+    repeated Java/Python/Markdown correctness rows do not flood the list.
+    """
+    all_tasks = task_manager.get_tasks()
+    filtered = [
+        t for t in all_tasks
+        if (t.get("name"), t.get("task_type")) not in _CANONICAL_EVALUATION_TASKS
+    ]
+    return {"tasks": filtered}
 
 
 @router.post("/api/tasks")
