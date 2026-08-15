@@ -104,7 +104,7 @@ async def run_task(task_id: str, config: dict):
                 lm_studio_url=lm_studio_url,
                 model=model,
                 fixture_name="python_correctness/solution.py",
-                max_output_tokens=int(config.get("max_output_tokens", PY_TASK_DEF["max_output_tokens"])),
+                max_output_tokens=max_tokens,
                 temperature=float(config.get("temperature", PY_TASK_DEF["temperature"])),
                 hardware_label=config.get("hardware_label", ""),
                 execution_environment=config.get("execution_environment", "Local"),
