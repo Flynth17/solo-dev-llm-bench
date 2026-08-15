@@ -10,3 +10,4 @@ Do not modify the hidden test harness file.
 Do not wrap the result in Markdown code fences.
 
 Here is the code:
+{}
