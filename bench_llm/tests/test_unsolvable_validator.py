@@ -259,3 +259,204 @@ class TestEdgeCases:
         assert result.score == 1.0
         assert "R1" in result.conflict_ids
         assert "R2" in result.conflict_ids
+
+
+# ------------------------------------------------------------------
+# U1.5 — Focused tests for updated unsolvable validator
+# ------------------------------------------------------------------
+
+class TestU15CanonicalExactFormat:
+    """Test canonical exact format passes."""
+
+    def test_canonical_exact_format_passes(self):
+        """Canonical exact format should PASS with score 1.0."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction that cannot be resolved in any consistent implementation."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+        assert result.impossible_detected is True
+        assert "R1" in result.conflict_ids
+        assert "R2" in result.conflict_ids
+        assert result.explanation_valid is True
+
+
+class TestU15QwenRealFormat:
+    """Test Qwen's real output format passes."""
+
+    def test_qwen_real_format_passes(self):
+        """Qwen's truncated format with code fences should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Contradictory Requirements\n'
+            'CONFLICT: R1, R2\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+        assert result.impossible_detected is True
+        assert "R1" in result.conflict_ids
+        assert "R2" in result.conflict_ids
+
+    def test_qwen_real_format_lowercase_class_passes(self):
+        """Qwen's format with lowercase class should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: contradictory-requirements\n'
+            'CONFLICT: R1,R2\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+
+class TestU15WrongConflictIds:
+    """Test wrong conflict IDs fail."""
+
+    def test_wrong_conflict_ids_fail(self):
+        """CONFLICT with R3, R4 should FAIL."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R3, R4\n"
+            "EXPLANATION: This is a contradiction that cannot be resolved."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+    def test_only_r1_conflict_fail(self):
+        """CONFLICT with only R1 should FAIL."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1\n"
+            "EXPLANATION: This is a contradiction that cannot be resolved."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+
+class TestU15SaysPossible:
+    """Test says possible fails."""
+
+    def test_says_possible_fails(self):
+        """IMPOSSIBLE: no should FAIL regardless of other fields."""
+        resp = (
+            "IMPOSSIBLE: no\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: This is a contradiction that cannot be resolved."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+        assert result.impossible_detected is False
+
+    def test_says_possible_lowercase_fails(self):
+        """IMPOSSIBLE: Possible should FAIL."""
+        resp = (
+            "IMPOSSIBLE: possible\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: This is a contradiction that cannot be resolved."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+
+class TestU15MissingInvalidExplanation:
+    """Test missing/invalid explanation fails."""
+
+    def test_no_explanation_field_passes(self):
+        """No EXPLANATION field but correct structured fields should PASS (U1.5)."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+    def test_short_no_keyword_explanation_fails(self):
+        """Short explanation with no relevant keywords should FAIL."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: blah"
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+    def test_truncated_with_keywords_passes(self):
+        """Truncated response with enough keywords should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Contradictory Requirements\n'
+            'CONFLICT: R1, R2\n'
+            'CONFLICT:'  # truncated here, no explanation field
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        # Should pass because it has IMPOSSIBLE + CLASS + CONFLICT(R1,R2) + keywords in context
+        assert result.score == 1.0
+        assert result.passed is True
+
+
+class TestU15CodeFenceStripping:
+    """Test Markdown code fence stripping works."""
+
+    def test_python_fence_stripped(self):
+        """```python fences should be stripped."""
+        resp = (
+            '```python\n'
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive.\n"
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+    def test_plain_fence_stripped(self):
+        """Plain ``` fences should be stripped."""
+        resp = (
+            "```\n"
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive.\n"
+            "```"
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+    def test_capitalization_independent(self):
+        """Capitalisation differences should not affect validation."""
+        for impossible_val in ["YES", "Yes", "yes"]:
+            resp = (
+                f"IMPOSSIBLE: {impossible_val}\n"
+                "CLASS: contradictory-requirements\n"
+                "CONFLICT: R1, R2\n"
+                "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive."
+            )
+            result = validate_unsolvable_response(resp)
+            assert result.score == 1.0, f"Failed for IMPOSSIBLE={impossible_val}"
+            assert result.passed is True, f"Failed for IMPOSSIBLE={impossible_val}"
