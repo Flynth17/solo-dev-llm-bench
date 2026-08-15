@@ -17,12 +17,14 @@ from typing import Any
 # Configuration
 # ------------------------------------------------------------------
 
-# Default markdownlint rules (standard set)
+# Canonical markdownlint rules — must match bench_llm/tasks/markdownlint_default/.markdownlint.json
+# This is the single source of truth for both CLI2 and Python fallback.
 DEFAULT_RULES = {
-    "MD013": {"line_length": 120},  # Line length
-    "MD010": {"code_blocks": True},  # No bare URLs
-    "MD026": {"punctuation": ".,;:!+"},  # No trailing punctuation in lists
-    "MD033": {"allowed_elements": ["a", "code", "em", "strong"]},  # Inline HTML
+    "MD013": {"line_length": 80},       # Line length (aligned with CLI2 config)
+    "MD034": True,                       # No bare URLs
+    "MD040": True,                       # Fenced code blocks should have language
+    "MD046": {"style": "fenced"},        # Code block style consistency
+    "MD047": True,                       # Files should end with single newline
 }
 
 # ------------------------------------------------------------------
