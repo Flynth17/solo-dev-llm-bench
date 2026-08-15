@@ -51,25 +51,21 @@ def load_fixture_py(fixture_name: str = "python_correctness/solution.py") -> str
 # Prompt construction
 # ------------------------------------------------------------------
 
-BENCHMARK_PROMPT_TEMPLATE = """Fix the bugs in the Python code below.
-
-Preserve the original meaning and functionality.
-Preserve all public function names and signatures.
-
-Return ONLY the complete corrected solution.py.
-Do not explain your changes.
-Do not return tests.
-Do not modify test_solution.py.
-Do not wrap the result in Markdown code fences.
-
-Here is the code:
-
-{code}"""
+def _load_prompt() -> str:
+    """Load the human-editable prompt from the task fixture directory."""
+    prompt_path = Path(__file__).parent.parent / "tasks" / "python_correctness" / "prompt.md"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+    return prompt_path.read_text(encoding="utf-8")
 
 
 def build_benchmark_prompt(code: str) -> str:
-    """Build the prompt for the Python correctness benchmark."""
-    return BENCHMARK_PROMPT_TEMPLATE.format(code=code)
+    """Build the prompt for the Python correctness benchmark.
+
+    Loads the human-editable prompt.md fixture and appends the code content.
+    """
+    instructions = _load_prompt()
+    return f"{instructions}\n\n{code}"
 
 
 # ------------------------------------------------------------------

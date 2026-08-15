@@ -52,22 +52,21 @@ def load_fixture_broken_md(fixture_name: str = "markdownlint_default/broken.md")
 # Prompt construction
 # ------------------------------------------------------------------
 
-BENCHMARK_PROMPT_TEMPLATE = """Fix the Markdown formatting errors in the document.
-
-Preserve the original meaning and information.
-
-Return only the complete corrected Markdown document.
-Do not explain your changes.
-Do not wrap the result in an additional Markdown code fence.
-
-Here is the document:
-
-{document}"""
+def _load_prompt() -> str:
+    """Load the human-editable prompt from the task fixture directory."""
+    prompt_path = Path(__file__).parent.parent / "tasks" / "markdownlint_default" / "prompt.md"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+    return prompt_path.read_text(encoding="utf-8")
 
 
 def build_benchmark_prompt(document: str) -> str:
-    """Build the prompt for the markdown benchmark."""
-    return BENCHMARK_PROMPT_TEMPLATE.format(document=document)
+    """Build the prompt for the markdown benchmark.
+
+    Loads the human-editable prompt.md fixture and appends the document content.
+    """
+    instructions = _load_prompt()
+    return f"{instructions}\n\n{document}"
 
 
 # ------------------------------------------------------------------
