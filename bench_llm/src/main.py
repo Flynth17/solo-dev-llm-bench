@@ -21,6 +21,7 @@ from src import task_manager
 from src.routes import config as config_routes
 from src.routes import models as models_routes
 from src.routes import prompts as prompts_routes
+from src.routes import results as results_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -45,6 +46,9 @@ app.include_router(models_routes.router)
 
 # Register prompts route
 app.include_router(prompts_routes.router)
+
+# Register results route
+app.include_router(results_routes.router)
 
 # Initialize tasks table
 task_manager.init_tasks_table()
@@ -73,34 +77,6 @@ async def past_results():
     """Serve the Past Results HTML page."""
     results_file = STATIC_DIR / "results.html"
     return results_file.read_text(encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# Past Results API endpoint
-# ---------------------------------------------------------------------------
-
-@app.get("/api/results")
-async def get_past_results():
-    """Return all benchmark results as individual rows, newest first."""
-    all_runs = results_store.get_all()
-
-    # Sort by timestamp descending (newest first)
-    all_runs.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
-
-    return {"results": all_runs}
-
-
-@app.delete("/api/results/{run_id}")
-async def delete_past_result(run_id: str):
-    """Delete a single benchmark run by its run_id."""
-    # Validate: reject arbitrary SQL or database identifiers
-    if not run_id or "\x00" in run_id or "/" in run_id:
-        raise HTTPException(status_code=400, detail="Invalid run_id")
-
-    deleted = results_store.delete_run(run_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    return {"status": "ok", "run_id": run_id}
 
 
 # ---------------------------------------------------------------------------
