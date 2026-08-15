@@ -30,6 +30,26 @@ def _get_results_store():
 # Valid correctness test names
 CORRECTNESS_TESTS = {"markdown", "python"}
 
+# Canonical task definitions
+CANONICAL_TASKS = {
+    "markdown": {"name": "Markdownlint Default", "task_type": "markdown"},
+    "python": {"name": "Python Correctness", "task_type": "python"},
+}
+
+
+def _get_or_create_canonical_task(task_type: str) -> str:
+    """Look up an existing task by name, or create it once if it doesn't exist.
+
+    Returns the task_id for use with create_task_run().
+    """
+    name = CANONICAL_TASKS[task_type]["name"]
+    existing = src.task_manager.get_tasks()
+    for t in existing:
+        if t["name"] == name and t["task_type"] == task_type:
+            return t["task_id"]
+    task = src.task_manager.create_task(name=name, task_type=task_type, prompt="")
+    return task["task_id"]
+
 
 def _validate_speed_tests(speed_tests: list) -> list[str]:
     """Validate and normalize the speed_tests list.
@@ -310,6 +330,9 @@ async def run_evaluation_endpoint(config: dict):
     correctness_scores: list[float] = []
 
     for test_name in correctness_tests:
+        # Get or create canonical task_id once per evaluation run
+        canonical_task_id = _get_or_create_canonical_task(test_name)
+
         if test_name == "markdown":
             from src.task_markdown import run_markdown_task
 
@@ -330,13 +353,24 @@ async def run_evaluation_endpoint(config: dict):
                     detail=f"Markdown correctness failed: {e}",
                 )
 
-            # Persist to task history
-            task_id = f"eval-{model[:20]}-{len(src.task_manager.get_tasks()) + 1:03d}"
-            src.task_manager.create_task(
-                name="Markdownlint Default",
-                task_type="markdown",
-                prompt="",
-                config={"model": model, "lm_studio_url": lm_studio_url},
+            # Persist to task history via create_task_run
+            src.task_manager.create_task_run(
+                task_id=canonical_task_id,
+                task_name=md_result["task_name"],
+                task_type=md_result["task_type"],
+                model=model,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                passed=md_result["passed"],
+                score=md_result["score"],
+                initial_errors=md_result["initial_errors"],
+                final_errors=md_result["final_errors"],
+                errors_fixed=md_result["errors_fixed"],
+                output_tokens=md_result["output_tokens"],
+                input_tokens=md_result["input_tokens"],
+                tokens_per_second=md_result["tokens_per_second"],
+                ttft_seconds=md_result.get("ttft_seconds"),
+                wall_time_seconds=md_result["wall_time_seconds"],
+                result=md_result,
             )
 
             correctness_results.append({
@@ -376,12 +410,21 @@ async def run_evaluation_endpoint(config: dict):
                     detail=f"Python correctness failed: {e}",
                 )
 
-            # Persist to task history
-            src.task_manager.create_task(
-                name="Python Correctness",
-                task_type="python",
-                prompt="",
-                config={"model": model, "lm_studio_url": lm_studio_url},
+            # Persist to task history via create_task_run
+            src.task_manager.create_task_run(
+                task_id=canonical_task_id,
+                task_name=py_result["task_name"],
+                task_type=py_result["task_type"],
+                model=model,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                passed=py_result["passed"],
+                score=py_result["score"],
+                output_tokens=py_result["output_tokens"],
+                input_tokens=py_result["input_tokens"],
+                tokens_per_second=py_result["tokens_per_second"],
+                ttft_seconds=py_result.get("ttft_seconds"),
+                wall_time_seconds=py_result["wall_time_seconds"],
+                result=py_result,
             )
 
             correctness_results.append({
