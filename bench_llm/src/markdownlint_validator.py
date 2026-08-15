@@ -28,9 +28,25 @@ DEFAULT_RULES = {
 # ------------------------------------------------------------------
 
 def _find_markdownlint() -> str | None:
-    """Try to find markdownlint CLI on the system."""
-    # Try markdownlint-cli
-    for cmd in ["markdownlint", "markdownlint-cli", "npx markdownlint"]:
+    """Try to find markdownlint CLI on the system.
+
+    Returns one of: 'markdownlint-cli', 'markdownlint-cli2', or None.
+    Priority: cli2 > standard cli (cli2 is newer and more widely available via npx).
+    """
+    # Try markdownlint-cli2 first (newer, more widely available via npx)
+    for cmd_prefix in ["npx markdownlint-cli2", "markdownlint-cli2"]:
+        try:
+            subprocess.run(
+                cmd_prefix.split() + ["--version"],
+                capture_output=True,
+                timeout=5,
+            )
+            return cmd_prefix
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            continue
+
+    # Try standard markdownlint CLI
+    for cmd in ["markdownlint", "markdownlint-cli"]:
         try:
             subprocess.run(
                 [cmd, "--version"],
@@ -40,7 +56,13 @@ def _find_markdownlint() -> str | None:
             return cmd
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
+
     return None
+
+
+def _is_cli2(cmd: str) -> bool:
+    """Check if the detected command is markdownlint-cli2."""
+    return "markdownlint-cli2" in cmd
 
 
 def _has_python_markdownlint() -> bool:
@@ -126,7 +148,12 @@ class MarkdownLintValidator:
 
     def validate_file(self, file_path: Path) -> MarkdownLintResult:
         """Validate a single markdown file."""
-        # Try CLI first
+        # Try CLI2 first (newer, more widely available via npx)
+        cli2_result = self._try_cli2(file_path)
+        if cli2_result:
+            return cli2_result
+
+        # Try standard CLI as fallback
         cli_result = self._try_cli(file_path)
         if cli_result:
             return cli_result
@@ -157,6 +184,84 @@ class MarkdownLintValidator:
             return self.validate_file(temp_path)
         finally:
             temp_path.unlink(missing_ok=True)
+
+    def _try_cli2(self, file_path: Path) -> MarkdownLintResult | None:
+        """Try to use markdownlint-cli2.
+
+        cli2 outputs human-readable text like:
+          path.md:13 error MD040/fenced-code-language Fenced code blocks ...
+          path.md:69:13 error MD034/no-bare-urls Bare URL used ...
+
+        Parses this into the same MarkdownLintResult structure.
+        """
+        try:
+            cmd = ["npx", "markdownlint-cli2", "--no-globs", str(file_path)]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=30,
+                text=True,
+            )
+
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            combined = ""
+            if stdout:
+                combined += stdout
+            if stderr:
+                if combined:
+                    combined += "\n"
+                combined += stderr
+
+            # Parse human-readable output: "path.md:line:error RULE_ID message"
+            violations = []
+            for line in combined.splitlines():
+                line = line.strip()
+                if not line or line.startswith("markdownlint-cli2") or line.startswith("Finding:") or line.startswith("Linting:") or line.startswith("Summary:") or line.startswith("$"):
+                    continue
+                # Format: path.md:line:error RULE_ID/message message text
+                match = self._parse_cli2_line(line)
+                if match:
+                    violations.append(match)
+
+            if violations or combined.strip():
+                return MarkdownLintResult(
+                    violations=violations,
+                    output=combined,
+                    command_used="markdownlint-cli2",
+                )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            pass
+        return None
+
+    @staticmethod
+    def _parse_cli2_line(line: str) -> dict | None:
+        """Parse a single markdownlint-cli2 output line.
+
+        Expected formats (cli2 human-readable):
+          path.md:line error RULE_ID/message message text
+          path.md:line:col error RULE_ID/message message text
+
+        The key insight is that the level keyword (error/warn/info) always appears
+        before the rule ID, so we match from there backwards.
+        """
+        import re
+        # Match from the end: ... error|warn|info RULE_ID/rule_msg detail
+        pattern = r'^(.+?):(\d+)(?::(\d+))?\s+(error|warn|info)\s+(\S+)/(\S+)\s+(.+)$'
+        m = re.search(pattern, line)
+        if not m:
+            return None
+        filepath, lineno, col, level, rule_name, rule_msg, detail = m.groups()
+        result = {
+            "file": filepath.strip(),
+            "line": int(lineno),
+            "level": level,
+            "rule": rule_name.strip(),
+            "message": f"{rule_msg.strip()}: {detail.strip()}",
+        }
+        if col:
+            result["column"] = int(col)
+        return result
 
     def _try_cli(self, file_path: Path) -> MarkdownLintResult | None:
         """Try to use markdownlint CLI."""
