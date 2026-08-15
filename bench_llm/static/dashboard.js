@@ -459,6 +459,9 @@ async function runEvaluation() {
     if (document.getElementById("eval-correctness-python").checked) {
         correctnessTests.push("python");
     }
+    if (document.getElementById("eval-correctness-java").checked) {
+        correctnessTests.push("java");
+    }
 
     if (speedTests.length === 0 && correctnessTests.length === 0) {
         showStatus("Select at least one speed test or correctness test.", "error");
@@ -552,6 +555,10 @@ async function runEvaluation() {
                     '<div class="aggregate-item"><div class="label">Passed</div><div class="value">' + (cr.passed_tests || 0) + '</div></div>' +
                     '<div class="aggregate-item"><div class="label">Total</div><div class="value">' + (cr.total_tests || 0) + '</div></div>' +
                     '<div class="aggregate-item"><div class="label">Failed</div><div class="value">' + (cr.failed_tests || 0) + '</div></div>';
+            } else if (cr.test_type === "java") {
+                detailHtml =
+                    '<div class="aggregate-item"><div class="label">Tests Passed</div><div class="value">' + (cr.passed_tests || 0) + ' / ' + (cr.total_tests || 0) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Compile</div><div class="value">' + (cr.compile_success ? 'PASS' : 'FAIL') + '</div></div>';
             }
 
             corrDiv.innerHTML =
