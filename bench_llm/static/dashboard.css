@@ -376,6 +376,133 @@ h1 {
 }
 
 /* ---------------------------------------------------------------------------
+   Evaluation Suite styles
+   --------------------------------------------------------------------------- */
+
+/* Eval section headings */
+.eval-section {
+    margin-bottom: 1.5rem;
+}
+
+.eval-section h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.6rem;
+}
+
+/* Eval checkbox group */
+.eval-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+}
+
+/* Individual eval checkbox */
+.eval-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.75rem;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.88rem;
+    color: #1e293b;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.1s ease;
+}
+
+.eval-checkbox:hover {
+    background: #f0f4f8;
+    border-color: #93c5fd;
+}
+
+.eval-checkbox input[type="checkbox"] {
+    cursor: pointer;
+    width: 1rem;
+    height: 1rem;
+}
+
+.eval-checkbox input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Disabled eval checkbox */
+.eval-checkbox.eval-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: #f9fafb;
+}
+
+.eval-checkbox.eval-disabled:hover {
+    background: #fff;
+    border-color: #d1d5db;
+}
+
+/* Eval params row styling */
+.eval-params {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* ---------------------------------------------------------------------------
+   Collapsible panel styles
+   --------------------------------------------------------------------------- */
+
+.collapsible {
+    border: 2px solid #e2e8f0;
+}
+
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease, background 0.15s ease;
+    padding: 0.3rem 0;
+    display: inline-block;
+}
+
+.collapsible-header:hover {
+    color: #2563eb;
+}
+
+.collapsible-header:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+.collapsible .collapsible-body {
+    margin-top: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Run Evaluation button styling
+   --------------------------------------------------------------------------- */
+
+#run-evaluation {
+    margin-top: 1.25rem;
+    width: 100%;
+    font-size: 1.05rem;
+    padding: 0.85rem 2rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Evaluation Suite panel heading styling
+   --------------------------------------------------------------------------- */
+
+#evaluation-suite h2 {
+    color: #1e40af;
+    border-bottom-color: #93c5fd;
+}
+
+/* ---------------------------------------------------------------------------
    Responsive — Dashboard
    --------------------------------------------------------------------------- */
 

@@ -13,7 +13,7 @@
         <p class="subtitle">Measure performance trade-offs when switching LLMs, hardware, or environments</p>
 
         <!-- Configuration Panel -->
-        <section class="panel">
+        <section class="panel" id="config-panel">
             <h2>Configuration</h2>
 
             <!-- Execution Environment -->
@@ -55,26 +55,56 @@
                     <button id="refresh-models" title="Refresh model list">&#x21bb;</button>
                 </div>
             </div>
+        </section>
 
-            <!-- Prompt Preset Selector -->
-            <div class="form-row">
-                <label for="prompt-preset">Prompt preset</label>
-                <div class="prompt-presets-wrapper">
-                    <select id="prompt-preset">
-                        <option value="">— Custom —</option>
-                    </select>
-                    <button id="save-prompt-btn" title="Save current prompt as preset">&#x1F4BE;</button>
-                    <button id="rename-prompt-btn" title="Rename selected preset">&#x270E;</button>
-                    <button id="delete-prompt-btn" title="Delete selected preset">&#x1F5D1;</button>
+        <!-- Evaluation Suite Panel -->
+        <section class="panel" id="evaluation-suite">
+            <h2>Evaluation Suite</h2>
+
+            <!-- Speed Checkboxes -->
+            <div class="eval-section">
+                <h3>Speed Tests</h3>
+                <div class="eval-group">
+                    <label class="eval-checkbox">
+                        <input type="checkbox" id="eval-speed-small" checked>
+                        <span>Small Prompt (~250 tokens)</span>
+                    </label>
+                    <label class="eval-checkbox">
+                        <input type="checkbox" id="eval-speed-medium" checked>
+                        <span>Medium Prompt (~1,000 tokens)</span>
+                    </label>
+                    <label class="eval-checkbox">
+                        <input type="checkbox" id="eval-speed-large">
+                        <span>Large Prompt (~4,000 tokens)</span>
+                    </label>
                 </div>
             </div>
 
-            <div class="form-row">
-                <label for="prompt">Benchmark Prompt</label>
-                <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
+            <!-- Correctness Checkboxes -->
+            <div class="eval-section">
+                <h3>Correctness Tests</h3>
+                <div class="eval-group">
+                    <label class="eval-checkbox">
+                        <input type="checkbox" id="eval-correctness-markdown">
+                        <span>Markdown Structure</span>
+                    </label>
+                    <label class="eval-checkbox">
+                        <input type="checkbox" id="eval-correctness-python">
+                        <span>Python Code Correctness</span>
+                    </label>
+                    <label class="eval-checkbox eval-disabled">
+                        <input type="checkbox" disabled>
+                        <span>Java Code Correctness — Coming soon</span>
+                    </label>
+                    <label class="eval-checkbox eval-disabled">
+                        <input type="checkbox" disabled>
+                        <span>Unsolvable — Coming soon</span>
+                    </label>
+                </div>
             </div>
 
-            <div class="form-row-inline">
+            <!-- Benchmark Parameters -->
+            <div class="form-row-inline eval-params">
                 <div class="form-row half">
                     <label for="iterations">Iterations</label>
                     <input type="number" id="iterations" value="5" min="1" max="100">
@@ -89,23 +119,31 @@
                 </div>
             </div>
 
-            <button id="run-benchmark" class="btn-primary">Run Benchmark</button>
+            <!-- Run Evaluation Button -->
+            <button id="run-evaluation" class="btn-primary">Run Evaluation</button>
         </section>
 
-        <!-- Task Manager -->
-        <section id="task-manager" class="panel">
-            <h2>Task Manager</h2>
-            <div class="task-toolbar">
-                <select id="task-type-select">
-                    <option value="markdown">Markdown Structure</option>
-                    <option value="python">Python Code Quality</option>
-                    <option value="java">Java Code Quality</option>
-                </select>
-                <input type="text" id="task-name-input" placeholder="Task name (optional)">
-                <button id="create-task-btn" class="btn-secondary">+ Create Task</button>
-            </div>
-            <div id="task-list-container">
-                <div id="task-list"></div>
+        <!-- Advanced / Custom Benchmark (collapsed) -->
+        <section class="panel collapsible" id="advanced-benchmark">
+            <h2 class="collapsible-header" tabindex="0">&#x25BE; Advanced / Custom Benchmark</h2>
+            <div class="collapsible-body hidden">
+                <!-- Prompt Preset Selector -->
+                <div class="form-row">
+                    <label for="prompt-preset">Prompt preset</label>
+                    <div class="prompt-presets-wrapper">
+                        <select id="prompt-preset">
+                            <option value="">— Custom —</option>
+                        </select>
+                        <button id="save-prompt-btn" title="Save current prompt as preset">&#x1F4BE;</button>
+                        <button id="rename-prompt-btn" title="Rename selected preset">&#x270E;</button>
+                        <button id="delete-prompt-btn" title="Delete selected preset">&#x1F5D1;</button>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label for="prompt">Benchmark Prompt</label>
+                    <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
+                </div>
             </div>
         </section>
 
@@ -117,6 +155,25 @@
             <h2>Results</h2>
             <div id="results-container"></div>
             <div id="results-charts"></div>
+        </section>
+
+        <!-- Advanced Task Manager (collapsed) -->
+        <section class="panel collapsible" id="advanced-tasks">
+            <h2 class="collapsible-header" tabindex="0">&#x25BE; Advanced Task Manager</h2>
+            <div class="collapsible-body hidden">
+                <div class="task-toolbar">
+                    <select id="task-type-select">
+                        <option value="markdown">Markdown Structure</option>
+                        <option value="python">Python Code Quality</option>
+                        <option value="java">Java Code Quality</option>
+                    </select>
+                    <input type="text" id="task-name-input" placeholder="Task name (optional)">
+                    <button id="create-task-btn" class="btn-secondary">+ Create Task</button>
+                </div>
+                <div id="task-list-container">
+                    <div id="task-list"></div>
+                </div>
+            </div>
         </section>
 
         <!-- View all past results -->
