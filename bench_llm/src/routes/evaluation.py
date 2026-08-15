@@ -81,16 +81,10 @@ def _validate_speed_tests(speed_tests: list) -> list[str]:
 def _validate_correctness_tests(correctness_tests: list) -> list[str]:
     """Validate and normalize the correctness_tests list.
 
-    - Reject empty lists
     - Reject unknown names
     - Deduplicate deterministically (preserve first occurrence order)
+    - Empty list is allowed (speed-only runs are valid)
     """
-    if not correctness_tests:
-        raise HTTPException(
-            status_code=400,
-            detail="correctness_tests must not be empty",
-        )
-
     # Check for unknown names
     for name in correctness_tests:
         if name not in CORRECTNESS_TESTS:
@@ -196,6 +190,13 @@ async def run_evaluation_endpoint(config: dict):
     correctness_tests_raw = config.get("correctness_tests", [])
     correctness_tests = _validate_correctness_tests(correctness_tests_raw)
 
+    # At least one test must be selected (speed or correctness)
+    if not speed_tests and not correctness_tests:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one speed test or correctness test must be selected",
+        )
+
     model = config.get("model", "").strip()
     if not model:
         raise HTTPException(status_code=400, detail="Model must be specified")
@@ -239,6 +240,10 @@ async def run_evaluation_endpoint(config: dict):
     execution_environment = config.get("execution_environment", "Local")
     connection_type = config.get("connection_type", "")
 
+    # Speed tests use a fixed output budget (1024 tokens) regardless of UI setting.
+    # Correctness tests use the user-selected max_output_tokens value.
+    SPEED_OUTPUT_TOKENS = 1024
+
     # --- Run selected speed tests sequentially ---
     results_store = _get_results_store()
     speed_results: list[dict] = []
@@ -257,7 +262,7 @@ async def run_evaluation_endpoint(config: dict):
 
         prompt_label = _PROMPT_LABELS.get(test_name, test_name.title() + " Prompt")
 
-        # Run benchmark engine
+        # Run benchmark engine (speed tests use fixed 1024 output budget)
         from src.benchmark import run_benchmark
 
         try:
@@ -266,7 +271,7 @@ async def run_evaluation_endpoint(config: dict):
                 model=model,
                 prompt=prompt_text,
                 iterations=iterations,
-                max_tokens=max_tokens,
+                max_tokens=SPEED_OUTPUT_TOKENS,
                 temperature=temperature,
                 hardware_label=hardware_label,
                 execution_environment=execution_environment,
