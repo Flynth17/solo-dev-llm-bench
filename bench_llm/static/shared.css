@@ -1,0 +1,641 @@
+/* Solo Dev LLM Bench — shared styles (used by both Dashboard and Results pages) */
+
+/* ---------------------------------------------------------------------------
+   Resets / Global
+   --------------------------------------------------------------------------- */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #f5f5f5;
+    color: #222;
+    line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons
+   --------------------------------------------------------------------------- */
+
+.btn-primary {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    padding: 0.7rem 1.75rem;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: background 0.15s ease;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.btn-primary:disabled {
+    background: #93a3b8;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: #fff;
+    color: #444;
+    border: 1px solid #ccc;
+    padding: 0.5rem 1.25rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-secondary:hover {
+    background: #f0f0f0;
+    border-color: #aaa;
+}
+
+.btn-secondary:active {
+    background: #e0e0e0;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    padding: 0.55rem 1.25rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+
+.btn-danger:active {
+    background: #991b1b;
+}
+
+/* ---------------------------------------------------------------------------
+   Forms
+   --------------------------------------------------------------------------- */
+
+.form-row {
+    margin-bottom: 1rem;
+}
+
+.form-row label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #444;
+}
+
+.form-row label .optional {
+    font-weight: 400;
+    color: #999;
+    font-size: 0.8rem;
+}
+
+.form-row input,
+.form-row textarea,
+.form-row select {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+}
+
+.form-row input:focus,
+.form-row textarea:focus,
+.form-row select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.form-row textarea {
+    resize: vertical;
+}
+
+/* Inline form rows */
+.form-row-inline {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.form-row-inline .form-row.half {
+    flex: 1;
+    min-width: 120px;
+    margin-bottom: 0;
+}
+
+/* Filter form controls */
+.filter-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #444;
+}
+
+.filter-group input,
+.filter-group select {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* ---------------------------------------------------------------------------
+   Panels
+   --------------------------------------------------------------------------- */
+
+.panel {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.panel h2 {
+    font-size: 1.2rem;
+    margin-bottom: 1.2rem;
+    border-bottom: 2px solid #e8ecf1;
+    padding-bottom: 0.6rem;
+    color: #1a2332;
+}
+
+/* ---------------------------------------------------------------------------
+   Status / Hidden
+   --------------------------------------------------------------------------- */
+
+.status {
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.status.info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status.error {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Ensure .hidden always wins over display:flex on modals */
+.modal-overlay.hidden {
+    display: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Tables
+   --------------------------------------------------------------------------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-bottom: 0.75rem;
+}
+
+th, td {
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid #eef0f2;
+}
+
+th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+td {
+    color: #333;
+}
+
+/* Cold row highlight */
+tr.cold-row {
+    background: #fffbeb;
+}
+
+tr.cold-row td {
+    border-bottom-color: #fde68a;
+}
+
+/* Warm row highlight */
+tr.warm-row {
+    background: #f0fdf4;
+}
+
+tr.warm-row td {
+    border-bottom-color: #bbf7d0;
+}
+
+/* ---------------------------------------------------------------------------
+   Code / Blockquote / Horizontal Rule
+   --------------------------------------------------------------------------- */
+
+pre {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.88em;
+    padding: 0.15em 0.3em;
+    border-radius: 3px;
+    background: #f1f5f9;
+}
+
+blockquote {
+    border-left: 4px solid #cbd5e1;
+    padding-left: 1rem;
+    color: #475569;
+    font-style: italic;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 1.5rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Metadata badges
+   --------------------------------------------------------------------------- */
+
+.metadata {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.badge-env {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.badge-conn {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.badge-hardware {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.badge-model {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+
+/* ---------------------------------------------------------------------------
+   Aggregate summaries
+   --------------------------------------------------------------------------- */
+
+.aggregate {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 0.75rem;
+    border: 1px solid #e2e8f0;
+}
+
+.aggregate-item {
+    min-width: 130px;
+}
+
+.aggregate-item .label {
+    font-size: 0.78rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.aggregate-item .value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 0.15rem;
+}
+
+.warm-aggregate {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    background: #f0fdf4;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 0.75rem;
+    border: 1px solid #bbf7d0;
+}
+
+.warm-aggregate .aggregate-item .label {
+    color: #166534;
+}
+
+.warm-aggregate .aggregate-item .value {
+    color: #15803d;
+}
+
+.unavailable {
+    color: #999;
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Timestamp
+   --------------------------------------------------------------------------- */
+
+.timestamp {
+    color: #888;
+    font-size: 0.82rem;
+    font-weight: 400;
+}
+
+/* ---------------------------------------------------------------------------
+   Charts shared
+   --------------------------------------------------------------------------- */
+
+.chart-container {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #fafbfc;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.chart-container h4,
+.chart-title {
+    margin-bottom: 0.75rem;
+    color: #374151;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.chart-svg-wrap {
+    overflow-x: auto;
+    padding: 0.5rem 0;
+}
+
+.chart-svg-wrap svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.chart-wrapper {
+    position: relative;
+    width: 100%;
+    max-height: 350px;
+    overflow-x: auto;
+}
+
+/* Best badge for grouped chart */
+.best-badge {
+    display: inline-block;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-left: 0.5rem;
+}
+
+/* Grouped model row */
+.grouped-model-row {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.grouped-model-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s ease;
+}
+
+.grouped-model-header:hover {
+    background: #f8fafc;
+}
+
+.grouped-model-name {
+    font-family: monospace;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+
+.grouped-model-best {
+    font-family: monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #16a34a;
+    margin-left: auto;
+}
+
+/* Subordinate child row */
+.grouped-child-row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 0.35rem 1rem 0.35rem 2.5rem;
+    font-size: 0.85rem;
+    color: #64748b;
+    border-left: 2px solid #e2e8f0;
+    margin-left: 1rem;
+    background: #fafbfc;
+}
+
+.grouped-child-row .child-tok {
+    font-family: monospace;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.88rem;
+}
+
+.grouped-child-row .child-date {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    margin-left: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Tab bar styles
+   --------------------------------------------------------------------------- */
+
+.tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 0;
+}
+
+.tab-btn {
+    padding: 0.6rem 1.5rem;
+    border: none;
+    background: transparent;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.tab-btn:hover {
+    color: #1e293b;
+    background: #f8fafc;
+}
+
+.tab-btn.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    background: #eff6ff;
+}
+
+/* ---------------------------------------------------------------------------
+   Modal overlay
+   --------------------------------------------------------------------------- */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+    margin-bottom: 1rem;
+    color: #1a2332;
+    font-size: 1.1rem;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+/* Delete button on each run */
+.delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.2rem;
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+    color: #dc2626;
+}
+
+.delete-btn:hover {
+    opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive — shared
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+    .aggregate,
+    .warm-aggregate {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .form-row-inline {
+        flex-direction: column;
+        gap: 0;
+    }
+    .form-row-inline .form-row.half {
+        min-width: 100%;
+    }
+}

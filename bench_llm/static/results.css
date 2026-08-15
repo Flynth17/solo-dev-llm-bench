@@ -1,0 +1,543 @@
+/* Solo Dev LLM Bench — Results page-only styles */
+
+/* ---------------------------------------------------------------------------
+   Layout — Results page container
+   --------------------------------------------------------------------------- */
+
+.page-container-wide {
+    width: min(94vw, 2600px);
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+@media (min-width: 1920px) {
+    .page-container-wide {
+        padding: 0 2rem;
+    }
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.page-actions a.btn-primary {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Filter panel
+   --------------------------------------------------------------------------- */
+
+.filter-panel {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-group {
+    flex: 1;
+    min-width: 180px;
+}
+
+/* ---------------------------------------------------------------------------
+   Results count / empty state
+   --------------------------------------------------------------------------- */
+
+.results-count {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+#empty-state p {
+    color: #64748b;
+    margin-bottom: 1rem;
+}
+
+#empty-state .btn-primary {
+    display: inline-block;
+}
+
+/* ---------------------------------------------------------------------------
+   Delete modal body
+   --------------------------------------------------------------------------- */
+
+#delete-modal-body {
+    margin-bottom: 1.25rem;
+    font-size: 0.92rem;
+    color: #333;
+    line-height: 1.7;
+}
+
+#delete-modal-body p {
+    margin: 0.3rem 0;
+}
+
+#delete-modal-body strong {
+    color: #1a2332;
+}
+
+/* ---------------------------------------------------------------------------
+   Chart container responsive
+   --------------------------------------------------------------------------- */
+
+.chart-container {
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   History run group (results page variant)
+   --------------------------------------------------------------------------- */
+
+.history-run {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.history-run-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.history-run-header .timestamp {
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+/* Expand/collapse arrow */
+.expand-arrow {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    color: #64748b;
+    transition: transform 0.15s ease;
+    display: inline-block;
+    min-width: 1em;
+    text-align: center;
+}
+
+.expand-arrow:hover {
+    color: #2563eb;
+}
+
+.expand-arrow.expanded {
+    transform: rotate(90deg);
+}
+
+/* Child rows for expanded runs */
+.history-child-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.4rem 1.25rem 0.4rem 3rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.88rem;
+    color: #64748b;
+    border-left: 2px solid #e2e8f0;
+    margin-left: 1.5rem;
+    background: #fafbfc;
+    border-radius: 0 4px 4px 0;
+}
+
+.history-child-row .child-tok {
+    font-weight: 600;
+    color: #1e293b;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.history-child-row .child-date {
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Task History section styles
+   --------------------------------------------------------------------------- */
+
+/* Task history container */
+#task-history-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Task history row */
+.task-history-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    transition: background 0.1s ease;
+    flex-wrap: wrap;
+}
+
+.task-history-row:hover {
+    background: #f8fafc;
+}
+
+.task-history-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.95rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.task-history-type {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.task-history-type.markdown {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.task-history-type.python {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.task-history-type.java {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.task-history-score {
+    font-weight: 700;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.task-history-score.pass {
+    color: #16a34a;
+}
+
+.task-history-score.fail {
+    color: #dc2626;
+}
+
+.task-history-tps {
+    font-size: 0.88rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.task-history-timestamp {
+    font-size: 0.82rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.task-history-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.task-history-actions button {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.1s ease;
+}
+
+.task-history-actions button:hover {
+    background: #f0f0f0;
+    border-color: #aaa;
+}
+
+.task-history-actions button.delete-task-btn {
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.task-history-actions button.delete-task-btn:hover {
+    background: #fef2f2;
+}
+
+/* Task detail section (expandable) */
+.task-history-detail {
+    margin-top: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.88rem;
+    margin-left: 1rem;
+}
+
+.task-detail-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+
+.task-detail-label {
+    font-weight: 600;
+    color: #475569;
+    min-width: 100px;
+}
+
+.task-detail-value {
+    color: #1e293b;
+}
+
+/* Hide task history by default */
+#task-history-section {
+    display: none;
+}
+
+#task-history-section.visible {
+    display: block;
+}
+
+/* ---------------------------------------------------------------------------
+   Task-Type Filter Bar
+   --------------------------------------------------------------------------- */
+
+.task-type-filter {
+    padding: 0.4rem 1rem !important;
+    margin-bottom: 0.5rem;
+}
+
+.task-type-tabs {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.task-type-btn {
+    padding: 0.35rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.task-type-btn:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+.task-type-btn.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #1d4ed8;
+}
+
+/* ---------------------------------------------------------------------------
+   Markdown Result Card
+   --------------------------------------------------------------------------- */
+
+.markdown-result-card {
+    margin-top: 0.75rem;
+    margin-left: 1rem;
+    padding: 0.75rem 1rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 4px;
+    font-size: 0.88rem;
+}
+
+.markdown-result-card.fail {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.markdown-result-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.markdown-result-header .pass-badge,
+.markdown-result-header .fail-badge {
+    padding: 0.15rem 0.6rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.pass-badge {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.fail-badge {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.markdown-result-score {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #166534;
+}
+
+.fail .markdown-result-score {
+    color: #991b1b;
+}
+
+.markdown-result-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.4rem 1.5rem;
+}
+
+.markdown-result-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.markdown-result-item .label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.markdown-result-item .value {
+    font-size: 0.95rem;
+    color: #111827;
+    font-weight: 500;
+}
+
+.markdown-result-errors {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.markdown-result-expand {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: #2563eb;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.markdown-result-expand:hover {
+    color: #1d4ed8;
+}
+
+.markdown-result-extra {
+    display: none;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #d1d5db;
+}
+
+.markdown-result-extra.visible {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.3rem 1.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive — Results
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+    .page-container-wide {
+        width: 98vw;
+        padding: 0 0.5rem;
+    }
+
+    .filter-row {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .filter-group {
+        min-width: 100%;
+    }
+
+    .task-history-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .task-history-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .page-actions {
+        width: 100%;
+    }
+
+    .tab-bar {
+        overflow-x: auto;
+    }
+
+    .tab-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+}
