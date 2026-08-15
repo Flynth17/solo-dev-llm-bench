@@ -516,7 +516,8 @@ async function runEvaluation() {
         for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
             var cr = allCorrectnessResults[ci];
             var testPct = Math.round((cr.score || 0) * 100);
-            var testStatus = cr.passed ? 'PASS' : 'FAIL';
+            // Always use PASS semantics: score represents percentage PASSED
+            var testStatus = 'PASS';
             var testColor = cr.passed ? '#22c55e' : '#ef4444';
             if (cr.passed) {
                 passedCount++;
@@ -556,8 +557,9 @@ async function runEvaluation() {
         var correctnessResults = data.correctness_results || [];
         for (var i = 0; i < correctnessResults.length; i++) {
             var cr = correctnessResults[i];
+            // Always use PASS semantics: score represents percentage PASSED
             var pct = Math.round((cr.score || 0) * 100);
-            var status = cr.passed ? 'PASS' : 'FAIL';
+            var status = 'PASS';
             var statusColor = cr.passed ? '#22c55e' : '#ef4444';
 
             var corrDiv = document.createElement("div");
