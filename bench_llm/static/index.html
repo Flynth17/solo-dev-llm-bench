@@ -78,6 +78,12 @@
                         <span>Large Prompt (~4,000 tokens)</span>
                     </label>
                 </div>
+
+                <!-- Speed Iterations -->
+                <div class="eval-iterations">
+                    <label for="iterations">Speed Iterations</label>
+                    <input type="number" id="iterations" value="5" min="1" max="100">
+                </div>
             </div>
 
             <!-- Correctness Checkboxes -->
@@ -106,10 +112,6 @@
             <!-- Benchmark Parameters -->
             <div class="form-row-inline eval-params">
                 <div class="form-row half">
-                    <label for="iterations">Iterations</label>
-                    <input type="number" id="iterations" value="5" min="1" max="100">
-                </div>
-                <div class="form-row half">
                     <label for="max-tokens">Max Output Tokens</label>
                     <input type="number" id="max-tokens" value="1024" min="1" max="10000">
                 </div>
@@ -123,10 +125,10 @@
             <button id="run-evaluation" class="btn-primary">Run Evaluation</button>
         </section>
 
-        <!-- Advanced / Custom Benchmark (collapsed) -->
-        <section class="panel collapsible" id="advanced-benchmark">
-            <h2 class="collapsible-header" tabindex="0">&#x25BE; Advanced / Custom Benchmark</h2>
-            <div class="collapsible-body hidden">
+        <!-- Advanced / Custom Benchmark (collapsible) -->
+        <details class="collapsible" id="advanced-benchmark">
+            <summary class="collapsible-header">&#x25B6; Advanced / Custom Benchmark</summary>
+            <div class="collapsible-body">
                 <!-- Prompt Preset Selector -->
                 <div class="form-row">
                     <label for="prompt-preset">Prompt preset</label>
@@ -144,8 +146,11 @@
                     <label for="prompt">Benchmark Prompt</label>
                     <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
                 </div>
+
+                <!-- Existing Run Benchmark button preserved for transitional use -->
+                <button id="run-benchmark" class="btn-secondary">Run Benchmark</button>
             </div>
-        </section>
+        </details>
 
         <!-- Status -->
         <section id="status" class="status hidden"></section>
@@ -157,10 +162,10 @@
             <div id="results-charts"></div>
         </section>
 
-        <!-- Advanced Task Manager (collapsed) -->
-        <section class="panel collapsible" id="advanced-tasks">
-            <h2 class="collapsible-header" tabindex="0">&#x25BE; Advanced Task Manager</h2>
-            <div class="collapsible-body hidden">
+        <!-- Advanced Task Manager (collapsible) -->
+        <details class="collapsible" id="advanced-tasks">
+            <summary class="collapsible-header">&#x25B6; Advanced Task Manager</summary>
+            <div class="collapsible-body">
                 <div class="task-toolbar">
                     <select id="task-type-select">
                         <option value="markdown">Markdown Structure</option>
@@ -174,7 +179,7 @@
                     <div id="task-list"></div>
                 </div>
             </div>
-        </section>
+        </details>
 
         <!-- View all past results -->
         <div class="view-all-link">

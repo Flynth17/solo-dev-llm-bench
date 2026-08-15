@@ -446,6 +446,40 @@ h1 {
     border-color: #d1d5db;
 }
 
+/* Eval iterations styling */
+.eval-iterations {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.eval-iterations label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+    margin-bottom: 0;
+}
+
+.eval-iterations input {
+    width: 80px;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    text-align: center;
+}
+
+.eval-iterations input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 /* Eval params row styling */
 .eval-params {
     margin-top: 1.25rem;
@@ -454,32 +488,56 @@ h1 {
 }
 
 /* ---------------------------------------------------------------------------
-   Collapsible panel styles
+   Collapsible panel styles (native <details>)
    --------------------------------------------------------------------------- */
 
 .collapsible {
     border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 1rem;
 }
 
-.collapsible-header {
+.collapsible summary {
     cursor: pointer;
     user-select: none;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.95rem;
     transition: color 0.15s ease, background 0.15s ease;
-    padding: 0.3rem 0;
-    display: inline-block;
+    list-style: none;
 }
 
-.collapsible-header:hover {
+.collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+.collapsible summary:hover {
     color: #2563eb;
 }
 
-.collapsible-header:focus {
-    outline: 2px solid #2563eb;
-    outline-offset: 2px;
+.collapsible summary::before {
+    display: inline-block;
+    content: "\25B6";
+    margin-right: 0.4rem;
+    font-size: 0.75rem;
+    transition: transform 0.15s ease;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.collapsible[open] summary::before {
+    content: "\25BC";
+}
+
+.collapsible[open] summary {
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: -1px;
 }
 
 .collapsible .collapsible-body {
-    margin-top: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.5rem;
 }
 
 /* ---------------------------------------------------------------------------
