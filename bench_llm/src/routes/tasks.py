@@ -7,9 +7,9 @@ from fastapi import APIRouter, HTTPException
 
 from src import task_manager
 from src.benchmark_markdown import run_markdown_benchmark, DEFAULT_PROMPTS as MD_PROMPTS
-from src.benchmark_python import run_python_benchmark, DEFAULT_PROMPTS as PY_PROMPTS
 from src.benchmark_java import run_java_benchmark, DEFAULT_PROMPTS as JA_PROMPTS
 from src.task_markdown import run_markdown_task, TASK_DEFINITION as MD_TASK_DEF
+from src.task_python import run_python_correctness_task, TASK_DEFINITION as PY_TASK_DEF
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -100,13 +100,15 @@ async def run_task(task_id: str, config: dict):
                 connection_type=config.get("connection_type", ""),
             )
         elif task["task_type"] == "python":
-            result = await run_python_benchmark(
+            result = await run_python_correctness_task(
                 lm_studio_url=lm_studio_url,
                 model=model,
-                prompt=task["prompt"] or PY_PROMPTS[0]["prompt"],
-                max_tokens=max_tokens,
-                temperature=temperature,
-                iterations=iterations,
+                fixture_name="python_correctness/solution.py",
+                max_output_tokens=int(config.get("max_output_tokens", PY_TASK_DEF["max_output_tokens"])),
+                temperature=float(config.get("temperature", PY_TASK_DEF["temperature"])),
+                hardware_label=config.get("hardware_label", ""),
+                execution_environment=config.get("execution_environment", "Local"),
+                connection_type=config.get("connection_type", ""),
             )
         elif task["task_type"] == "java":
             result = await run_java_benchmark(
