@@ -423,6 +423,113 @@ async function runBenchmark() {
 runBtn.addEventListener("click", runBenchmark);
 
 // ---------------------------------------------------------------------------
+// Run Evaluation (speed tests only)
+// ---------------------------------------------------------------------------
+
+var runEvaluationBtn = document.getElementById("run-evaluation");
+
+if (runEvaluationBtn) {
+    runEvaluationBtn.addEventListener("click", runEvaluation);
+}
+
+async function runEvaluation() {
+    var model = modelSelect.value.trim();
+    if (!model) {
+        showStatus("Please select a model first.", "error");
+        return;
+    }
+
+    // Collect selected speed tests
+    var speedTests = [];
+    if (document.getElementById("eval-speed-small").checked) {
+        speedTests.push("small");
+    }
+    if (document.getElementById("eval-speed-medium").checked) {
+        speedTests.push("medium");
+    }
+    if (document.getElementById("eval-speed-large").checked) {
+        speedTests.push("large");
+    }
+
+    if (speedTests.length === 0) {
+        showStatus("Select at least one speed test.", "error");
+        return;
+    }
+
+    var config = {
+        lm_studio_url: lmStudioUrlInput.value.replace(/\/$/, ""),
+        model: model,
+        execution_environment: executionEnvSelect.value,
+        connection_type: connectionTypeSelect.value,
+        hardware_label: hardwareLabelInput.value.trim(),
+        iterations: parseInt(iterationsInput.value, 10),
+        max_output_tokens: parseInt(maxTokensInput.value, 10),
+        temperature: parseFloat(temperatureInput.value),
+        speed_tests: speedTests,
+    };
+
+    disableRun(true);
+    showStatus("Running evaluation\u2026", "info");
+    hideResults();
+
+    try {
+        var resp = await fetch("/api/evaluation/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+        });
+
+        if (!resp.ok) {
+            var err = await resp.json().catch(function () { return {}; });
+            throw new Error(err.detail || "HTTP " + resp.status);
+        }
+
+        var data = await resp.json();
+        clearStatus();
+
+        // Display evaluation results
+        resultsPanel.classList.remove("hidden");
+        resultsContainer.innerHTML = "";
+
+        // Build summary
+        var summary = data.summary || {};
+        var summaryDiv = document.createElement("div");
+        summaryDiv.className = "results-group";
+        summaryDiv.innerHTML =
+            '<h3>Evaluation Summary</h3>' +
+            '<div class="aggregate">' +
+                '<div class="aggregate-item"><div class="label">Tests Run</div><div class="value">' + (summary.speed_tests_run || 0) + '</div></div>' +
+                '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + fmt2(summary.avg_tokens_per_second) + '</div></div>' +
+                '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(summary.avg_ttft_seconds) + '</div></div>' +
+                '<div class="aggregate-item"><div class="label">Total Wall (s)</div><div class="value">' + fmt2(summary.total_wall_time_seconds) + '</div></div>' +
+            '</div>';
+        resultsContainer.appendChild(summaryDiv);
+
+        // Per-test details
+        var speedResults = data.speed_results || [];
+        for (var i = 0; i < speedResults.length; i++) {
+            var sr = speedResults[i];
+            var testDiv = document.createElement("div");
+            testDiv.className = "results-group";
+            testDiv.innerHTML =
+                '<h4>Speed Test: <code>' + escapeHtml(sr.prompt_label || sr.test_name) + '</code></h4>' +
+                '<div class="aggregate">' +
+                    '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + fmt2(sr.aggregate.avg_tokens_per_second) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Min tok/s</div><div class="value">' + fmt2(sr.aggregate.min_tokens_per_second) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Max tok/s</div><div class="value">' + fmt2(sr.aggregate.max_tokens_per_second) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(sr.aggregate.avg_ttft_seconds) + '</div></div>' +
+                '</div>';
+            resultsContainer.appendChild(testDiv);
+        }
+
+    } catch (e) {
+        showStatus("Evaluation failed: " + e.message, "error");
+    } finally {
+        disableRun(false);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 

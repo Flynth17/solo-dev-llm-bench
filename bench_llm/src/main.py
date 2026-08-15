@@ -19,6 +19,7 @@ from src.routes import prompts as prompts_routes
 from src.routes import results as results_routes
 from src.routes import benchmark as benchmark_routes
 from src.routes import tasks as tasks_routes
+from src.routes import evaluation as evaluation_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -52,6 +53,9 @@ app.include_router(benchmark_routes.router)
 
 # Register task CRUD and history routes
 app.include_router(tasks_routes.router)
+
+# Register evaluation route
+app.include_router(evaluation_routes.router)
 
 # Initialize tasks table
 task_manager.init_tasks_table()
