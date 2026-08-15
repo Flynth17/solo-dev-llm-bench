@@ -11,10 +11,83 @@ Mirrors the existing Markdown task runner architecture:
 7. Return deterministic correctness + performance metadata
 """
 
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+# ------------------------------------------------------------------
+# Runtime output persistence (Act P5.1)
+# ------------------------------------------------------------------
+
+def _save_latest_python_output(content: str) -> None:
+    """Write the exact submitted Python code to runtime/python/latest_output.py.
+
+    Creates parent directories if missing. Always overwrites (never appends).
+    This file contains ONLY the final submitted code — no reasoning/thinking text.
+    """
+    output_dir = Path(__file__).parent.parent / "runtime" / "python"
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = output_dir / "latest_output.py"
+    output_file.write_text(content, encoding="utf-8")
+
+
+# ------------------------------------------------------------------
+# Final message extraction (Act P5.1 — mirror Markdown's _extract_final_message)
+# ------------------------------------------------------------------
+
+def _extract_final_message(raw_output: Any) -> tuple[str | None, str]:
+    """Extract the final answer from LM Studio response output.
+
+    Uses the same strategy as Markdown task runner:
+    - If raw_output is a list/tuple of chat blocks, scan from the END for
+      the last block with type == "message" (the final answer).
+    - Discard reasoning/thinking blocks entirely.
+    - Return (final_message_content_or_None, failure_reason_or_empty_string).
+
+    Returns:
+        (content, reason) where:
+          - content is the extracted final message string, or None if not found
+          - reason is a failure code like "no_final_answer" or ""
+    """
+    if isinstance(raw_output, str):
+        return raw_output.strip(), ""
+
+    if isinstance(raw_output, dict):
+        for key in ("output", "text", "response", "content"):
+            if key in raw_output:
+                val = raw_output[key]
+                if isinstance(val, str):
+                    return val.strip(), ""
+                if isinstance(val, dict) and "text" in val:
+                    return val["text"].strip(), ""
+        # Fallback: join all string values only
+        parts = []
+        for v in raw_output.values():
+            if isinstance(v, str):
+                parts.append(v)
+        return "\n".join(parts).strip() or None, "no_final_answer"
+
+    if isinstance(raw_output, (list, tuple)):
+        # Scan from the END for the last block with type == "message"
+        for item in reversed(list(raw_output)):
+            if isinstance(item, dict) and item.get("type") == "message":
+                content = item.get("content", "")
+                if isinstance(content, str):
+                    return content.strip(), ""
+                # Content as list of parts (common with some LM Studio endpoints)
+                if isinstance(content, (list, tuple)):
+                    parts = [str(p) for p in content if isinstance(p, (str, int, float))]
+                    joined = "\n".join(parts).strip()
+                    return joined or None, "no_final_answer" if not joined else ""
+
+        # No "message" block found — model returned only reasoning/thinking
+        return None, "no_final_answer"
+
+    # Unknown type: treat as empty
+    return None, "no_final_answer"
 
 
 # ------------------------------------------------------------------
@@ -186,19 +259,54 @@ async def run_python_correctness_task(
 
     elapsed = time.perf_counter() - start_time
 
-    # 4. Normalize output
+    # 4. Extract final message (Act P5.1 — discard reasoning blocks)
     raw_output = body.get("output", body.get("text", ""))
-    generated_code = normalize_llm_output(raw_output)
+    generated_code, failure_reason = _extract_final_message(raw_output)
 
-    # 5. Strip Markdown fences
+    # If no final message found, short-circuit with failure result.
+    if not generated_code:
+        stats = body.get("stats", {})
+        output_tokens = stats.get("total_output_tokens", 0)
+        input_tokens = stats.get("input_tokens", 0)
+        # Write empty runtime file when no final answer
+        _save_latest_python_output("")
+
+        tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
+        return {
+            "task_name": TASK_DEFINITION["name"],
+            "task_type": TASK_DEFINITION["task_type"],
+            "model": model,
+            "score": 0.0,
+            "passed": False,
+            "total_tests": 0,
+            "passed_tests": 0,
+            "failed_tests": 0,
+            "output_tokens": output_tokens,
+            "input_tokens": input_tokens,
+            "tokens_per_second": round(tokens_per_second, 2),
+            "ttft_seconds": round(ttft, 4) if ttft else None,
+            "wall_time_seconds": round(elapsed, 4),
+            "generated_code": "",
+            "validator_error": failure_reason,
+            "failure_reason": failure_reason,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hardware_label": hardware_label,
+            "execution_environment": execution_environment,
+            "connection_type": connection_type,
+        }
+
+    # 5. Strip Markdown fences from the final message
     generated_code = strip_code_fences(generated_code)
 
-    # 6. Extract token stats
+    # 6. Save exact submitted code to runtime file (Act P5.1)
+    _save_latest_python_output(generated_code)
+
+    # 7. Extract token stats
     stats = body.get("stats", {})
     output_tokens = stats.get("total_output_tokens", len(generated_code.split()))
     input_tokens = stats.get("input_tokens", 0)
 
-    # 7. Validate with python_validator.py
+    # 8. Validate with python_validator.py
     validation_result = validate_python_solution(generated_code, test_code)
 
     # 8. Compute performance metadata
