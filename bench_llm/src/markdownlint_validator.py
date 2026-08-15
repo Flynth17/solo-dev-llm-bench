@@ -59,27 +59,58 @@ def _has_python_markdownlint() -> bool:
 class MarkdownLintResult:
     """Result from running markdownlint."""
 
+    # Status constants — must distinguish between completed and unavailable states.
+    STATUS_COMPLETED = "completed"
+    STATUS_UNAVAILABLE = "unavailable"
+
     def __init__(
         self,
         violations: list[dict],
         output: str,
         command_used: str,
+        status: str = STATUS_COMPLETED,
+        error_message: str = "",
     ):
         self.violations = violations
         self.output = output
         self.command_used = command_used
+        self.status = status
+        self.error_message = error_message
 
     @property
     def count(self) -> int:
         return len(self.violations)
 
+    @property
+    def is_available(self) -> bool:
+        """True if validation was actually performed."""
+        return self.status == MarkdownLintResult.STATUS_COMPLETED
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "violations": self.violations,
             "count": self.count,
             "command_used": self.command_used,
             "output": self.output,
+            "status": self.status,
         }
+        if self.error_message:
+            d["error_message"] = self.error_message
+        return d
+
+    @classmethod
+    def unavailable(cls, message: str) -> "MarkdownLintResult":
+        """Factory for an explicit 'validator unavailable' result.
+
+        This MUST NOT be treated as a zero-error validation.
+        """
+        return cls(
+            violations=[],
+            output="",
+            command_used="none",
+            status=cls.STATUS_UNAVAILABLE,
+            error_message=message,
+        )
 
 
 class MarkdownLintValidator:
@@ -105,12 +136,13 @@ class MarkdownLintValidator:
         if py_result:
             return py_result
 
-        # Neither available
-        return MarkdownLintResult(
-            violations=[],
-            output="",
-            command_used="none",
+        # Neither available — MUST NOT be treated as a zero-error validation.
+        dep = self.check_dependency()
+        msg = (
+            "markdownlint is not available: neither CLI nor python-markdownlint package found. "
+            "Install via 'npm install -g markdownlint-cli' or 'pip install markdownlint'."
         )
+        return MarkdownLintResult.unavailable(msg)
 
     def validate_string(self, content: str, filename: str = "input.md") -> MarkdownLintResult:
         """Validate markdown content from a string."""
@@ -284,9 +316,27 @@ def run_markdownlint_benchmark(
 
     try:
         original_result = validator.validate_file(original_path)
-        initial_errors = original_result.count
     finally:
         original_path.unlink(missing_ok=True)
+
+    # If the validator is unavailable, short-circuit immediately.
+    if not original_result.is_available:
+        return {
+            "initial_errors": None,
+            "final_errors": None,
+            "errors_fixed": None,
+            "score": None,
+            "passed": False,
+            "original_violations": [],
+            "corrected_violations": [],
+            "corrected_output": "",
+            "command_used": "none",
+            "dependency_message": validator.check_dependency()["message"],
+            "validator_available": False,
+            "error": original_result.error_message,
+        }
+
+    initial_errors = original_result.count
 
     # Validate corrected
     with tempfile.NamedTemporaryFile(
@@ -298,10 +348,28 @@ def run_markdownlint_benchmark(
 
     try:
         corrected_result = validator.validate_file(corrected_path)
-        final_errors = corrected_result.count
-        corrected_output = corrected_result.output
     finally:
         corrected_path.unlink(missing_ok=True)
+
+    # If the corrected validation also failed (shouldn't happen if original passed), propagate.
+    if not corrected_result.is_available:
+        return {
+            "initial_errors": initial_errors,
+            "final_errors": None,
+            "errors_fixed": None,
+            "score": None,
+            "passed": False,
+            "original_violations": original_result.violations,
+            "corrected_violations": [],
+            "corrected_output": "",
+            "command_used": original_result.command_used,
+            "dependency_message": validator.check_dependency()["message"],
+            "validator_available": False,
+            "error": corrected_result.error_message,
+        }
+
+    final_errors = corrected_result.count
+    corrected_output = corrected_result.output
 
     # Calculate score
     score_info = calculate_score(initial_errors, final_errors)

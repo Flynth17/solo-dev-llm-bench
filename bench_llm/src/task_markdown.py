@@ -153,6 +153,41 @@ async def run_markdown_task(
     # Validate with markdownlint
     validator = MarkdownLintValidator()
 
+    dep_info = validator.check_dependency()
+    validator_available = dep_info["cli_available"] or dep_info["python_available"]
+
+    # If no markdownlint implementation is available, short-circuit.
+    if not validator_available:
+        tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
+        return {
+            "task_name": TASK_DEFINITION["name"],
+            "task_type": TASK_DEFINITION["task_type"],
+            "model": model,
+            "initial_errors": None,
+            "final_errors": None,
+            "errors_fixed": None,
+            "score": None,
+            "passed": False,
+            "output_tokens": output_tokens,
+            "input_tokens": input_tokens,
+            "tokens_per_second": round(tokens_per_second, 2),
+            "ttft_seconds": round(ttft, 4) if ttft else None,
+            "wall_time_seconds": round(elapsed, 4),
+            "corrected_output": generated_text,
+            "corrected_violations": [],
+            "dependency_message": dep_info["message"],
+            "validator_available": False,
+            "validator_error": (
+                "markdownlint is not available: neither CLI nor python-markdownlint package found. "
+                "Install via 'npm install -g markdownlint-cli' or 'pip install markdownlint'. "
+                "Benchmark could not be evaluated."
+            ),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hardware_label": hardware_label,
+            "execution_environment": execution_environment,
+            "connection_type": connection_type,
+        }
+
     # Validate original
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, dir=tempfile.gettempdir()
@@ -204,7 +239,8 @@ async def run_markdown_task(
         "wall_time_seconds": round(elapsed, 4),
         "corrected_output": generated_text,
         "corrected_violations": corrected_result.violations,
-        "dependency_message": validator.check_dependency()["message"],
+        "dependency_message": dep_info["message"],
+        "validator_available": True,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hardware_label": hardware_label,
         "execution_environment": execution_environment,
