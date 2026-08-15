@@ -140,8 +140,8 @@ def seeded_data(client):
     db_path = Path(tmp_dir) / "benchmark_results.db"
 
     # Patch the global results_store temporarily
-    import src.main as main_module
-    old_store = main_module.results_store
+    import src.app_state as app_state_module
+    old_store = app_state_module.results_store
     new_store = ResultsStore(csv_path=csv_path, db_path=db_path)
 
     run_a_id = "run_api_a"
@@ -189,11 +189,11 @@ def seeded_data(client):
             "temperature": 0.5,
         })
 
-    main_module.results_store = new_store
+    app_state_module.results_store = new_store
     yield run_a_id, run_b_id, csv_path, db_path
 
     # Restore old store
-    main_module.results_store = old_store
+    app_state_module.results_store = old_store
 
 
 # ---------------------------------------------------------------------------

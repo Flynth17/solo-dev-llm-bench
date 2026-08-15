@@ -16,12 +16,13 @@ from src.benchmark_python import run_python_benchmark, DEFAULT_PROMPTS as PY_PRO
 from src.benchmark_java import run_java_benchmark, DEFAULT_PROMPTS as JA_PROMPTS
 from src.task_markdown import run_markdown_task, TASK_DEFINITION as MD_TASK_DEF
 from src.config_loader import load_config, save_config
-from src.results import ResultsStore
 from src import task_manager
+from src import app_state
 from src.routes import config as config_routes
 from src.routes import models as models_routes
 from src.routes import prompts as prompts_routes
 from src.routes import results as results_routes
+from src.routes import benchmark as benchmark_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -35,8 +36,8 @@ app = FastAPI(title="Solo Dev LLM Bench", version="1.0.0")
 STATIC_DIR = Path(__file__).parent.parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Global results store
-results_store = ResultsStore()
+# Shared results store singleton
+results_store = app_state.results_store
 
 # Register config routes
 app.include_router(config_routes.router)
@@ -49,6 +50,9 @@ app.include_router(prompts_routes.router)
 
 # Register results route
 app.include_router(results_routes.router)
+
+# Register benchmark route
+app.include_router(benchmark_routes.router)
 
 # Initialize tasks table
 task_manager.init_tasks_table()
@@ -346,56 +350,3 @@ async def delete_task_run(run_id: int):
     return {"status": "ok", "run_id": run_id}
 
 
-# ---------------------------------------------------------------------------
-# Legacy group-by-run endpoint for backward compatibility
-# ---------------------------------------------------------------------------
-
-@app.get("/api/benchmark/runs/grouped")
-async def get_grouped_results():
-    """Return results grouped by run_id (for dashboard compatibility)."""
-    all_runs = results_store.get_all()
-
-    # Group by run_id
-    groups: dict[str, dict] = {}
-    for run in all_runs:
-        rid = run.get("run_id", "")
-        if not rid:
-            continue
-        if rid not in groups:
-            groups[rid] = {
-                "run_id": rid,
-                "timestamp": run.get("timestamp", ""),
-                "model": run.get("model_key", ""),
-                "model_display_name": run.get("model_display_name", ""),
-                "hardware_label": run.get("hardware_label", ""),
-                "execution_environment": run.get("execution_environment", ""),
-                "connection_type": run.get("connection_type", ""),
-                "prompt_name": run.get("prompt_name", ""),
-                "iterations": 0,
-                "runs": [],
-                "aggregate": {"avg_tokens_per_second": 0, "min_tokens_per_second": 0, "max_tokens_per_second": 0},
-                "warm_aggregate": {"avg_tokens_per_second": None, "avg_ttft": None, "available": False},
-            }
-        groups[rid]["runs"].append(run)
-        groups[rid]["iterations"] += 1
-
-    # Compute aggregates per group
-    for rid, group in groups.items():
-        tps_values = [r["tokens_per_second"] for r in group["runs"] if r.get("tokens_per_second", 0) > 0]
-        if tps_values:
-            group["aggregate"] = {
-                "avg_tokens_per_second": round(sum(tps_values) / len(tps_values), 2),
-                "min_tokens_per_second": round(min(tps_values), 2),
-                "max_tokens_per_second": round(max(tps_values), 2),
-            }
-
-        warm_tps = [r["tokens_per_second"] for r in group["runs"] if r.get("cold_or_warm") == "warm" and r.get("tokens_per_second", 0) > 0]
-        warm_ttfts = [r["ttft_seconds"] for r in group["runs"] if r.get("cold_or_warm") == "warm"]
-        if warm_tps:
-            group["warm_aggregate"] = {
-                "avg_tokens_per_second": round(sum(warm_tps) / len(warm_tps), 2),
-                "avg_ttft": round(sum(warm_ttfts) / len(warm_ttfts), 2) if warm_ttfts else None,
-                "available": True,
-            }
-
-    return {"results": list(groups.values())}
