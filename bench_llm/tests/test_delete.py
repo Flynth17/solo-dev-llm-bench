@@ -205,7 +205,7 @@ class TestCancelRegression:
     def test_closeDeleteModal_clears_pending_state(self):
         """closeDeleteModal() should clear all pending vars and hide modal."""
         # Read the JS source directly and verify closeDeleteModal resets state
-        js_path = Path(__file__).parent.parent / "static" / "results.js"
+        js_path = Path(__file__).parent.parent / "static" / "results-delete-modal.js"
         js_text = js_path.read_text(encoding="utf-8")
         assert "pendingDeleteRunId = null" in js_text
         assert 'pendingDeleteModel = ""' in js_text
@@ -214,7 +214,7 @@ class TestCancelRegression:
 
     def test_cancel_button_has_stopPropagation(self):
         """Cancel button should call e.stopPropagation() to prevent bubbling."""
-        js_path = Path(__file__).parent.parent / "static" / "results.js"
+        js_path = Path(__file__).parent.parent / "static" / "results-delete-modal.js"
         js_text = js_path.read_text(encoding="utf-8")
         # Verify cancelDeleteBtn listener uses stopPropagation
         assert "cancelDeleteBtn.addEventListener" in js_text
