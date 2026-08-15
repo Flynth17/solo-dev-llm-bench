@@ -203,9 +203,15 @@ def validate_unsolvable_response(response: str) -> UnsolvableResult:
     )
 
     if has_required_fields:
-        # Core terms that must appear in the explanation for it to be valid
+        # Core terms that must appear in the explanation for it to be valid.
+        # The response must explain that classify(0) cannot simultaneously return "zero" and "positive".
         core_terms = ["classify", "zero", "positive"]
         core_matches = sum(1 for kw in core_terms if kw in explanation_lower)
+
+        # Also check the full normalized text (not just EXPLANATION field value) for reasoning content.
+        # This handles cases where the model provides reasoning without an explicit EXPLANATION: label.
+        full_text_lower = normalized.lower()
+        full_core_matches = sum(1 for kw in core_terms if kw in full_text_lower)
 
         if has_explanation_content and keyword_matches >= 2:
             # Explanation present with enough keywords — but must include at least one core term
@@ -216,9 +222,9 @@ def validate_unsolvable_response(response: str) -> UnsolvableResult:
         elif not has_explanation_content and keyword_matches >= 3:
             # Truncated but contains enough reasoning context (e.g. "CONFLICT:" truncated)
             explanation_valid = True
-        elif not explanation_field_exists and keyword_matches == 0:
-            # No EXPLANATION field marker at all, but IMPOSSIBLE=yes + CLASS valid + CONFLICT R1,R2 present
-            # Accept as pass — the structured fields themselves are sufficient evidence
+        elif not explanation_field_exists and full_core_matches >= 2:
+            # No explicit EXPLANATION field, but the response text contains at least 2 core terms
+            # (classify + zero/positive), indicating actual contradiction reasoning was provided.
             explanation_valid = True
         else:
             explanation_valid = False

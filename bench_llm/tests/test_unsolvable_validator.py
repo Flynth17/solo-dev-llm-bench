@@ -286,10 +286,10 @@ class TestU15CanonicalExactFormat:
 
 
 class TestU15QwenRealFormat:
-    """Test Qwen's real output format passes."""
+    """Test Qwen's real output format — U1.6 requires contradiction explanation."""
 
-    def test_qwen_real_format_passes(self):
-        """Qwen's truncated format with code fences should PASS."""
+    def test_qwen_real_format_fails_no_explanation(self):
+        """Qwen's truncated format without contradiction reasoning should FAIL (U1.6)."""
         resp = (
             '```\n'
             'IMPOSSIBLE: yes\n'
@@ -298,19 +298,31 @@ class TestU15QwenRealFormat:
             '```'
         )
         result = validate_unsolvable_response(resp)
-        assert result.score == 1.0
-        assert result.passed is True
+        assert result.score == 0.0
+        assert result.passed is False
         assert result.impossible_detected is True
-        assert "R1" in result.conflict_ids
-        assert "R2" in result.conflict_ids
 
-    def test_qwen_real_format_lowercase_class_passes(self):
-        """Qwen's format with lowercase class should PASS."""
+    def test_qwen_real_format_lowercase_class_fails(self):
+        """Qwen's format with lowercase class but no explanation should FAIL (U1.6)."""
         resp = (
             '```\n'
             'IMPOSSIBLE: yes\n'
             'CLASS: contradictory-requirements\n'
             'CONFLICT: R1,R2\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+    def test_qwen_real_format_with_explanation_passes(self):
+        """Qwen's format WITH contradiction explanation should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Contradictory Requirements\n'
+            'CONFLICT: R1, R2\n'
+            'EXPLANATION: classify(0) cannot simultaneously return "zero" and "positive".\n'
             '```'
         )
         result = validate_unsolvable_response(resp)
@@ -378,16 +390,16 @@ class TestU15SaysPossible:
 class TestU15MissingInvalidExplanation:
     """Test missing/invalid explanation fails."""
 
-    def test_no_explanation_field_passes(self):
-        """No EXPLANATION field but correct structured fields should PASS (U1.5)."""
+    def test_no_explanation_field_fails(self):
+        """No EXPLANATION field and no contradiction reasoning should FAIL (U1.6)."""
         resp = (
             "IMPOSSIBLE: yes\n"
             "CLASS: contradictory-requirements\n"
             "CONFLICT: R1, R2\n"
         )
         result = validate_unsolvable_response(resp)
-        assert result.score == 1.0
-        assert result.passed is True
+        assert result.score == 0.0
+        assert result.passed is False
 
     def test_short_no_keyword_explanation_fails(self):
         """Short explanation with no relevant keywords should FAIL."""
@@ -401,8 +413,8 @@ class TestU15MissingInvalidExplanation:
         assert result.score == 0.0
         assert result.passed is False
 
-    def test_truncated_with_keywords_passes(self):
-        """Truncated response with enough keywords should PASS."""
+    def test_truncated_without_explanation_fails(self):
+        """Truncated response without contradiction reasoning should FAIL (U1.6)."""
         resp = (
             '```\n'
             'IMPOSSIBLE: yes\n'
@@ -412,7 +424,20 @@ class TestU15MissingInvalidExplanation:
             '```'
         )
         result = validate_unsolvable_response(resp)
-        # Should pass because it has IMPOSSIBLE + CLASS + CONFLICT(R1,R2) + keywords in context
+        assert result.score == 0.0
+        assert result.passed is False
+
+    def test_truncated_with_explanation_passes(self):
+        """Truncated response WITH contradiction explanation should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Contradictory Requirements\n'
+            'CONFLICT: R1, R2\n'
+            'EXPLANATION: classify(0) cannot return both "zero" and "positive".\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
         assert result.score == 1.0
         assert result.passed is True
 
