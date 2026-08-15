@@ -194,6 +194,27 @@ def strip_code_fences(text: str) -> str:
     return stripped
 
 
+def _count_test_functions(test_code: str) -> int:
+    """Count the number of test functions in a pytest test file.
+
+    Looks for patterns like ``def test_`` at the start of a line or
+    after indentation.  This provides a deterministic expected test
+    count even when the test module cannot be collected.
+
+    Args:
+        test_code: The pytest test file content.
+
+    Returns:
+        The number of test functions found.
+    """
+    count = 0
+    for line in test_code.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("def test_") and "(" in stripped:
+            count += 1
+    return count
+
+
 # ------------------------------------------------------------------
 # Task runner
 # ------------------------------------------------------------------
@@ -268,6 +289,10 @@ async def run_python_correctness_task(
         stats = body.get("stats", {})
         output_tokens = stats.get("total_output_tokens", 0)
         input_tokens = stats.get("input_tokens", 0)
+
+        # Count expected tests from test_code (deterministic for correctness benchmark)
+        expected_tests = _count_test_functions(test_code)
+
         # Write empty runtime file when no final answer
         _save_latest_python_output("")
 
@@ -278,9 +303,9 @@ async def run_python_correctness_task(
             "model": model,
             "score": 0.0,
             "passed": False,
-            "total_tests": 0,
+            "total_tests": expected_tests,
             "passed_tests": 0,
-            "failed_tests": 0,
+            "failed_tests": expected_tests,
             "output_tokens": output_tokens,
             "input_tokens": input_tokens,
             "tokens_per_second": round(tokens_per_second, 2),

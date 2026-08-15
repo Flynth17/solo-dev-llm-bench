@@ -92,36 +92,18 @@ def validate_python_solution(
             result.stdout = proc.stdout
             result.stderr = proc.stderr
 
-            # Parse pytest output for test counts
-            # pytest -q output format: "1 failed, 2 passed, 3 skipped in 0.12s"
-            output_lines = proc.stdout.strip().split("\n")
-            last_line = output_lines[-1] if output_lines else ""
-
-            # Parse counts from last line
-            if "failed" in last_line:
-                try:
-                    # Extract number before "failed"
-                    parts = last_line.split("failed")
-                    failed_str = parts[0].strip().split()[-1] if parts[0].strip().split() else "0"
-                    result.failed_tests = int(failed_str)
-                except (ValueError, IndexError):
-                    result.failed_tests = 0
-            else:
-                result.failed_tests = 0
-
-            if "passed" in last_line:
-                try:
-                    parts = last_line.split("passed")
-                    passed_str = parts[0].strip().split()[-1] if parts[0].strip().split() else "0"
-                    result.passed_tests = int(passed_str)
-                except (ValueError, IndexError):
-                    result.passed_tests = 0
-            else:
-                result.passed_tests = 0
+            # Parse pytest output for test counts — robust multi-format parser.
+            # pytest -q output format examples:
+            #   "6 passed in 0.02s"
+            #   "5 passed, 1 failed in 0.03s"
+            #   "1 failed, 5 passed in 0.03s"
+            #   "...... [100%]"  (dot output lines before summary)
+            result.failed_tests = _parse_pytest_count(proc.stdout, "failed")
+            result.passed_tests = _parse_pytest_count(proc.stdout, "passed")
 
             result.total_tests = result.passed_tests + result.failed_tests
 
-            # If total is 0, try to count from output
+            # If total is 0, try to count from output markers
             if result.total_tests == 0:
                 # Count "::" occurrences in output which indicate test names
                 if "::" in result.stdout:
@@ -174,6 +156,51 @@ def validate_python_solution(
         traceback.print_exc()
 
     return result
+
+
+def _parse_pytest_count(stdout: str, keyword: str) -> int:
+    """Parse a count for *keyword* from pytest summary output.
+
+    Handles these formats robustly (pytest -q):
+      "6 passed in 0.02s"
+      "5 passed, 1 failed in 0.03s"
+      "1 failed, 5 passed in 0.03s"
+      "...... [100%]"   (dot lines — no summary line)
+
+    Returns 0 when the keyword is not found or parsing fails.
+    """
+    # Strategy 1: parse the LAST non-empty line that contains the keyword.
+    # This handles cases where pytest prints dot-lines before the summary.
+    lines = [l.strip() for l in stdout.splitlines() if l.strip()]
+    for line in reversed(lines):
+        if keyword not in line:
+            continue
+        # Split on the keyword; the token immediately to the left is the count.
+        parts = line.split(keyword)
+        # parts[0] is everything before "keyword".  Grab the last whitespace-delimited token.
+        pre_tokens = parts[0].strip().split()
+        if pre_tokens:
+            try:
+                return int(pre_tokens[-1])
+            except ValueError:
+                pass
+        # If nothing before keyword, count might be at start of line (e.g. "6 failed")
+        all_tokens = line.split()
+        for i, tok in enumerate(all_tokens):
+            if tok == keyword and i + 1 < len(all_tokens):
+                try:
+                    return int(all_tokens[i + 1])
+                except ValueError:
+                    pass
+                break
+
+    # Strategy 2: regex fallback — look for "<digits> <keyword>" anywhere.
+    import re as _re
+    m = _re.search(r"(\d+)\s+" + keyword, stdout)
+    if m:
+        return int(m.group(1))
+
+    return 0
 
 
 def _count_test_functions(test_code: str) -> int:
