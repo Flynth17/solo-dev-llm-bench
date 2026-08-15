@@ -567,10 +567,25 @@ async function runEvaluation() {
 
             var detailHtml = "";
             if (cr.test_type === "markdown") {
+                // Use explicit null checks for correctness fields — do NOT map null to 0.
+                // Null means the validator could not produce a count (e.g., no final answer).
+                function fmtNullable(val) {
+                    return (val !== null && val !== undefined) ? String(val) : '\u2014';
+                }
                 detailHtml =
-                    '<div class="aggregate-item"><div class="label">Initial Errors</div><div class="value">' + (cr.initial_errors || 0) + '</div></div>' +
-                    '<div class="aggregate-item"><div class="label">Final Errors</div><div class="value">' + (cr.final_errors || 0) + '</div></div>' +
-                    '<div class="aggregate-item"><div class="label">Errors Fixed</div><div class="value">' + (cr.errors_fixed || 0) + '</div></div>';
+                    '<div class="aggregate-item"><div class="label">Initial Errors</div><div class="value">' + fmtNullable(cr.initial_errors) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Final Errors</div><div class="value">' + fmtNullable(cr.final_errors) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Errors Fixed</div><div class="value">' + fmtNullable(cr.errors_fixed) + '</div></div>';
+
+                // Show failure reason as a status row when present (e.g., "no_final_answer")
+                if (cr.failure_reason) {
+                    var statusLabel = cr.failure_reason.replace(/_/g, ' ').toUpperCase();
+                    detailHtml +=
+                        '<div class="aggregate-item">' +
+                            '<div class="label">Status</div>' +
+                            '<div class="value" style="color:#f59e0b;font-weight:bold;">' + statusLabel + '</div>' +
+                        '</div>';
+                }
             } else if (cr.test_type === "python") {
                 detailHtml =
                     '<div class="aggregate-item"><div class="label">Passed</div><div class="value">' + (cr.passed_tests || 0) + '</div></div>' +

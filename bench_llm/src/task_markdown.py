@@ -201,6 +201,25 @@ async def run_markdown_task(
 
     elapsed = time.perf_counter() - start_time
 
+    # Validate canonical broken.md BEFORE checking for final model message.
+    # This ensures initial_errors is always populated even on no_final_answer.
+    validator = MarkdownLintValidator()
+    dep_info = validator.check_dependency()
+    validator_available = dep_info["cli_available"] or dep_info["python_available"]
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, dir=tempfile.gettempdir()
+    ) as f:
+        f.write(original_content)
+        f.flush()
+        original_path = Path(f.name)
+
+    try:
+        original_result = validator.validate_file(original_path)
+        initial_errors = original_result.count
+    finally:
+        original_path.unlink(missing_ok=True)
+
     # Extract output — use final message extraction (Act M4.6)
     raw_output = body.get("output", body.get("text", ""))
     generated_text, failure_reason = _extract_final_message(raw_output)
@@ -212,13 +231,14 @@ async def run_markdown_task(
     input_tokens = stats.get("input_tokens", 0)
 
     # If no final message found, short-circuit with failure result.
+    # initial_errors is already populated from the canonical fixture validation above.
     if not generated_text:
         tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
         return {
             "task_name": TASK_DEFINITION["name"],
             "task_type": TASK_DEFINITION["task_type"],
             "model": model,
-            "initial_errors": None,
+            "initial_errors": initial_errors,
             "final_errors": None,
             "errors_fixed": 0,
             "score": 0.0,
@@ -230,8 +250,8 @@ async def run_markdown_task(
             "wall_time_seconds": round(elapsed, 4),
             "corrected_output": "",
             "corrected_violations": [],
-            "dependency_message": "N/A",
-            "validator_available": False,
+            "dependency_message": dep_info["message"],
+            "validator_available": validator_available,
             "failure_reason": failure_reason,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "hardware_label": hardware_label,
@@ -242,12 +262,6 @@ async def run_markdown_task(
     # Save exact generated output to runtime file for inspection.
     _save_latest_markdown_output(generated_text)
 
-    # Validate with markdownlint
-    validator = MarkdownLintValidator()
-
-    dep_info = validator.check_dependency()
-    validator_available = dep_info["cli_available"] or dep_info["python_available"]
-
     # If no markdownlint implementation is available, short-circuit.
     if not validator_available:
         tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
@@ -255,7 +269,7 @@ async def run_markdown_task(
             "task_name": TASK_DEFINITION["name"],
             "task_type": TASK_DEFINITION["task_type"],
             "model": model,
-            "initial_errors": None,
+            "initial_errors": initial_errors,
             "final_errors": None,
             "errors_fixed": None,
             "score": None,
@@ -279,20 +293,6 @@ async def run_markdown_task(
             "execution_environment": execution_environment,
             "connection_type": connection_type,
         }
-
-    # Validate original
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".md", delete=False, dir=tempfile.gettempdir()
-    ) as f:
-        f.write(original_content)
-        f.flush()
-        original_path = Path(f.name)
-
-    try:
-        original_result = validator.validate_file(original_path)
-        initial_errors = original_result.count
-    finally:
-        original_path.unlink(missing_ok=True)
 
     # Validate corrected (the actual final message, not reasoning text)
     with tempfile.NamedTemporaryFile(
