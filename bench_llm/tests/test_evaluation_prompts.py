@@ -4,7 +4,7 @@ Verifies:
 1. small, medium, large prompts exist
 2. all are non-empty
 3. small < medium < large (by character count)
-4. approximate size bands are reasonable
+4. approximate token size bands are reasonable
 5. repeated lookup returns identical content
 6. unknown names are rejected
 """
@@ -19,17 +19,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from src.evaluation_prompts import SPEED_PROMPTS, get_speed_prompt
+from src.evaluation_prompts import SPEED_PROMPTS, get_speed_prompt, estimate_tokens
 
 
 # ------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ------------------------------------------------------------------
 
-@pytest.fixture()
-def known_keys() -> list[str]:
-    """Return the set of known speed prompt keys."""
-    return sorted(SPEED_PROMPTS.keys())
+# Approximate token count using the project's estimate_tokens helper.
+# If the helper is not available, fall back to chars/4.
+def _token_count(text: str) -> int:
+    """Estimate token count for *text*."""
+    try:
+        return estimate_tokens(text)
+    except Exception:
+        return len(text) // 4
 
 
 # ------------------------------------------------------------------
@@ -78,37 +82,37 @@ class TestPromptSizeOrdering:
 
 
 # ------------------------------------------------------------------
-# 4. Approximate size bands
+# 4. Approximate token size bands
 # ------------------------------------------------------------------
 
 class TestPromptSizeBands:
-    """Verify prompts fall in roughly correct size ranges.
+    """Verify prompts fall in roughly correct token ranges.
 
-    Approximate token-to-char ratio: ~4 chars per token.
-    small  ~250 tokens  -> ~1,000 chars
-    medium ~1,000 tokens -> ~4,000 chars
-    large  ~4,000 tokens -> ~16,000 chars
+    Target bands (advertising labels):
+        small:  ~200-325 tokens
+        medium: ~850-1,500 tokens
+        large:  ~3,500-4,500 tokens
     """
 
-    def test_small_size_approx_250_tokens(self) -> None:
-        chars = len(SPEED_PROMPTS["small"])
-        # Allow generous tolerance: ~250 tokens ~1000 chars, allow 30% tolerance
-        assert 300 <= chars <= 1500, (
-            f"small prompt length {chars} chars out of expected band [300, 1500]"
+    def test_small_size_bands(self) -> None:
+        tokens = _token_count(SPEED_PROMPTS["small"])
+        assert 200 <= tokens <= 325, (
+            f"small prompt estimated at {tokens} tokens, "
+            f"expected 200-325"
         )
 
-    def test_medium_size_approx_1000_tokens(self) -> None:
-        chars = len(SPEED_PROMPTS["medium"])
-        # ~1000 tokens ~4000 chars; use generous tolerance for realistic prompts
-        assert 800 <= chars <= 7500, (
-            f"medium prompt length {chars} chars out of expected band [800, 7500]"
+    def test_medium_size_bands(self) -> None:
+        tokens = _token_count(SPEED_PROMPTS["medium"])
+        assert 850 <= tokens <= 1500, (
+            f"medium prompt estimated at {tokens} tokens, "
+            f"expected 850-1500"
         )
 
-    def test_large_size_approx_4000_tokens(self) -> None:
-        chars = len(SPEED_PROMPTS["large"])
-        # ~4000 tokens ~16000 chars; use generous tolerance for realistic prompts
-        assert 2000 <= chars <= 25000, (
-            f"large prompt length {chars} chars out of expected band [2000, 25000]"
+    def test_large_size_bands(self) -> None:
+        tokens = _token_count(SPEED_PROMPTS["large"])
+        assert 3000 <= tokens <= 4500, (
+            f"large prompt estimated at {tokens} tokens, "
+            f"expected 3000-4500"
         )
 
 
