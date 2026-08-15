@@ -186,15 +186,14 @@ async def run_markdown_task(
         "model": model,
         "input": prompt,
         "temperature": temperature,
-        "max_output_tokens": max_output_tokens,
+        "max_tokens": max_output_tokens,
         "stream": False,
-        "store": False,
     }
 
     start_time = time.perf_counter()
     ttft = None
-
-    async with httpx.AsyncClient(timeout=300.0) as client:
+    
+    async with httpx.AsyncClient(timeout=3000) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
         body = resp.json()
@@ -220,11 +219,14 @@ async def run_markdown_task(
     finally:
         original_path.unlink(missing_ok=True)
 
+    stats = body.get("stats", {})
+
+    # Capture TTFT from LM Studio response stats
+    ttft = stats.get("time_to_first_token_seconds")
+
     # Extract output — use final message extraction (Act M4.6)
     raw_output = body.get("output", body.get("text", ""))
     generated_text, failure_reason = _extract_final_message(raw_output)
-
-    stats = body.get("stats", {})
 
     # Output tokens
     output_tokens = stats.get("total_output_tokens", len(generated_text.split()) if generated_text else 0)

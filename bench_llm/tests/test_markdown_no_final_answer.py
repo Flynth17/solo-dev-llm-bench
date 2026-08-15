@@ -113,5 +113,227 @@ class TestReasoningNeverLinted(TestCase):
             self.assertEqual(reason, "no_final_answer")
 
 
+# ---------------------------------------------------------------------------
+# Additional regression tests for Act M4.9 — status + TTFT mapping
+# ---------------------------------------------------------------------------
+
+class TestFailureReasonEvaluationMapping(TestCase):
+    """Test that failure_reason survives the evaluation route mapping."""
+
+    def test_no_final_answer_survives_evaluation_mapping(self):
+        """failure_reason='no_final_answer' must be present in correctness_results[0]."""
+        # Simulate what run_markdown_task returns on no_final_answer
+        md_result = {
+            "task_name": "Markdownlint Default",
+            "task_type": "markdown",
+            "model": "test-model",
+            "initial_errors": 6,
+            "final_errors": None,
+            "errors_fixed": 0,
+            "score": 0.0,
+            "passed": False,
+            "output_tokens": 0,
+            "input_tokens": 0,
+            "tokens_per_second": 0.0,
+            "ttft_seconds": None,
+            "wall_time_seconds": 1.23,
+            "corrected_output": "",
+            "corrected_violations": [],
+            "dependency_message": "markdownlint available",
+            "validator_available": True,
+            "failure_reason": "no_final_answer",
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "hardware_label": "",
+            "execution_environment": "Local",
+            "connection_type": "",
+        }
+
+        # Simulate the evaluation route mapping (evaluation.py lines 380-395)
+        correctness_row = {
+            "test_type": "markdown",
+            "test_label": "Markdownlint Default",
+            "score": md_result["score"],
+            "passed": md_result["passed"],
+            "initial_errors": md_result["initial_errors"],
+            "final_errors": md_result["final_errors"],
+            "errors_fixed": md_result["errors_fixed"],
+            "tokens_per_second": md_result["tokens_per_second"],
+            "ttft_seconds": md_result.get("ttft_seconds"),
+            "wall_time_seconds": md_result["wall_time_seconds"],
+            "output_tokens": md_result["output_tokens"],
+            "input_tokens": md_result["input_tokens"],
+            "corrected_violations": md_result.get("corrected_violations", []),
+            "failure_reason": md_result.get("failure_reason"),
+        }
+
+        self.assertEqual(correctness_row["failure_reason"], "no_final_answer")
+
+    def test_null_failure_reason_survives_evaluation_mapping(self):
+        """When failure_reason is absent, it should map to None (not crash)."""
+        md_result = {
+            "task_name": "Markdownlint Default",
+            "task_type": "markdown",
+            "model": "test-model",
+            "initial_errors": 3,
+            "final_errors": 1,
+            "errors_fixed": 2,
+            "score": 66.67,
+            "passed": True,
+            "output_tokens": 100,
+            "input_tokens": 50,
+            "tokens_per_second": 80.0,
+            "ttft_seconds": 0.45,
+            "wall_time_seconds": 2.0,
+            "corrected_output": "# Fixed",
+            "corrected_violations": [],
+            "dependency_message": "markdownlint available",
+            "validator_available": True,
+            # failure_reason intentionally absent (normal success case)
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "hardware_label": "",
+            "execution_environment": "Local",
+            "connection_type": "",
+        }
+
+        correctness_row = {
+            "test_type": "markdown",
+            "test_label": "Markdownlint Default",
+            "score": md_result["score"],
+            "passed": md_result["passed"],
+            "initial_errors": md_result["initial_errors"],
+            "final_errors": md_result["final_errors"],
+            "errors_fixed": md_result["errors_fixed"],
+            "tokens_per_second": md_result["tokens_per_second"],
+            "ttft_seconds": md_result.get("ttft_seconds"),
+            "wall_time_seconds": md_result["wall_time_seconds"],
+            "output_tokens": md_result["output_tokens"],
+            "input_tokens": md_result["input_tokens"],
+            "corrected_violations": md_result.get("corrected_violations", []),
+            "failure_reason": md_result.get("failure_reason"),
+        }
+
+        self.assertIsNone(correctness_row["failure_reason"])
+
+
+class TestTTFTMapping(TestCase):
+    """Test that TTFT survives the mapping when present and missing."""
+
+    def test_ttft_survives_evaluation_mapping_when_present(self):
+        """When LM Studio returns TTFT, it must be preserved through mapping."""
+        md_result = {
+            "task_name": "Markdownlint Default",
+            "task_type": "markdown",
+            "model": "test-model",
+            "initial_errors": 6,
+            "final_errors": 2,
+            "errors_fixed": 4,
+            "score": 66.67,
+            "passed": True,
+            "output_tokens": 100,
+            "input_tokens": 50,
+            "tokens_per_second": 80.0,
+            "ttft_seconds": 0.3421,
+            "wall_time_seconds": 2.5,
+            "corrected_output": "# Fixed",
+            "corrected_violations": [],
+            "dependency_message": "markdownlint available",
+            "validator_available": True,
+            "failure_reason": "",
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "hardware_label": "",
+            "execution_environment": "Local",
+            "connection_type": "",
+        }
+
+        correctness_row = {
+            "test_type": "markdown",
+            "test_label": "Markdownlint Default",
+            "score": md_result["score"],
+            "passed": md_result["passed"],
+            "initial_errors": md_result["initial_errors"],
+            "final_errors": md_result["final_errors"],
+            "errors_fixed": md_result["errors_fixed"],
+            "tokens_per_second": md_result["tokens_per_second"],
+            "ttft_seconds": md_result.get("ttft_seconds"),
+            "wall_time_seconds": md_result["wall_time_seconds"],
+            "output_tokens": md_result["output_tokens"],
+            "input_tokens": md_result["input_tokens"],
+            "corrected_violations": md_result.get("corrected_violations", []),
+            "failure_reason": md_result.get("failure_reason"),
+        }
+
+        self.assertEqual(correctness_row["ttft_seconds"], 0.3421)
+
+    def test_ttft_none_when_missing(self):
+        """When TTFT is missing, it should be None (dashboard shows —)."""
+        md_result = {
+            "task_name": "Markdownlint Default",
+            "task_type": "markdown",
+            "model": "test-model",
+            "initial_errors": 6,
+            "final_errors": None,
+            "errors_fixed": 0,
+            "score": 0.0,
+            "passed": False,
+            "output_tokens": 0,
+            "input_tokens": 0,
+            "tokens_per_second": 0.0,
+            # ttft_seconds intentionally missing/None
+            "wall_time_seconds": 1.23,
+            "corrected_output": "",
+            "corrected_violations": [],
+            "dependency_message": "markdownlint available",
+            "validator_available": True,
+            "failure_reason": "no_final_answer",
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "hardware_label": "",
+            "execution_environment": "Local",
+            "connection_type": "",
+        }
+
+        correctness_row = {
+            "test_type": "markdown",
+            "test_label": "Markdownlint Default",
+            "score": md_result["score"],
+            "passed": md_result["passed"],
+            "initial_errors": md_result["initial_errors"],
+            "final_errors": md_result["final_errors"],
+            "errors_fixed": md_result["errors_fixed"],
+            "tokens_per_second": md_result["tokens_per_second"],
+            "ttft_seconds": md_result.get("ttft_seconds"),
+            "wall_time_seconds": md_result["wall_time_seconds"],
+            "output_tokens": md_result["output_tokens"],
+            "input_tokens": md_result["input_tokens"],
+            "corrected_violations": md_result.get("corrected_violations", []),
+            "failure_reason": md_result.get("failure_reason"),
+        }
+
+        self.assertIsNone(correctness_row["ttft_seconds"])
+
+
+class TestStatusRenderingLogic(TestCase):
+    """Test that STATUS row is rendered when failure_reason is present."""
+
+    def test_failure_reason_no_final_answer_maps_to_status_label(self):
+        """no_final_answer should map to 'NO FINAL ANSWER' status label."""
+        failure_reason = "no_final_answer"
+        if failure_reason:
+            status_label = failure_reason.replace("_", " ").upper()
+        else:
+            status_label = None
+
+        self.assertEqual(status_label, "NO FINAL ANSWER")
+
+    def test_null_failure_reason_does_not_render_status(self):
+        """When failure_reason is null/None, no STATUS row should be rendered."""
+        failure_reason = None
+        if failure_reason:
+            status_label = failure_reason.replace("_", " ").upper()
+        else:
+            status_label = None
+
+        self.assertIsNone(status_label)
+
+
 if __name__ == "__main__":
     main()

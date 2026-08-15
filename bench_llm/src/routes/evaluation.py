@@ -28,13 +28,14 @@ def _get_results_store():
 
 
 # Valid correctness test names
-CORRECTNESS_TESTS = {"markdown", "python", "java"}
+CORRECTNESS_TESTS = {"markdown", "python", "java", "unsolvable"}
 
 # Canonical task definitions
 CANONICAL_TASKS = {
     "markdown": {"name": "Markdownlint Default", "task_type": "markdown"},
     "python": {"name": "Python Correctness", "task_type": "python"},
     "java": {"name": "Java Correctness", "task_type": "java"},
+    "unsolvable": {"name": "Unsolvable Recognition", "task_type": "unsolvable"},
 }
 
 
@@ -162,6 +163,7 @@ _CORRECTNESS_LABELS = {
     "markdown": "Markdownlint Default",
     "python": "Python Correctness",
     "java": "Java Correctness",
+    "unsolvable": "Unsolvable Recognition",
 }
 
 
@@ -389,6 +391,7 @@ async def run_evaluation_endpoint(config: dict):
                 "output_tokens": md_result["output_tokens"],
                 "input_tokens": md_result["input_tokens"],
                 "corrected_violations": md_result.get("corrected_violations", []),
+                "failure_reason": md_result.get("failure_reason"),
             })
             correctness_scores.append(md_result["score"])
 
@@ -497,6 +500,60 @@ async def run_evaluation_endpoint(config: dict):
                 "input_tokens": java_result.input_tokens,
             })
             correctness_scores.append(java_result.score)
+
+        elif test_name == "unsolvable":
+            from src.task_unsolvable import run_unsolvable_task
+
+            try:
+                us_result = await run_unsolvable_task(
+                    lm_studio_url=lm_studio_url,
+                    model=model,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                    hardware_label=hardware_label,
+                    connection_type=connection_type,
+                )
+            except Exception as e:
+                logger.error("Unsolvable correctness failed: %s — %s", type(e).__name__, e)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Unsolvable correctness failed: {e}",
+                )
+
+            # Persist to task history via create_task_run
+            src.task_manager.create_task_run(
+                task_id=canonical_task_id,
+                task_name=us_result.task_name,
+                task_type=us_result.task_type,
+                model=model,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                passed=us_result.passed,
+                score=us_result.score,
+                output_tokens=us_result.output_tokens,
+                input_tokens=us_result.input_tokens,
+                tokens_per_second=us_result.tokens_per_second,
+                ttft_seconds=us_result.ttft_seconds,
+                wall_time_seconds=us_result.wall_time_seconds,
+                result=us_result.to_dict(),
+            )
+
+            correctness_results.append({
+                "test_type": "unsolvable",
+                "test_label": _CORRECTNESS_LABELS["unsolvable"],
+                "score": us_result.score,
+                "passed": us_result.passed,
+                "impossible_detected": us_result.impossible_detected,
+                "classification": us_result.classification,
+                "conflict_ids": sorted(us_result.conflict_ids),
+                "explanation_valid": us_result.explanation_valid,
+                "tokens_per_second": us_result.tokens_per_second,
+                "ttft_seconds": us_result.ttft_seconds,
+                "wall_time_seconds": us_result.wall_time_seconds,
+                "output_tokens": us_result.output_tokens,
+                "input_tokens": us_result.input_tokens,
+                "generated_response": us_result.generated_response,
+            })
+            correctness_scores.append(us_result.score)
 
     total_wall_time = round(time.time() - total_wall_start, 2)
 
