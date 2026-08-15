@@ -222,7 +222,7 @@ class TestCancelRegression:
 
     def test_escapeHtml_produces_valid_entities(self):
         """escapeHtml must produce valid HTML entities, not broken strings."""
-        js_path = Path(__file__).parent.parent / "static" / "results.js"
+        js_path = Path(__file__).parent.parent / "static" / "results-utils.js"
         js_text = js_path.read_text(encoding="utf-8")
         # Verify the function uses String.fromCharCode to build entities
         assert "String.fromCharCode(38)" in js_text  # &
