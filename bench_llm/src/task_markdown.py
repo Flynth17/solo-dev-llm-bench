@@ -87,6 +87,62 @@ def _save_latest_markdown_output(content: str) -> None:
 
 
 # ------------------------------------------------------------------
+# Output normalization (Act M4.6 — discard reasoning blocks)
+# ------------------------------------------------------------------
+
+def _extract_final_message(raw_output: Any) -> tuple[str | None, str]:
+    """Extract the final answer from LM Studio response output.
+
+    Uses the same strategy as Java task runner:
+    - If raw_output is a list/tuple of chat blocks, scan from the END for
+      the last block with type == "message" (the final answer).
+    - Discard reasoning/thinking blocks entirely.
+    - Return (final_message_content_or_None, failure_reason_or_empty_string).
+
+    Returns:
+        (content, reason) where:
+          - content is the extracted final message string, or None if not found
+          - reason is a failure code like "no_final_answer" or ""
+    """
+    if isinstance(raw_output, str):
+        return raw_output.strip(), ""
+
+    if isinstance(raw_output, dict):
+        for key in ("output", "text", "response", "content"):
+            if key in raw_output:
+                val = raw_output[key]
+                if isinstance(val, str):
+                    return val.strip(), ""
+                if isinstance(val, dict) and "text" in val:
+                    return val["text"].strip(), ""
+        # Fallback: join all string values only
+        parts = []
+        for v in raw_output.values():
+            if isinstance(v, str):
+                parts.append(v)
+        return "\n".join(parts).strip() or None, "no_final_answer"
+
+    if isinstance(raw_output, (list, tuple)):
+        # Scan from the END for the last block with type == "message"
+        for item in reversed(list(raw_output)):
+            if isinstance(item, dict) and item.get("type") == "message":
+                content = item.get("content", "")
+                if isinstance(content, str):
+                    return content.strip(), ""
+                # Content as list of parts (common with some LM Studio endpoints)
+                if isinstance(content, (list, tuple)):
+                    parts = [str(p) for p in content if isinstance(p, (str, int, float))]
+                    joined = "\n".join(parts).strip()
+                    return joined or None, "no_final_answer" if not joined else ""
+
+        # No "message" block found — model returned only reasoning/thinking
+        return None, "no_final_answer"
+
+    # Unknown type: treat as empty
+    return None, "no_final_answer"
+
+
+# ------------------------------------------------------------------
 # Task runner
 # ------------------------------------------------------------------
 
@@ -145,27 +201,43 @@ async def run_markdown_task(
 
     elapsed = time.perf_counter() - start_time
 
-    # Extract output
-    # LM Studio /api/v1/chat may return "output" as a string or as a list
-    # of message dicts. Normalize to string at this boundary.
+    # Extract output — use final message extraction (Act M4.6)
     raw_output = body.get("output", body.get("text", ""))
-    if isinstance(raw_output, list):
-        # Extract text content from message objects
-        generated_text = ""
-        for item in raw_output:
-            if isinstance(item, dict):
-                generated_text += item.get("content", "")
-            elif isinstance(item, str):
-                generated_text += item
-    elif isinstance(raw_output, dict):
-        generated_text = raw_output.get("content", str(raw_output))
-    else:
-        generated_text = str(raw_output)
+    generated_text, failure_reason = _extract_final_message(raw_output)
+
     stats = body.get("stats", {})
 
     # Output tokens
-    output_tokens = stats.get("total_output_tokens", len(generated_text.split()))
+    output_tokens = stats.get("total_output_tokens", len(generated_text.split()) if generated_text else 0)
     input_tokens = stats.get("input_tokens", 0)
+
+    # If no final message found, short-circuit with failure result.
+    if not generated_text:
+        tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
+        return {
+            "task_name": TASK_DEFINITION["name"],
+            "task_type": TASK_DEFINITION["task_type"],
+            "model": model,
+            "initial_errors": None,
+            "final_errors": None,
+            "errors_fixed": 0,
+            "score": 0.0,
+            "passed": False,
+            "output_tokens": output_tokens,
+            "input_tokens": input_tokens,
+            "tokens_per_second": round(tokens_per_second, 2),
+            "ttft_seconds": round(ttft, 4) if ttft else None,
+            "wall_time_seconds": round(elapsed, 4),
+            "corrected_output": "",
+            "corrected_violations": [],
+            "dependency_message": "N/A",
+            "validator_available": False,
+            "failure_reason": failure_reason,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hardware_label": hardware_label,
+            "execution_environment": execution_environment,
+            "connection_type": connection_type,
+        }
 
     # Save exact generated output to runtime file for inspection.
     _save_latest_markdown_output(generated_text)
@@ -222,7 +294,7 @@ async def run_markdown_task(
     finally:
         original_path.unlink(missing_ok=True)
 
-    # Validate corrected
+    # Validate corrected (the actual final message, not reasoning text)
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, dir=tempfile.gettempdir()
     ) as f:
