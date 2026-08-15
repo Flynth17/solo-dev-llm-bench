@@ -509,15 +509,27 @@ async function runEvaluation() {
         var summaryDiv = document.createElement("div");
         summaryDiv.className = "results-group";
 
-        // Correctness score
+        // Correctness score and tests passed count
         var correctnessHtml = "";
         if (summary.correctness_score !== null && summary.correctness_score !== undefined) {
             var pct = Math.round(summary.correctness_score * 100);
-            var isPass = summary.correctness_score >= 0.5;
+            // Count passed correctness results separately
+            var allCorrectnessResults = data.correctness_results || [];
+            var passedCount = 0;
+            for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
+                if (allCorrectnessResults[ci].passed) {
+                    passedCount++;
+                }
+            }
+            var totalCount = allCorrectnessResults.length;
             correctnessHtml =
                 '<div class="aggregate-item">' +
-                    '<div class="label">Correctness</div>' +
-                    '<div class="value">' + pct + '% ' + (isPass ? '✓' : '✗') + '</div>' +
+                    '<div class="label">Correctness Score</div>' +
+                    '<div class="value">' + pct + '%</div>' +
+                '</div>' +
+                '<div class="aggregate-item">' +
+                    '<div class="label">Tests Passed</div>' +
+                    '<div class="value">' + passedCount + ' / ' + totalCount + '</div>' +
                 '</div>';
         }
 
