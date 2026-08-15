@@ -62,17 +62,13 @@ class TestMarkdownLintResultUnavailable(TestCase):
 class TestValidatorUnavailability(TestCase):
     """Test that validate_file returns unavailable when no tool is present."""
 
-    def _mock_both_unavailable(self):
-        """Return a patch set that disables both CLI and python-markdownlint."""
-        return patch.multiple(
-            "src.markdownlint_validator",
-            _find_markdownlint=return_none,
-            _has_python_markdownlint=return_false,
-        )
+    def _mock_all_subprocess(self):
+        """Return a patch set that disables subprocess for CLI detection AND execution."""
+        return patch("src.markdownlint_validator.subprocess.run", side_effect=FileNotFoundError)
 
     def test_validate_file_returns_unavailable_when_no_tool(self):
         """validate_file() must NOT return a zero-error completed result when no tool is available."""
-        with self._mock_both_unavailable():
+        with self._mock_all_subprocess():
             validator = MarkdownLintValidator()
             # Create a temp file to validate
             with tempfile.NamedTemporaryFile(
@@ -92,7 +88,7 @@ class TestValidatorUnavailability(TestCase):
 
     def test_validate_string_returns_unavailable_when_no_tool(self):
         """validate_string() must also propagate unavailability."""
-        with self._mock_both_unavailable():
+        with self._mock_all_subprocess():
             validator = MarkdownLintValidator()
             result = validator.validate_string("# Title\n\nSome text.\n")
             self.assertFalse(result.is_available)
@@ -102,16 +98,12 @@ class TestValidatorUnavailability(TestCase):
 class TestBenchmarkUnavailability(TestCase):
     """Test that run_markdownlint_benchmark handles unavailability correctly."""
 
-    def _mock_both_unavailable(self):
-        return patch.multiple(
-            "src.markdownlint_validator",
-            _find_markdownlint=return_none,
-            _has_python_markdownlint=return_false,
-        )
+    def _mock_all_subprocess(self):
+        return patch("src.markdownlint_validator.subprocess.run", side_effect=FileNotFoundError)
 
     def test_benchmark_returns_no_score_when_unavailable(self):
         """run_markdownlint_benchmark must NOT return score=1.0 when validator is unavailable."""
-        with self._mock_both_unavailable():
+        with self._mock_all_subprocess():
             result = run_markdownlint_benchmark("# Title", "## Fixed")
             self.assertIsNone(result["score"])
             self.assertFalse(result["passed"])
@@ -122,7 +114,7 @@ class TestBenchmarkUnavailability(TestCase):
 
     def test_benchmark_includes_error_message_when_unavailable(self):
         """run_markdownlint_benchmark must include a clear error message when unavailable."""
-        with self._mock_both_unavailable():
+        with self._mock_all_subprocess():
             result = run_markdownlint_benchmark("# Title", "## Fixed")
             self.assertIn("error", result)
             self.assertIn("not available", result["error"].lower())

@@ -6,7 +6,9 @@ implementation via the `markdownlint` pip package.
 """
 
 import json
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -32,6 +34,10 @@ def _find_markdownlint() -> str | None:
 
     Returns one of: 'markdownlint-cli', 'markdownlint-cli2', or None.
     Priority: cli2 > standard cli (cli2 is newer and more widely available via npx).
+
+    On Windows, .cmd/.bat files are not found by subprocess with list args
+    because _winapi.CreateProcess only tries .exe extensions.  We use
+    shutil.which + shell=True for those cases.
     """
     # Try markdownlint-cli2 first (newer, more widely available via npx)
     for cmd_prefix in ["npx markdownlint-cli2", "markdownlint-cli2"]:
@@ -43,7 +49,22 @@ def _find_markdownlint() -> str | None:
             )
             return cmd_prefix
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
+            pass
+
+    # Windows fallback for npx/markdownlint-cli2: use shell=True so the
+    # command interpreter resolves .cmd/.bat scripts.
+    if sys.platform == "win32":
+        for cmd_str in ["npx markdownlint-cli2 --version", "markdownlint-cli2 --version"]:
+            try:
+                subprocess.run(
+                    cmd_str,
+                    capture_output=True,
+                    timeout=5,
+                    shell=True,
+                )
+                return cmd_str.replace(" --version", "")
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                pass
 
     # Try standard markdownlint CLI
     for cmd in ["markdownlint", "markdownlint-cli"]:
@@ -55,7 +76,21 @@ def _find_markdownlint() -> str | None:
             )
             return cmd
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
+            pass
+
+    # Windows fallback for standard markdownlint CLI
+    if sys.platform == "win32":
+        for cmd_str in ["markdownlint --version", "markdownlint-cli --version"]:
+            try:
+                subprocess.run(
+                    cmd_str,
+                    capture_output=True,
+                    timeout=5,
+                    shell=True,
+                )
+                return cmd_str.replace(" --version", "")
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                pass
 
     return None
 
@@ -193,15 +228,18 @@ class MarkdownLintValidator:
           path.md:69:13 error MD034/no-bare-urls Bare URL used ...
 
         Parses this into the same MarkdownLintResult structure.
+
+        On Windows, npx is a .CMD file so we must use shell=True to find it.
         """
         try:
             cmd = ["npx", "markdownlint-cli2", "--no-globs", str(file_path)]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=30,
-                text=True,
-            )
+            # On Windows, subprocess with list args cannot find .cmd/.bat files.
+            # Use shell=True when npx is the first arg to resolve them.
+            kwargs: dict = {"capture_output": True, "timeout": 30, "text": True}
+            if sys.platform == "win32":
+                kwargs["shell"] = True
+
+            result = subprocess.run(cmd, **kwargs)
 
             stdout = (result.stdout or "").strip()
             stderr = (result.stderr or "").strip()
