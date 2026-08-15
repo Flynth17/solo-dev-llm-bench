@@ -1,27 +1,11 @@
 """Unsolvable (contradictory-requirements) LLM task runner for Solo Dev LLM Bench.
 
-Loads the human-editable prompt.md + scenario.md fixtures, sends the combined
-prompt to an LM Studio endpoint, normalizes the model output, and validates it
-deterministically using unsolvable_validator.py.
-
-Architecture:
-
-    tasks/unsolvable/  = benchmark content (prompt.md, scenario.md)
-    src/               = execution + scoring (task_unsolvable.py, unsolvable_validator.py)
-
-Expected structured response::
-
-    IMPOSSIBLE: yes
-    CLASS: contradictory-requirements
-    CONFLICT: R1, R2
-    EXPLANATION: <at least 50 characters of reasoning>
-
-Correct result: score=1.0, passed=True
-Anything else: score=0.0, passed=False
+Loads prompt.md + scenario.md, sends to LM Studio, extracts the final message
+block (discarding reasoning/thinking blocks), and validates deterministically
+using unsolvable_validator.py.
 """
 
-from __future__ import annotations
-
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -38,26 +22,23 @@ from src.unsolvable_validator import validate_unsolvable_response, UnsolvableRes
 _FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tasks" / "unsolvable"
 
 
-# ------------------------------------------------------------------
-# Fixture loading
-# ------------------------------------------------------------------
-
 def _load_fixture(filename: str) -> str:
     """Load a fixture file from the unsolvable fixture directory."""
     path = _FIXTURE_DIR / filename
-    if not path.exists():
-        raise FileNotFoundError(f"Unsolvable fixture not found: {path}")
     return path.read_text(encoding="utf-8")
 
 
-def load_prompt() -> str:
-    """Load the human-editable prompt from the task fixture directory."""
-    return _load_fixture("prompt.md")
+# ------------------------------------------------------------------
+# Task definition
+# ------------------------------------------------------------------
 
-
-def load_scenario() -> str:
-    """Load the scenario definition from the task fixture directory."""
-    return _load_fixture("scenario.md")
+TASK_DEFINITION = {
+    "name": "Unsolvable Recognition",
+    "task_type": "unsolvable",
+    "validator": "unsolvable",
+    "max_output_tokens": 1024,
+    "temperature": 0,
+}
 
 
 # ------------------------------------------------------------------
@@ -65,63 +46,79 @@ def load_scenario() -> str:
 # ------------------------------------------------------------------
 
 def build_unsolvable_prompt() -> str:
-    """Build the final model prompt from prompt.md + scenario.md.
-
-    The prompt.md template uses ``{{scenario}}`` as a placeholder that is
-    replaced with the full scenario content.
-    """
-    prompt_template = load_prompt()
-    scenario = load_scenario()
-
-    if "{{scenario}}" in prompt_template:
-        return prompt_template.replace("{{scenario}}", scenario)
-
-    # Fallback: append scenario if no placeholder
-    return f"{prompt_template}\n\n---\n\n{scenario}"
+    """Build the final model prompt from prompt.md + scenario.md."""
+    prompt_template = _load_fixture("prompt.md")
+    scenario = _load_fixture("scenario.md")
+    return prompt_template.replace("{{scenario}}", scenario)
 
 
 # ------------------------------------------------------------------
-# Output normalization
+# Output normalization — reasoning/message extraction
 # ------------------------------------------------------------------
 
-def normalize_llm_output(raw_output: Any) -> str:
-    """Normalize LM Studio /api/v1/chat output to a string.
+def normalize_llm_output(output: Any) -> str:
+    """Normalize LM Studio output to a single string.
 
     Handles:
-    - string (direct text)
-    - dict (e.g. {"output": "..."})
-    - list (e.g. [{"content": "..."}] or ["text1", "text2"])
+    - str → returned as-is (trimmed)
+    - dict → extracted from 'output', 'text', or 'response' key
+    - list/tuple of LM Studio chat blocks ({type, content}) → prefer the LAST
+      block with type == "message" (the final answer), discarding reasoning
+      blocks. Never serialize dict objects via str(dict).
+    - list/tuple of strings → joined
     """
-    if isinstance(raw_output, str):
-        return raw_output
+    if isinstance(output, str):
+        return output.strip()
 
-    if isinstance(raw_output, dict):
-        # Try common key names in priority order
+    if isinstance(output, dict):
         for key in ("output", "text", "response", "content"):
-            if key in raw_output:
-                val = raw_output[key]
+            if key in output:
+                val = output[key]
                 if isinstance(val, str):
-                    return val
+                    return val.strip()
                 # Nested dict with text
                 if isinstance(val, dict) and "text" in val:
-                    return val["text"]
-        # Fallback: join all string values
+                    return val["text"].strip()
+        # Fallback: join all string values only (never str(dict)).
         parts = []
-        for v in raw_output.values():
+        for v in output.values():
             if isinstance(v, str):
                 parts.append(v)
-        return "\n".join(parts) if parts else str(raw_output)
+        return "\n".join(parts).strip()
 
-    if isinstance(raw_output, (list, tuple)):
+    if isinstance(output, (list, tuple)):
+        # LM Studio chat format: list of {"type": ..., "content": ...} blocks.
+        # Search from the END and prefer the LAST block with type == "message"
+        # (the final answer), discarding reasoning/thinking blocks.
+        for item in reversed(list(output)):
+            if isinstance(item, dict) and item.get("type") == "message":
+                content = item.get("content", "")
+                if isinstance(content, str):
+                    return content.strip()
+                # Some endpoints emit content as a list of parts.
+                if isinstance(content, (list, tuple)):
+                    parts = [str(p) for p in content if isinstance(p, (str, int, float))]
+                    return "\n".join(parts).strip()
+
+        # No "message" block found: safe fallback that extracts textual content
+        # only. Never serialize dict objects with str(dict). Preserves the old
+        # list-of-strings behavior for non-reasoning responses.
         parts = []
-        for item in raw_output:
-            if isinstance(item, dict):
-                parts.append(str(item.get("content", "")))
-            else:
-                parts.append(str(item))
-        return "".join(parts)
+        for item in output:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                for key in ("content", "text", "output"):
+                    val = item.get(key)
+                    if isinstance(val, str) and val.strip():
+                        parts.append(val)
+                        break
+        return "\n".join(parts).strip()
 
-    return str(raw_output)
+    # Last resort: stringify only non-dict scalars to avoid dict repr leakage.
+    if isinstance(output, (int, float)):
+        return str(output).strip()
+    return ""
 
 
 # ------------------------------------------------------------------
@@ -129,9 +126,8 @@ def normalize_llm_output(raw_output: Any) -> str:
 # ------------------------------------------------------------------
 
 @dataclass
-class UnsolvableCorrectnessResult:
-    """Result of the unsolvable correctness task."""
-
+class UnsolvableResultData:
+    """Result of the unsolvable task runner."""
     task_name: str
     task_type: str
     model: str
@@ -149,7 +145,6 @@ class UnsolvableCorrectnessResult:
     generated_response: str
     timestamp: str
     hardware_label: str
-    execution_environment: str
     connection_type: str
     validator_result: UnsolvableResult = field(default=None)  # type: ignore
 
@@ -173,7 +168,6 @@ class UnsolvableCorrectnessResult:
             "generated_response": self.generated_response,
             "timestamp": self.timestamp,
             "hardware_label": self.hardware_label,
-            "execution_environment": self.execution_environment,
             "connection_type": self.connection_type,
         }
 
@@ -187,11 +181,10 @@ async def run_unsolvable_task(
     model: str = "",
     temperature: float = 0.0,
     max_output_tokens: int = 1024,
-    hardware_label: str = "",
-    execution_environment: str = "Local",
-    connection_type: str = "",
-) -> UnsolvableCorrectnessResult:
-    """Run the unsolvable (contradictory-requirements) task against an LM Studio endpoint.
+    hardware_label: str = "local",
+    connection_type: str = "local",
+) -> UnsolvableResultData:
+    """Run the unsolvable recognition task against an LM Studio endpoint.
 
     Args:
         lm_studio_url: LM Studio API URL.
@@ -199,15 +192,15 @@ async def run_unsolvable_task(
         temperature: Sampling temperature.
         max_output_tokens: Maximum output tokens.
         hardware_label: Hardware label for reporting.
-        execution_environment: Local / Self-hosted / Cloud.
         connection_type: Connection type (local/remote).
 
     Returns:
-        UnsolvableCorrectnessResult with correctness + performance metadata.
+        UnsolvableResultData with correctness + performance metadata.
     """
     import httpx
+    import time as _time
 
-    # Build prompt
+    # Load fixtures and build prompt
     prompt = build_unsolvable_prompt()
 
     # Call LM Studio
@@ -221,13 +214,12 @@ async def run_unsolvable_task(
         "store": False,
     }
 
-    start = time.perf_counter()
-    ttft_seconds = 0.0
+    start = _time.perf_counter()
 
     async with httpx.AsyncClient(timeout=600.0) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
-        elapsed = time.perf_counter() - start
+        elapsed = _time.perf_counter() - start
 
     body = resp.json()
     stats = body.get("stats", {})
@@ -235,25 +227,22 @@ async def run_unsolvable_task(
     # Extract output
     raw_output = body.get("output", body.get("text", body.get("response", "")))
 
-    # Normalize output
-    generated_response = normalize_llm_output(raw_output)
+    # Normalize output — prefer final message block, discard reasoning
+    normalized = normalize_llm_output(raw_output)
 
     # Extract stats
     input_tokens = stats.get("input_tokens", 0)
     output_tokens = stats.get("total_output_tokens", stats.get("output_tokens", 0))
-    ttft = stats.get("time_to_first_token_seconds", 0)
     tps = stats.get("tokens_per_second", 0)
+    ttft = stats.get("time_to_first_token_seconds", 0)
 
-    # Validate with unsolvable_validator.py
-    validator_result = validate_unsolvable_response(generated_response)
-
-    # Compute performance metadata
-    tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
+    # Validate response deterministically
+    validator_result = validate_unsolvable_response(normalized)
 
     # Build result
-    result = UnsolvableCorrectnessResult(
-        task_name="unsolvable",
-        task_type="unsolvable",
+    result = UnsolvableResultData(
+        task_name=TASK_DEFINITION["name"],
+        task_type=TASK_DEFINITION["task_type"],
         model=model,
         score=validator_result.score,
         passed=validator_result.passed,
@@ -263,13 +252,12 @@ async def run_unsolvable_task(
         explanation_valid=validator_result.explanation_valid,
         output_tokens=output_tokens,
         input_tokens=input_tokens,
-        tokens_per_second=round(tokens_per_second, 2),
-        ttft_seconds=round(ttft, 4) if ttft else 0.0,
+        tokens_per_second=tps,
+        ttft_seconds=ttft,
         wall_time_seconds=round(elapsed, 4),
-        generated_response=generated_response,
+        generated_response=normalized,
         timestamp=datetime.now(timezone.utc).isoformat(),
         hardware_label=hardware_label,
-        execution_environment=execution_environment,
         connection_type=connection_type,
         validator_result=validator_result,
     )

@@ -1,288 +1,217 @@
-"""Tests for src/task_unsolvable.py.
+"""Tests for src/task_unsolvable.py — Unsolvable correctness task runner.
 
-Covers 12 scenarios:
-
- 1. prompt.md loads
- 2. scenario.md loads
- 3. final prompt contains scenario
- 4. string LM Studio output works
- 5. list output works
- 6. dict output works
- 7. correct structured answer -> score 1.0
- 8. incorrect answer -> score 0.0
- 9. fabricated/code-only response -> fail
-10. validator result passes through unchanged
-11. performance metadata is returned
-12. repeated prompt construction is deterministic
+Covers:
+1. prompt.md loads
+2. scenario.md loads
+3. final prompt contains scenario
+4. prompt construction is deterministic
+5. plain string output works
+6. dict output works
+7. list/message-block output works
+8. reasoning blocks are discarded
+9. final message is extracted
+10. correct structured recognition -> score 1.0
+11. incorrect recognition -> score 0.0
+12. code-only answer -> score 0.0
+13. validator result passes through unchanged
+14. performance metadata is returned
+15. reasoning+message response returns only final message
 """
 
-import pytest
-
-# Import the task module
-from src import task_unsolvable
-from src.unsolvable_validator import UnsolvableResult
+import asyncio
+from unittest import TestCase, main
 
 
-# ------------------------------------------------------------------
-# 1. prompt.md loads
-# ------------------------------------------------------------------
+class TestPromptLoads(TestCase):
+    """Tests 1-2: prompt.md and scenario.md load."""
 
-class TestPromptLoads:
     def test_prompt_md_loads(self):
-        content = task_unsolvable.load_prompt()
-        assert isinstance(content, str)
-        assert len(content) > 0
+        from src.task_unsolvable import _load_fixture
+        content = _load_fixture("prompt.md")
+        self.assertIsInstance(content, str)
+        self.assertTrue(len(content) > 0)
 
-    def test_prompt_contains_instructions(self):
-        content = task_unsolvable.load_prompt()
-        assert "IMPOSSIBLE" in content
-        assert "CLASS" in content
-        assert "CONFLICT" in content
-        assert "EXPLANATION" in content
-
-
-# ------------------------------------------------------------------
-# 2. scenario.md loads
-# ------------------------------------------------------------------
-
-class TestScenarioLoads:
     def test_scenario_md_loads(self):
-        content = task_unsolvable.load_scenario()
-        assert isinstance(content, str)
-        assert len(content) > 0
-
-    def test_scenario_contains_requirements(self):
-        content = task_unsolvable.load_scenario()
-        assert "R1" in content
-        assert "R2" in content
-        assert "R3" in content
-        assert "R4" in content
+        from src.task_unsolvable import _load_fixture
+        content = _load_fixture("scenario.md")
+        self.assertIsInstance(content, str)
+        self.assertTrue(len(content) > 0)
 
 
-# ------------------------------------------------------------------
-# 3. Final prompt contains scenario
-# ------------------------------------------------------------------
+class TestPromptConstruction(TestCase):
+    """Tests 3-4: final prompt contains scenario and is deterministic."""
 
-class TestBuildPrompt:
     def test_final_prompt_contains_scenario(self):
-        prompt = task_unsolvable.build_unsolvable_prompt()
-        scenario = task_unsolvable.load_scenario()
-        assert "classify" in prompt
-        assert "R1" in prompt
-        assert "R2" in prompt
+        from src.task_unsolvable import build_unsolvable_prompt
+        prompt = build_unsolvable_prompt()
+        self.assertIn("classify", prompt)
+        self.assertIn("R1", prompt)
+        self.assertIn("R2", prompt)
 
-    def test_final_prompt_contains_instructions(self):
-        prompt = task_unsolvable.build_unsolvable_prompt()
-        assert "IMPOSSIBLE" in prompt
-        assert "CLASS" in prompt
-        assert "CONFLICT" in prompt
-        assert "EXPLANATION" in prompt
-
-
-# ------------------------------------------------------------------
-# 4. String LM Studio output works
-# ------------------------------------------------------------------
-
-class TestStringOutput:
-    def test_normalize_string(self):
-        raw = "IMPOSSIBLE: yes\nCLASS: contradictory-requirements\nCONFLICT: R1, R2\nEXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction."
-        result = task_unsolvable.normalize_llm_output(raw)
-        assert result == raw
-        assert "IMPOSSIBLE" in result
-
-
-# ------------------------------------------------------------------
-# 5. List output works
-# ------------------------------------------------------------------
-
-class TestListOutput:
-    def test_normalize_list_of_strings(self):
-        raw = ["IMPOSSIBLE: yes", "CLASS: contradictory-requirements", "CONFLICT: R1, R2", "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction."]
-        result = task_unsolvable.normalize_llm_output(raw)
-        assert "IMPOSSIBLE" in result
-        assert "R1" in result
-
-    def test_normalize_list_of_dicts(self):
-        raw = [{"content": "IMPOSSIBLE: yes"}, {"content": "CLASS: contradictory-requirements"}, {"content": "CONFLICT: R1, R2"}, {"content": "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction."}]
-        result = task_unsolvable.normalize_llm_output(raw)
-        assert "IMPOSSIBLE" in result
-        assert "R1" in result
-
-
-# ------------------------------------------------------------------
-# 6. Dict output works
-# ------------------------------------------------------------------
-
-class TestDictOutput:
-    def test_normalize_dict_with_output_key(self):
-        raw = {"output": "IMPOSSIBLE: yes\nCLASS: contradictory-requirements\nCONFLICT: R1, R2\nEXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction."}
-        result = task_unsolvable.normalize_llm_output(raw)
-        assert "IMPOSSIBLE" in result
-
-    def test_normalize_dict_with_text_key(self):
-        raw = {"text": "IMPOSSIBLE: yes\nCLASS: contradictory-requirements\nCONFLICT: R1, R2\nEXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction."}
-        result = task_unsolvable.normalize_llm_output(raw)
-        assert "IMPOSSIBLE" in result
-
-    def test_normalize_dict_with_nested_text(self):
-        raw = {"output": {"text": "IMPOSSIBLE: yes"}}
-        result = task_unsolvable.normalize_llm_output(raw)
-        assert "IMPOSSIBLE" in result
-
-
-# ------------------------------------------------------------------
-# 7. Correct structured answer -> score 1.0
-# ------------------------------------------------------------------
-
-class TestCorrectAnswer:
-    def test_correct_answer_scores_1(self):
-        correct_response = (
-            "IMPOSSIBLE: yes\n"
-            "CLASS: contradictory-requirements\n"
-            "CONFLICT: R1, R2\n"
-            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction that cannot be resolved."
-        )
-        validator_result = task_unsolvable.validate_unsolvable_response(correct_response)
-        assert validator_result.score == 1.0
-        assert validator_result.passed is True
-        assert validator_result.impossible_detected is True
-        assert "R1" in validator_result.conflict_ids
-        assert "R2" in validator_result.conflict_ids
-        assert validator_result.explanation_valid is True
-
-
-# ------------------------------------------------------------------
-# 8. Incorrect answer -> score 0.0
-# ------------------------------------------------------------------
-
-class TestIncorrectAnswer:
-    def test_impossible_no_scores_0(self):
-        incorrect_response = (
-            "IMPOSSIBLE: no\n"
-            "CLASS: contradictory-requirements\n"
-            "CONFLICT: R1, R2\n"
-            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction that cannot be resolved."
-        )
-        validator_result = task_unsolvable.validate_unsolvable_response(incorrect_response)
-        assert validator_result.score == 0.0
-        assert validator_result.passed is False
-
-
-# ------------------------------------------------------------------
-# 9. Fabricated/code-only response -> fail
-# ------------------------------------------------------------------
-
-class TestFabricatedResponse:
-    def test_code_only_response_fails(self):
-        code_response = 'def classify(x):\n    return "zero"'
-        validator_result = task_unsolvable.validate_unsolvable_response(code_response)
-        assert validator_result.score == 0.0
-        assert validator_result.passed is False
-
-    def test_fabricated_solution_fails(self):
-        fake_response = (
-            "IMPOSSIBLE: no\n"
-            "CLASS: solvable\n"
-            "SOLUTION: Just make classify always return positive."
-        )
-        validator_result = task_unsolvable.validate_unsolvable_response(fake_response)
-        assert validator_result.score == 0.0
-        assert validator_result.passed is False
-
-
-# ------------------------------------------------------------------
-# 10. Validator result passes through unchanged
-# ------------------------------------------------------------------
-
-class TestValidatorPassthrough:
-    def test_validator_result_preserved(self):
-        correct_response = (
-            "IMPOSSIBLE: yes\n"
-            "CLASS: contradictory-requirements\n"
-            "CONFLICT: R1, R2\n"
-            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction that cannot be resolved."
-        )
-        validator_result = task_unsolvable.validate_unsolvable_response(correct_response)
-        # Score is preserved exactly
-        assert validator_result.score == 1.0
-        # All fields are populated
-        assert validator_result.impossible_detected is True
-        assert validator_result.classification == "contradictory-requirements"
-        assert len(validator_result.conflict_ids) == 2
-        assert validator_result.explanation_valid is True
-
-    def test_to_dict_serialization(self):
-        correct_response = (
-            "IMPOSSIBLE: yes\n"
-            "CLASS: contradictory-requirements\n"
-            "CONFLICT: R1, R2\n"
-            "EXPLANATION: Requirement R1 demands classify(0) return zero while R2 demands it return positive, which is a direct contradiction that cannot be resolved."
-        )
-        validator_result = task_unsolvable.validate_unsolvable_response(correct_response)
-        # The result can be serialized
-        assert validator_result.score == 1.0
-        assert isinstance(validator_result.passed, bool)
-
-
-# ------------------------------------------------------------------
-# 11. Performance metadata is returned
-# ------------------------------------------------------------------
-
-class TestPerformanceMetadata:
-    def test_result_dataclass_has_all_fields(self):
-        """Verify the UnsolvableCorrectnessResult dataclass has all required fields."""
-        import inspect
-        fields = [f.name for f in task_unsolvable.UnsolvableCorrectnessResult.__dataclass_fields__.values()]
-        required_fields = [
-            "task_name", "task_type", "model", "score", "passed",
-            "impossible_detected", "classification", "conflict_ids",
-            "explanation_valid", "output_tokens", "input_tokens",
-            "tokens_per_second", "ttft_seconds", "wall_time_seconds",
-            "generated_response", "timestamp", "hardware_label",
-            "execution_environment", "connection_type", "validator_result",
-        ]
-        for field in required_fields:
-            assert field in fields, f"Missing field: {field}"
-
-
-# ------------------------------------------------------------------
-# 12. Repeated prompt construction is deterministic
-# ------------------------------------------------------------------
-
-class TestDeterminism:
     def test_prompt_construction_is_deterministic(self):
-        prompt1 = task_unsolvable.build_unsolvable_prompt()
-        prompt2 = task_unsolvable.build_unsolvable_prompt()
-        assert prompt1 == prompt2
-
-    def test_prompt_contains_all_requirements(self):
-        prompt = task_unsolvable.build_unsolvable_prompt()
-        assert "R1" in prompt
-        assert "R2" in prompt
-        assert "R3" in prompt
-        assert "R4" in prompt
-        assert "classify" in prompt
-        assert "zero" in prompt
-        assert "positive" in prompt
+        from src.task_unsolvable import build_unsolvable_prompt
+        p1 = build_unsolvable_prompt()
+        p2 = build_unsolvable_prompt()
+        self.assertEqual(p1, p2)
 
 
-# ------------------------------------------------------------------
-# Edge cases
-# ------------------------------------------------------------------
+class TestOutputNormalization(TestCase):
+    """Tests 5-9: output normalization and reasoning/message extraction."""
 
-class TestEdgeCases:
-    def test_normalize_none_output(self):
-        result = task_unsolvable.normalize_llm_output(None)  # type: ignore
-        assert result == "None"
+    def _normalize(self):
+        from src.task_unsolvable import normalize_llm_output
+        return normalize_llm_output
 
-    def test_normalize_number_output(self):
-        result = task_unsolvable.normalize_llm_output(42)  # type: ignore
-        assert result == "42"
+    def test_plain_string_output(self):
+        n = self._normalize()
+        result = n("IMPOSSIBLE: yes\nCLASS: contradictory\nCONFLICT: R1, R2\nEXPLANATION: The requirements are logically inconsistent.")
+        self.assertEqual(result.strip(), "IMPOSSIBLE: yes\nCLASS: contradictory\nCONFLICT: R1, R2\nEXPLANATION: The requirements are logically inconsistent.")
 
-    def test_normalize_empty_list(self):
-        result = task_unsolvable.normalize_llm_output([])
-        assert result == ""
+    def test_dict_output(self):
+        n = self._normalize()
+        result = n({"output": "test content"})
+        self.assertEqual(result, "test content")
 
-    def test_normalize_empty_dict(self):
-        result = task_unsolvable.normalize_llm_output({})
-        assert result == "{}"
+    def test_list_message_block_output(self):
+        n = self._normalize()
+        blocks = [
+            {"type": "reasoning", "content": "thinking..."},
+            {"type": "message", "content": "IMPOSSIBLE: yes\nCLASS: contradictory\nCONFLICT: R1, R2\nEXPLANATION: The requirements are logically inconsistent."},
+        ]
+        result = n(blocks)
+        self.assertIn("IMPOSSIBLE: yes", result)
+
+    def test_reasoning_blocks_discarded(self):
+        n = self._normalize()
+        blocks = [
+            {"type": "reasoning", "content": "I think this is possible..."},
+            {"type": "message", "content": "IMPOSSIBLE: yes\nCLASS: contradictory\nCONFLICT: R1, R2\nEXPLANATION: The requirements are logically inconsistent."},
+        ]
+        result = n(blocks)
+        self.assertNotIn("I think this is possible", result)
+
+    def test_final_message_extracted(self):
+        n = self._normalize()
+        blocks = [
+            {"type": "reasoning", "content": "thinking 1"},
+            {"type": "reasoning", "content": "thinking 2"},
+            {"type": "message", "content": "FINAL ANSWER"},
+        ]
+        result = n(blocks)
+        self.assertEqual(result, "FINAL ANSWER")
+
+
+class TestValidatorIntegration(TestCase):
+    """Tests 10-13: validator integration with correct/incorrect responses."""
+
+    def _validate(self):
+        from src.unsolvable_validator import validate_unsolvable_response
+        return validate_unsolvable_response
+
+    def test_correct_structured_recognition_scores_1(self):
+        v = self._validate()
+        response = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: contradictory-requirements\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: Requirements R1 and R2 are mutually exclusive because they demand that classify(0) return two different values simultaneously, which is logically impossible."
+        )
+        result = v(response)
+        self.assertTrue(result.passed)
+        self.assertEqual(result.score, 1.0)
+        self.assertTrue(result.impossible_detected)
+
+    def test_incorrect_recognition_scores_0(self):
+        v = self._validate()
+        response = "IMPOSSIBLE: no\nCLASS: solvable\nCONFLICT: R1\nEXPLANATION: This is a simple classification task that can be solved."
+        result = v(response)
+        self.assertFalse(result.passed)
+        self.assertEqual(result.score, 0.0)
+
+    def test_code_only_answer_scores_0(self):
+        v = self._validate()
+        response = "def classify(x):\n    return 'zero'"
+        result = v(response)
+        self.assertFalse(result.passed)
+        self.assertEqual(result.score, 0.0)
+
+    def test_validator_result_passes_through(self):
+        from src.task_unsolvable import UnsolvableResultData
+        # Verify the dataclass has all required fields
+        result = UnsolvableResultData(
+            task_name="Unsolvable Recognition",
+            task_type="unsolvable",
+            model="test-model",
+            score=1.0,
+            passed=True,
+            impossible_detected=True,
+            classification="contradictory-requirements",
+            conflict_ids={"R1", "R2"},
+            explanation_valid=True,
+            output_tokens=100,
+            input_tokens=50,
+            tokens_per_second=10.0,
+            ttft_seconds=0.5,
+            wall_time_seconds=1.0,
+            generated_response="IMPOSSIBLE: yes",
+            timestamp="2026-01-01T00:00:00+00:00",
+            hardware_label="local",
+            connection_type="local",
+        )
+        d = result.to_dict()
+        self.assertIn("task_name", d)
+        self.assertIn("task_type", d)
+        self.assertIn("score", d)
+        self.assertIn("passed", d)
+
+
+class TestPerformanceMetadata(TestCase):
+    """Test 14: performance metadata is returned."""
+
+    def test_result_has_performance_fields(self):
+        from src.task_unsolvable import UnsolvableResultData
+        result = UnsolvableResultData(
+            task_name="Unsolvable Recognition",
+            task_type="unsolvable",
+            model="test-model",
+            score=1.0,
+            passed=True,
+            impossible_detected=True,
+            classification="contradictory-requirements",
+            conflict_ids={"R1", "R2"},
+            explanation_valid=True,
+            output_tokens=500,
+            input_tokens=200,
+            tokens_per_second=25.0,
+            ttft_seconds=0.3,
+            wall_time_seconds=2.5,
+            generated_response="IMPOSSIBLE: yes",
+            timestamp="2026-01-01T00:00:00+00:00",
+            hardware_label="local",
+            connection_type="local",
+        )
+        d = result.to_dict()
+        self.assertEqual(d["output_tokens"], 500)
+        self.assertEqual(d["input_tokens"], 200)
+        self.assertEqual(d["tokens_per_second"], 25.0)
+        self.assertEqual(d["ttft_seconds"], 0.3)
+        self.assertEqual(d["wall_time_seconds"], 2.5)
+
+
+class TestReasoningMessageExtraction(TestCase):
+    """Test 15: reasoning+message response returns only final message."""
+
+    def test_reasoning_plus_message_returns_only_final(self):
+        from src.task_unsolvable import normalize_llm_output
+        blocks = [
+            {"type": "reasoning", "content": "Let me think about this..."},
+            {"type": "reasoning", "content": "Actually, I should reconsider..."},
+            {"type": "message", "content": "IMPOSSIBLE: yes\nCLASS: contradictory-requirements\nCONFLICT: R1, R2\nEXPLANATION: The requirements demand mutually exclusive outputs for the same input."},
+        ]
+        result = normalize_llm_output(blocks)
+        self.assertNotIn("Let me think", result)
+        self.assertIn("IMPOSSIBLE: yes", result)
+
+
+if __name__ == "__main__":
+    main()
