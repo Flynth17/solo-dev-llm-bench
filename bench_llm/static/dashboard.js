@@ -451,8 +451,17 @@ async function runEvaluation() {
         speedTests.push("large");
     }
 
-    if (speedTests.length === 0) {
-        showStatus("Select at least one speed test.", "error");
+    // Collect selected correctness tests
+    var correctnessTests = [];
+    if (document.getElementById("eval-correctness-markdown").checked) {
+        correctnessTests.push("markdown");
+    }
+    if (document.getElementById("eval-correctness-python").checked) {
+        correctnessTests.push("python");
+    }
+
+    if (speedTests.length === 0 && correctnessTests.length === 0) {
+        showStatus("Select at least one speed test or correctness test.", "error");
         return;
     }
 
@@ -466,6 +475,7 @@ async function runEvaluation() {
         max_output_tokens: parseInt(maxTokensInput.value, 10),
         temperature: parseFloat(temperatureInput.value),
         speed_tests: speedTests,
+        correctness_tests: correctnessTests,
     };
 
     disableRun(true);
@@ -495,15 +505,69 @@ async function runEvaluation() {
         var summary = data.summary || {};
         var summaryDiv = document.createElement("div");
         summaryDiv.className = "results-group";
+
+        // Correctness score
+        var correctnessHtml = "";
+        if (summary.correctness_score !== null && summary.correctness_score !== undefined) {
+            var pct = Math.round(summary.correctness_score * 100);
+            var isPass = summary.correctness_score >= 0.5;
+            correctnessHtml =
+                '<div class="aggregate-item">' +
+                    '<div class="label">Correctness</div>' +
+                    '<div class="value">' + pct + '% ' + (isPass ? '✓' : '✗') + '</div>' +
+                '</div>';
+        }
+
         summaryDiv.innerHTML =
             '<h3>Evaluation Summary</h3>' +
             '<div class="aggregate">' +
-                '<div class="aggregate-item"><div class="label">Tests Run</div><div class="value">' + (summary.speed_tests_run || 0) + '</div></div>' +
+                '<div class="aggregate-item"><div class="label">Speed Tests</div><div class="value">' + (summary.speed_tests_run || 0) + '</div></div>' +
+                '<div class="aggregate-item"><div class="label">Correctness Tests</div><div class="value">' + (summary.correctness_tests_run || 0) + '</div></div>' +
                 '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + fmt2(summary.avg_tokens_per_second) + '</div></div>' +
                 '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(summary.avg_ttft_seconds) + '</div></div>' +
                 '<div class="aggregate-item"><div class="label">Total Wall (s)</div><div class="value">' + fmt2(summary.total_wall_time_seconds) + '</div></div>' +
+                correctnessHtml +
             '</div>';
         resultsContainer.appendChild(summaryDiv);
+
+        // Correctness results
+        var correctnessResults = data.correctness_results || [];
+        for (var i = 0; i < correctnessResults.length; i++) {
+            var cr = correctnessResults[i];
+            var pct = Math.round((cr.score || 0) * 100);
+            var status = cr.passed ? 'PASS' : 'FAIL';
+            var statusColor = cr.passed ? '#22c55e' : '#ef4444';
+
+            var corrDiv = document.createElement("div");
+            corrDiv.className = "results-group";
+
+            var detailHtml = "";
+            if (cr.test_type === "markdown") {
+                detailHtml =
+                    '<div class="aggregate-item"><div class="label">Initial Errors</div><div class="value">' + (cr.initial_errors || 0) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Final Errors</div><div class="value">' + (cr.final_errors || 0) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Errors Fixed</div><div class="value">' + (cr.errors_fixed || 0) + '</div></div>';
+            } else if (cr.test_type === "python") {
+                detailHtml =
+                    '<div class="aggregate-item"><div class="label">Passed</div><div class="value">' + (cr.passed_tests || 0) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Total</div><div class="value">' + (cr.total_tests || 0) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Failed</div><div class="value">' + (cr.failed_tests || 0) + '</div></div>';
+            }
+
+            corrDiv.innerHTML =
+                '<h4>Correctness: <code>' + escapeHtml(cr.test_label || cr.test_type) + '</code></h4>' +
+                '<div class="aggregate">' +
+                    '<div class="aggregate-item">' +
+                        '<div class="label">Score</div>' +
+                        '<div class="value" style="color:' + statusColor + '; font-weight:bold;">' + pct + '% ' + status + '</div>' +
+                    '</div>' +
+                    '<div class="aggregate-item"><div class="label">tok/s</div><div class="value">' + fmt2(cr.tokens_per_second) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">TTFT</div><div class="value">' + formatTtft(cr.ttft_seconds) + '</div></div>' +
+                    '<div class="aggregate-item"><div class="label">Wall (s)</div><div class="value">' + fmt2(cr.wall_time_seconds) + '</div></div>' +
+                    detailHtml +
+                '</div>';
+            resultsContainer.appendChild(corrDiv);
+        }
 
         // Per-test details
         var speedResults = data.speed_results || [];

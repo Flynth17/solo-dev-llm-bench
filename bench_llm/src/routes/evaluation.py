@@ -1,6 +1,6 @@
 """Evaluation routes for Solo Dev LLM Bench.
 
-Handles the new Run Evaluation flow for speed-only tests.
+Handles the Run Evaluation flow for speed + correctness tests.
 """
 
 import time
@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 import src.app_state
 from src.evaluation_prompts import get_speed_prompt, PROMPT_FILES
+import src.task_manager
 
 logger = __import__("logging").getLogger("solo_dev_llm_bench")
 router = APIRouter()
@@ -26,20 +27,17 @@ def _get_results_store():
     return src.app_state.results_store
 
 
+# Valid correctness test names
+CORRECTNESS_TESTS = {"markdown", "python"}
+
+
 def _validate_speed_tests(speed_tests: list) -> list[str]:
     """Validate and normalize the speed_tests list.
 
-    - Reject empty lists
     - Reject unknown names
     - Deduplicate deterministically (preserve first occurrence order)
     """
-    if not speed_tests:
-        raise HTTPException(
-            status_code=400,
-            detail="speed_tests must not be empty",
-        )
-
-    # Check for unknown names
+    # Check for unknown names (empty list is allowed — correctness-only runs OK)
     for name in speed_tests:
         if name not in PROMPT_FILES:
             raise HTTPException(
@@ -51,6 +49,38 @@ def _validate_speed_tests(speed_tests: list) -> list[str]:
     seen: set[str] = set()
     deduped: list[str] = []
     for name in speed_tests:
+        if name not in seen:
+            seen.add(name)
+            deduped.append(name)
+
+    return deduped
+
+
+def _validate_correctness_tests(correctness_tests: list) -> list[str]:
+    """Validate and normalize the correctness_tests list.
+
+    - Reject empty lists
+    - Reject unknown names
+    - Deduplicate deterministically (preserve first occurrence order)
+    """
+    if not correctness_tests:
+        raise HTTPException(
+            status_code=400,
+            detail="correctness_tests must not be empty",
+        )
+
+    # Check for unknown names
+    for name in correctness_tests:
+        if name not in CORRECTNESS_TESTS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown correctness test: {name!r}",
+            )
+
+    # Deduplicate preserving first occurrence order
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for name in correctness_tests:
         if name not in seen:
             seen.add(name)
             deduped.append(name)
@@ -107,6 +137,11 @@ _PROMPT_LABELS = {
     "large": "Large Prompt",
 }
 
+_CORRECTNESS_LABELS = {
+    "markdown": "Markdownlint Default",
+    "python": "Python Correctness",
+}
+
 
 # ------------------------------------------------------------------
 # Endpoints
@@ -114,7 +149,7 @@ _PROMPT_LABELS = {
 
 @router.post("/api/evaluation/run")
 async def run_evaluation_endpoint(config: dict):
-    """Run selected speed tests and return results.
+    """Run selected speed + correctness tests and return results.
 
     Request body:
     {
@@ -126,18 +161,16 @@ async def run_evaluation_endpoint(config: dict):
         "iterations": 5,
         "max_output_tokens": 1024,
         "temperature": 0,
-        "speed_tests": ["small", "medium", "large"]
+        "speed_tests": ["small", "medium", "large"],
+        "correctness_tests": ["markdown", "python"]
     }
     """
     # --- Validation ---
     speed_tests_raw = config.get("speed_tests", [])
-    if not speed_tests_raw:
-        raise HTTPException(
-            status_code=400,
-            detail="speed_tests must not be empty",
-        )
-
     speed_tests = _validate_speed_tests(speed_tests_raw)
+
+    correctness_tests_raw = config.get("correctness_tests", [])
+    correctness_tests = _validate_correctness_tests(correctness_tests_raw)
 
     model = config.get("model", "").strip()
     if not model:
@@ -272,6 +305,101 @@ async def run_evaluation_endpoint(config: dict):
             "warm_aggregate": warm_agg,
         })
 
+    # --- Run selected correctness tests sequentially ---
+    correctness_results: list[dict] = []
+    correctness_scores: list[float] = []
+
+    for test_name in correctness_tests:
+        if test_name == "markdown":
+            from src.task_markdown import run_markdown_task
+
+            try:
+                md_result = await run_markdown_task(
+                    lm_studio_url=lm_studio_url,
+                    model=model,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                    hardware_label=hardware_label,
+                    execution_environment=execution_environment,
+                    connection_type=connection_type,
+                )
+            except Exception as e:
+                logger.error("Markdown correctness failed: %s — %s", type(e).__name__, e)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Markdown correctness failed: {e}",
+                )
+
+            # Persist to task history
+            task_id = f"eval-{model[:20]}-{len(src.task_manager.get_tasks()) + 1:03d}"
+            src.task_manager.create_task(
+                name="Markdownlint Default",
+                task_type="markdown",
+                prompt="",
+                config={"model": model, "lm_studio_url": lm_studio_url},
+            )
+
+            correctness_results.append({
+                "test_type": "markdown",
+                "test_label": _CORRECTNESS_LABELS["markdown"],
+                "score": md_result["score"],
+                "passed": md_result["passed"],
+                "initial_errors": md_result["initial_errors"],
+                "final_errors": md_result["final_errors"],
+                "errors_fixed": md_result["errors_fixed"],
+                "tokens_per_second": md_result["tokens_per_second"],
+                "ttft_seconds": md_result.get("ttft_seconds"),
+                "wall_time_seconds": md_result["wall_time_seconds"],
+                "output_tokens": md_result["output_tokens"],
+                "input_tokens": md_result["input_tokens"],
+                "corrected_violations": md_result.get("corrected_violations", []),
+            })
+            correctness_scores.append(md_result["score"])
+
+        elif test_name == "python":
+            from src.task_python import run_python_correctness_task
+
+            try:
+                py_result = await run_python_correctness_task(
+                    lm_studio_url=lm_studio_url,
+                    model=model,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                    hardware_label=hardware_label,
+                    execution_environment=execution_environment,
+                    connection_type=connection_type,
+                )
+            except Exception as e:
+                logger.error("Python correctness failed: %s — %s", type(e).__name__, e)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Python correctness failed: {e}",
+                )
+
+            # Persist to task history
+            src.task_manager.create_task(
+                name="Python Correctness",
+                task_type="python",
+                prompt="",
+                config={"model": model, "lm_studio_url": lm_studio_url},
+            )
+
+            correctness_results.append({
+                "test_type": "python",
+                "test_label": _CORRECTNESS_LABELS["python"],
+                "score": py_result["score"],
+                "passed": py_result["passed"],
+                "total_tests": py_result["total_tests"],
+                "passed_tests": py_result["passed_tests"],
+                "failed_tests": py_result["failed_tests"],
+                "tokens_per_second": py_result["tokens_per_second"],
+                "ttft_seconds": py_result.get("ttft_seconds"),
+                "wall_time_seconds": py_result["wall_time_seconds"],
+                "output_tokens": py_result["output_tokens"],
+                "input_tokens": py_result["input_tokens"],
+            })
+            correctness_scores.append(py_result["score"])
+
     total_wall_time = round(time.time() - total_wall_start, 2)
 
     # Compute overall summary
@@ -285,12 +413,20 @@ async def run_evaluation_endpoint(config: dict):
     else:
         avg_ttft = 0
 
+    # Compute correctness score (average of selected correctness scores)
+    correctness_score = None
+    if correctness_scores:
+        correctness_score = round(sum(correctness_scores) / len(correctness_scores), 4)
+
     return {
         "status": "completed",
         "model": model,
         "speed_results": speed_results,
+        "correctness_results": correctness_results,
         "summary": {
             "speed_tests_run": len(speed_results),
+            "correctness_tests_run": len(correctness_results),
+            "correctness_score": correctness_score,
             "avg_tokens_per_second": avg_tps,
             "avg_ttft_seconds": avg_ttft,
             "total_wall_time_seconds": total_wall_time,

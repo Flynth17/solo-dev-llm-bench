@@ -4,6 +4,9 @@ Verifies:
 - Empty speed_tests rejected
 - Unknown speed test names rejected
 - Duplicate speed test names normalized
+- Empty correctness_tests rejected
+- Unknown correctness test names rejected
+- Duplicate correctness test names normalized
 - Validation of model, iterations, max_tokens, temperature
 - Result structure contains required fields
 """
@@ -20,7 +23,12 @@ from fastapi.testclient import TestClient
 from fastapi import HTTPException
 
 from src.main import app
-from src.routes.evaluation import _validate_speed_tests, _aggregate_for_runs, _warm_aggregate_for_runs
+from src.routes.evaluation import (
+    _validate_speed_tests,
+    _validate_correctness_tests,
+    _aggregate_for_runs,
+    _warm_aggregate_for_runs,
+)
 from src.evaluation_prompts import PROMPT_FILES
 
 client = TestClient(app)
@@ -31,9 +39,10 @@ client = TestClient(app)
 # ------------------------------------------------------------------
 
 class TestValidateSpeedTests:
-    def test_empty_list_raises(self) -> None:
-        with pytest.raises(HTTPException):
-            _validate_speed_tests([])
+    def test_empty_list_allowed(self) -> None:
+        """Empty speed_tests is OK when correctness tests are selected."""
+        result = _validate_speed_tests([])
+        assert result == []
 
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(HTTPException):
@@ -50,6 +59,32 @@ class TestValidateSpeedTests:
     def test_single_name(self) -> None:
         result = _validate_speed_tests(["large"])
         assert result == ["large"]
+
+
+# ------------------------------------------------------------------
+# _validate_correctness_tests unit tests
+# ------------------------------------------------------------------
+
+class TestValidateCorrectnessTests:
+    def test_empty_list_raises(self) -> None:
+        with pytest.raises(HTTPException):
+            _validate_correctness_tests([])
+
+    def test_unknown_name_raises(self) -> None:
+        with pytest.raises(HTTPException):
+            _validate_correctness_tests(["java"])
+
+    def test_duplicate_names_deduplicated(self) -> None:
+        result = _validate_correctness_tests(["markdown", "python", "markdown"])
+        assert result == ["markdown", "python"]
+
+    def test_all_valid_names(self) -> None:
+        result = _validate_correctness_tests(["markdown", "python"])
+        assert result == ["markdown", "python"]
+
+    def test_single_name(self) -> None:
+        result = _validate_correctness_tests(["python"])
+        assert result == ["python"]
 
 
 # ------------------------------------------------------------------
@@ -104,10 +139,29 @@ class TestWarmAggregateForRuns:
 # ------------------------------------------------------------------
 
 class TestEvaluationEndpointValidation:
-    def test_empty_speed_tests(self) -> None:
+    def test_empty_speed_tests_empty_correctness(self) -> None:
+        """Both speed_tests and correctness_tests empty should reject."""
         resp = client.post("/api/evaluation/run", json={
             "model": "test-model",
             "speed_tests": [],
+            "correctness_tests": [],
+        })
+        assert resp.status_code == 400
+
+    def test_empty_correctness_tests_only(self) -> None:
+        """Empty correctness_tests should reject."""
+        resp = client.post("/api/evaluation/run", json={
+            "model": "test-model",
+            "speed_tests": ["small"],
+            "correctness_tests": [],
+        })
+        assert resp.status_code == 400
+
+    def test_unknown_correctness_test(self) -> None:
+        resp = client.post("/api/evaluation/run", json={
+            "model": "test-model",
+            "speed_tests": ["small"],
+            "correctness_tests": ["java"],
         })
         assert resp.status_code == 400
 
@@ -115,12 +169,14 @@ class TestEvaluationEndpointValidation:
         resp = client.post("/api/evaluation/run", json={
             "model": "test-model",
             "speed_tests": ["huge"],
+            "correctness_tests": ["markdown"],
         })
         assert resp.status_code == 400
 
     def test_no_model(self) -> None:
         resp = client.post("/api/evaluation/run", json={
             "speed_tests": ["small"],
+            "correctness_tests": ["markdown"],
         })
         assert resp.status_code == 400
 
@@ -128,6 +184,7 @@ class TestEvaluationEndpointValidation:
         resp = client.post("/api/evaluation/run", json={
             "model": "test-model",
             "speed_tests": ["small"],
+            "correctness_tests": ["markdown"],
             "iterations": 0,
         })
         assert resp.status_code == 400
@@ -136,6 +193,7 @@ class TestEvaluationEndpointValidation:
         resp = client.post("/api/evaluation/run", json={
             "model": "test-model",
             "speed_tests": ["small"],
+            "correctness_tests": ["markdown"],
             "max_output_tokens": 0,
         })
         assert resp.status_code == 400
@@ -144,6 +202,7 @@ class TestEvaluationEndpointValidation:
         resp = client.post("/api/evaluation/run", json={
             "model": "test-model",
             "speed_tests": ["small"],
+            "correctness_tests": ["markdown"],
             "temperature": 3,
         })
         assert resp.status_code == 400
