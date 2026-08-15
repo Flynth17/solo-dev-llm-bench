@@ -28,12 +28,13 @@ def _get_results_store():
 
 
 # Valid correctness test names
-CORRECTNESS_TESTS = {"markdown", "python"}
+CORRECTNESS_TESTS = {"markdown", "python", "java"}
 
 # Canonical task definitions
 CANONICAL_TASKS = {
     "markdown": {"name": "Markdownlint Default", "task_type": "markdown"},
     "python": {"name": "Python Correctness", "task_type": "python"},
+    "java": {"name": "Java Correctness", "task_type": "java"},
 }
 
 
@@ -160,6 +161,7 @@ _PROMPT_LABELS = {
 _CORRECTNESS_LABELS = {
     "markdown": "Markdownlint Default",
     "python": "Python Correctness",
+    "java": "Java Correctness",
 }
 
 
@@ -442,6 +444,59 @@ async def run_evaluation_endpoint(config: dict):
                 "input_tokens": py_result["input_tokens"],
             })
             correctness_scores.append(py_result["score"])
+
+        elif test_name == "java":
+            from src.task_java import run_java_correctness_task
+
+            try:
+                java_result = await run_java_correctness_task(
+                    lm_studio_url=lm_studio_url,
+                    model=model,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                    hardware_label=hardware_label,
+                    connection_type=connection_type,
+                )
+            except Exception as e:
+                logger.error("Java correctness failed: %s — %s", type(e).__name__, e)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Java correctness failed: {e}",
+                )
+
+            # Persist to task history via create_task_run
+            src.task_manager.create_task_run(
+                task_id=canonical_task_id,
+                task_name=java_result.task_name,
+                task_type=java_result.task_type,
+                model=model,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                passed=java_result.passed,
+                score=java_result.score,
+                output_tokens=java_result.output_tokens,
+                input_tokens=java_result.input_tokens,
+                tokens_per_second=java_result.tokens_per_second,
+                ttft_seconds=java_result.ttft_seconds,
+                wall_time_seconds=java_result.wall_time_seconds,
+                result=java_result.to_dict(),
+            )
+
+            correctness_results.append({
+                "test_type": "java",
+                "test_label": _CORRECTNESS_LABELS["java"],
+                "score": java_result.score,
+                "passed": java_result.passed,
+                "total_tests": java_result.total_tests,
+                "passed_tests": java_result.passed_tests,
+                "failed_tests": java_result.failed_tests,
+                "compile_success": java_result.compile_success,
+                "tokens_per_second": java_result.tokens_per_second,
+                "ttft_seconds": java_result.ttft_seconds,
+                "wall_time_seconds": java_result.wall_time_seconds,
+                "output_tokens": java_result.output_tokens,
+                "input_tokens": java_result.input_tokens,
+            })
+            correctness_scores.append(java_result.score)
 
     total_wall_time = round(time.time() - total_wall_start, 2)
 

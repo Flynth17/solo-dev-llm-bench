@@ -78,7 +78,7 @@ class TestValidateCorrectnessTests:
 
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(HTTPException):
-            _validate_correctness_tests(["java"])
+            _validate_correctness_tests(["javascript"])
 
     def test_duplicate_names_deduplicated(self) -> None:
         result = _validate_correctness_tests(["markdown", "python", "markdown"])
@@ -167,7 +167,7 @@ class TestEvaluationEndpointValidation:
         resp = client.post("/api/evaluation/run", json={
             "model": "test-model",
             "speed_tests": ["small"],
-            "correctness_tests": ["java"],
+            "correctness_tests": ["javascript"],
         })
         assert resp.status_code == 400
 
