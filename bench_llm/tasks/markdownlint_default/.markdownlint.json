@@ -1,0 +1,12 @@
+{
+  "default": false,
+  "MD013": {
+    "line_length": 80
+  },
+  "MD034": true,
+  "MD040": true,
+  "MD046": {
+    "style": "fenced"
+  },
+  "MD047": true
+}

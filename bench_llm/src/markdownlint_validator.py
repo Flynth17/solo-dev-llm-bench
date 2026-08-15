@@ -230,16 +230,26 @@ class MarkdownLintValidator:
         Parses this into the same MarkdownLintResult structure.
 
         On Windows, npx is a .CMD file so we must use shell=True to find it.
+
+        Uses the canonical config file from the task fixture directory
+        to ensure deterministic rule evaluation across environments.
         """
+        # Resolve path to the canonical config file in the same fixture dir
+        config_path = Path(__file__).parent.parent / "tasks" / "markdownlint_default" / ".markdownlint.json"
+
         try:
-            cmd = ["npx", "markdownlint-cli2", "--no-globs", str(file_path)]
+            cmd_parts = ["npx", "markdownlint-cli2", "--no-globs"]
+            if config_path.exists():
+                cmd_parts.extend(["--config", str(config_path)])
+            cmd_parts.append(str(file_path))
+
             # On Windows, subprocess with list args cannot find .cmd/.bat files.
             # Use shell=True when npx is the first arg to resolve them.
             kwargs: dict = {"capture_output": True, "timeout": 30, "text": True}
             if sys.platform == "win32":
                 kwargs["shell"] = True
 
-            result = subprocess.run(cmd, **kwargs)
+            result = subprocess.run(cmd_parts, **kwargs)
 
             stdout = (result.stdout or "").strip()
             stderr = (result.stderr or "").strip()
