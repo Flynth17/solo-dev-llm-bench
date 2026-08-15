@@ -4,6 +4,8 @@ Validates a corrected Python solution by running pytest in an isolated
 temporary workspace with a hard timeout.
 """
 
+import importlib
+import re
 import subprocess
 import tempfile
 import time
@@ -76,8 +78,10 @@ def validate_python_solution(
             test_file.write_text(test_code, encoding="utf-8")
 
             # Run pytest via subprocess (no shell)
+            # Note: removed "-x" so all tests run even if some fail
+            # This gives accurate partial scoring for partial solutions
             proc = subprocess.run(
-                ["python", "-m", "pytest", "-x", "--tb=short", "-q", str(test_file)],
+                ["python", "-m", "pytest", "--tb=short", "-q", str(test_file)],
                 cwd=str(workspace),
                 capture_output=True,
                 text=True,
@@ -127,6 +131,18 @@ def validate_python_solution(
                     if result.total_tests == 0:
                         result.total_tests = result.passed_tests + result.failed_tests
 
+            # If still total is 0, the test module couldn't be imported/collection failed.
+            # Count expected tests from the test_code by looking for def test_ patterns.
+            if result.total_tests == 0:
+                result.total_tests = _count_test_functions(test_code)
+                result.passed_tests = 0
+                result.failed_tests = result.total_tests
+                result.error = (
+                    "Test module could not be imported or collected. "
+                    "This is likely due to a syntax error, missing imports, "
+                    "or missing required functions in the solution."
+                )
+
             # Scoring
             if result.total_tests > 0:
                 result.score = round(result.passed_tests / result.total_tests, 4)
@@ -140,6 +156,9 @@ def validate_python_solution(
         result.timed_out = True
         result.error = "pytest subprocess timed out"
         result.exit_code = -1
+        result.total_tests = _count_test_functions(test_code)
+        result.passed_tests = 0
+        result.failed_tests = result.total_tests
         result.score = 0.0
         result.passed = False
     except FileNotFoundError:
@@ -155,3 +174,25 @@ def validate_python_solution(
         traceback.print_exc()
 
     return result
+
+
+def _count_test_functions(test_code: str) -> int:
+    """Count the number of test functions in a pytest test file.
+
+    Looks for patterns like ``def test_`` at the start of a line or
+    after indentation.  This provides a deterministic expected test
+    count even when the test module cannot be collected.
+
+    Args:
+        test_code: The pytest test file content.
+
+    Returns:
+        The number of test functions found.
+    """
+    count = 0
+    for line in test_code.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("def test_") and "(" in stripped:
+            count += 1
+    return count
+

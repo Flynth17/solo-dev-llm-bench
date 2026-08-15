@@ -300,7 +300,8 @@ def is_even(n):
 
         if validation.total_tests > 0:
             expected_score = validation.passed_tests / validation.total_tests
-            assert validation.score == expected_score
+            # Validator rounds to 4 decimal places
+            assert abs(validation.score - round(expected_score, 4)) < 1e-9
 
 
 # ------------------------------------------------------------------

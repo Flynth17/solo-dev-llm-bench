@@ -148,7 +148,9 @@ class TestSyntaxErrorHandling:
         assert result.exit_code != 0
         assert result.passed is False
         assert result.score == 0.0
-        assert result.error == ""  # pytest handles it, not our code
+        assert result.total_tests == 6, "Should count 6 tests from fixture"
+        assert result.failed_tests == 6, "All tests should be marked as failed"
+        assert result.error != "", "Error message should be set for collection failures"
 
 
 class TestScoreRange:
@@ -172,3 +174,123 @@ def is_even(n):
         broken_code = _load_fixture("solution.py")
         result = validate_python_solution(broken_code, TEST_CODE)
         assert 0.0 <= result.score <= 1.0
+
+
+class TestRegressionScenarios:
+    """Regression tests for Python validator deterministic scoring."""
+
+    def test_syntax_error_returns_deterministic_count(self):
+        """Syntax error in solution should return total_tests=6, failed=6, score=0.0."""
+        syntax_error_code = "def foo(  # missing colon\n    pass\n"
+        result = validate_python_solution(syntax_error_code, TEST_CODE)
+
+        assert result.total_tests == 6, "Should count 6 tests from fixture"
+        assert result.passed_tests == 0, "No tests passed on syntax error"
+        assert result.failed_tests == 6, "All 6 tests failed on syntax error"
+        assert result.score == 0.0, "Score should be 0.0"
+        assert result.passed is False, "Should not pass"
+        assert result.error != "", "Error message should be set"
+
+    def test_missing_required_function_returns_deterministic_count(self):
+        """Missing required functions should return total_tests=6, failed=6, score=0.0."""
+        # Solution only defines add, missing multiply and is_even
+        missing_functions_code = '''"""Incomplete Python module."""
+
+
+def add(a, b):
+    """Add two numbers and return the result."""
+    return a + b
+'''
+        result = validate_python_solution(missing_functions_code, TEST_CODE)
+
+        assert result.total_tests == 6, "Should count 6 tests from fixture"
+        assert result.passed_tests == 0, "No tests passed on missing functions"
+        assert result.failed_tests == 6, "All 6 tests failed on missing functions"
+        assert result.score == 0.0, "Score should be 0.0"
+        assert result.passed is False, "Should not pass"
+
+    def test_partial_solution_correct_count(self):
+        """Partial solution should show correct passed/failed counts."""
+        # add is correct, multiply and is_even are broken
+        partial_code = '''"""Partially correct Python module."""
+
+
+def add(a, b):
+    """Add two numbers and return the result."""
+    return a + b
+
+
+def multiply(x, y):
+    """Multiply two numbers and return the result."""
+    result = x * y
+    # BUG: missing return statement
+
+
+def is_even(n):
+    """Return True if n is even, False otherwise."""
+    return n % 2 == 1  # BUG: checks odd instead of even
+'''
+        result = validate_python_solution(partial_code, TEST_CODE)
+
+        assert result.total_tests == 6, "Should count 6 tests from fixture"
+        assert result.passed_tests >= 0, "Passed count should be non-negative"
+        assert result.failed_tests >= 0, "Failed count should be non-negative"
+        assert result.passed_tests + result.failed_tests == 6, "Passed + failed must equal total"
+        assert 0.0 <= result.score <= 1.0, "Score must be in [0.0, 1.0]"
+        assert result.score < 1.0, "Partial solution should have score < 1.0"
+
+    def test_correct_solution_passes_all(self):
+        """Correct solution should pass all 6 tests with score=1.0."""
+        correct_code = '''"""Correct Python module."""
+
+
+def add(a, b):
+    """Add two numbers and return the result."""
+    return a + b
+
+
+def multiply(x, y):
+    """Multiply two numbers and return the result."""
+    return x * y
+
+
+def is_even(n):
+    """Return True if n is even, False otherwise."""
+    return n % 2 == 0
+'''
+        result = validate_python_solution(correct_code, TEST_CODE)
+
+        assert result.total_tests == 6, "Should count 6 tests from fixture"
+        assert result.passed_tests == 6, "All 6 tests should pass"
+        assert result.failed_tests == 0, "No tests should fail"
+        assert result.score == 1.0, "Score should be 1.0"
+        assert result.passed is True, "Should pass"
+        assert result.exit_code == 0, "Exit code should be 0"
+
+    def test_timeout_returns_deterministic_count(self):
+        """Timeout should return total_tests=6, failed=6, score=0.0."""
+        # Use a code that will sleep longer than the timeout
+        slow_code = '''"""Slow Python module."""
+import time
+
+def add(a, b):
+    """Add two numbers and return the result."""
+    time.sleep(10)
+    return a + b
+'''
+        # Minimal test that will trigger the slow add
+        minimal_test = '''
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from solution import add
+def test_add():
+    assert add(1, 2) == 3
+'''
+        result = validate_python_solution(slow_code, minimal_test, timeout=1.0)
+
+        assert result.timed_out is True, "Should be marked as timed out"
+        assert result.total_tests == 1, "Should count 1 test from minimal fixture"
+        assert result.passed_tests == 0, "No tests passed on timeout"
+        assert result.failed_tests == 1, "All 1 tests failed on timeout"
+        assert result.score == 0.0, "Score should be 0.0"
+        assert result.passed is False, "Should not pass"
