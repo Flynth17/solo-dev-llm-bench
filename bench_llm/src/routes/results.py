@@ -2,17 +2,14 @@
 
 from fastapi import APIRouter, HTTPException
 
-from src.results import ResultsStore
+import src.app_state
 
 router = APIRouter()
 
 
-# Import the global singleton from main module
-# We keep the singleton pattern — just import the reference
 def _get_results_store():
-    """Get the global results_store from the app module."""
-    from src.main import results_store
-    return results_store
+    """Get the current results_store from app_state module."""
+    return src.app_state.results_store
 
 
 @router.get("/api/results")
