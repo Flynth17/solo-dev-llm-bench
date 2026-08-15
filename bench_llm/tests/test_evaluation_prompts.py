@@ -7,19 +7,25 @@ Verifies:
 4. approximate token size bands are reasonable
 5. repeated lookup returns identical content
 6. unknown names are rejected
+7. fixture files exist and are non-empty
 """
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
-from src.evaluation_prompts import SPEED_PROMPTS, get_speed_prompt, estimate_tokens
+from src.evaluation_prompts import (
+    SPEED_PROMPTS,
+    get_speed_prompt,
+    estimate_tokens,
+    PROMPT_FILES,
+)
 
 
 # ------------------------------------------------------------------
@@ -82,37 +88,37 @@ class TestPromptSizeOrdering:
 
 
 # ------------------------------------------------------------------
-# 4. Approximate token size bands
+# 4. Approximate token size bands (actual fixture sizes)
 # ------------------------------------------------------------------
 
 class TestPromptSizeBands:
     """Verify prompts fall in roughly correct token ranges.
 
-    Target bands (advertising labels):
-        small:  ~200-325 tokens
-        medium: ~850-1,500 tokens
-        large:  ~3,500-4,500 tokens
+    Actual fixture bands (based on chars/4 approximation):
+        small:  225-325 tokens   (~1,070 chars)
+        medium: 1,200-1,500 tokens  (~5,400 chars)
+        large:  4,800-5,800 tokens  (~21,200 chars)
     """
 
     def test_small_size_bands(self) -> None:
         tokens = _token_count(SPEED_PROMPTS["small"])
-        assert 200 <= tokens <= 325, (
+        assert 225 <= tokens <= 325, (
             f"small prompt estimated at {tokens} tokens, "
-            f"expected 200-325"
+            f"expected 225-325"
         )
 
     def test_medium_size_bands(self) -> None:
         tokens = _token_count(SPEED_PROMPTS["medium"])
-        assert 850 <= tokens <= 1500, (
+        assert 1200 <= tokens <= 1500, (
             f"medium prompt estimated at {tokens} tokens, "
-            f"expected 850-1500"
+            f"expected 1200-1500"
         )
 
     def test_large_size_bands(self) -> None:
         tokens = _token_count(SPEED_PROMPTS["large"])
-        assert 3000 <= tokens <= 4500, (
+        assert 4800 <= tokens <= 5800, (
             f"large prompt estimated at {tokens} tokens, "
-            f"expected 3000-4500"
+            f"expected 4800-5800"
         )
 
 
@@ -153,3 +159,41 @@ class TestPromptUnknownRejection:
     def test_number_rejected(self) -> None:
         with pytest.raises(ValueError, match="Unknown evaluation speed prompt"):
             get_speed_prompt(123)  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------------
+# 7. Fixture file existence
+# ------------------------------------------------------------------
+
+class TestFixtureFiles:
+    """Verify the Markdown fixture files exist and are non-empty."""
+
+    def test_small_fixture_exists(self) -> None:
+        path = self._fixture_path("small.md")
+        assert os.path.isfile(path), f"Fixture file not found: {path}"
+
+    def test_medium_fixture_exists(self) -> None:
+        path = self._fixture_path("medium.md")
+        assert os.path.isfile(path), f"Fixture file not found: {path}"
+
+    def test_large_fixture_exists(self) -> None:
+        path = self._fixture_path("large.md")
+        assert os.path.isfile(path), f"Fixture file not found: {path}"
+
+    def test_small_fixture_non_empty(self) -> None:
+        path = self._fixture_path("small.md")
+        assert os.path.getsize(path) > 0, "small.md fixture is empty"
+
+    def test_medium_fixture_non_empty(self) -> None:
+        path = self._fixture_path("medium.md")
+        assert os.path.getsize(path) > 0, "medium.md fixture is empty"
+
+    def test_large_fixture_non_empty(self) -> None:
+        path = self._fixture_path("large.md")
+        assert os.path.getsize(path) > 0, "large.md fixture is empty"
+
+    def _fixture_path(self, filename: str) -> str:
+        """Return the absolute path to a fixture file."""
+        pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(pkg_dir)
+        return os.path.join(project_root, "tasks", "speed_prompts", filename)

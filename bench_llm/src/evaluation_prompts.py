@@ -1,15 +1,32 @@
 """Canonical evaluation speed prompts.
 
 Backend-owned fixed prompts for speed-benchmarking three different workload sizes.
-These are deterministic, static, and realistic solo-developer engineering tasks.
+Prompts are stored as Markdown fixture files under ``tasks/speed_prompts/``.
 
-Target approximate INPUT sizes:
-    small  ~250 tokens
-    medium ~1,000 tokens
-    large  ~4,000 tokens
+Prompt mapping (name -> fixture file):
+    small  -> small.md   (~267 tokens)
+    medium -> medium.md  (~1,359 tokens)
+    large  -> large.md   (~5,318 tokens)
 """
 
 from __future__ import annotations
+
+import os
+from typing import Dict
+
+# ------------------------------------------------------------------
+# Fixture file mapping
+# ------------------------------------------------------------------
+
+PROMPT_FILES: Dict[str, str] = {
+    "small": "small.md",
+    "medium": "medium.md",
+    "large": "large.md",
+}
+
+# ------------------------------------------------------------------
+# Token estimation helper
+# ------------------------------------------------------------------
 
 
 def estimate_tokens(text: str) -> int:
@@ -19,7 +36,7 @@ def estimate_tokens(text: str) -> int:
     for many tokenizers (GPT-2, CL100K, etc.) is roughly **4 characters per
     token** for English text, though the exact ratio varies by model.
 
-    This function is intentionally lightweight — no heavyweight tokenizer
+    This function is intentionally lightweight -- no heavyweight tokenizer
     dependency is required.
 
     Args:
@@ -33,405 +50,69 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-SPEED_PROMPTS: dict[str, str] = {
-    "small": (
-        "You are debugging a Python utility used in a solo developer's CI pipeline. "
-        "The file `deploy_helper.py` contains the following function that is supposed "
-        "to validate a list of service names against a registry of allowed services:\n\n"
-        "```python\n"
-        "def check_services(services: list[str], registry: list[str]) -> bool:\n"
-        "    for svc in services:\n"
-        "        if svc in registry:\n"
-        "            return False\n"
-        "    return True\n"
-        "```\n\n"
-        "The function has a bug: it returns False when it should return True (and vice "
-        "versa). Write a corrected version of `check_services` that returns True only "
-        "when ALL service names in the input list are found in the registry. Include "
-        "type hints, a docstring explaining the behavior, and an example usage block "
-        "under `if __name__ == '__main__':` that demonstrates both a passing and failing "
-        "case. Also add input validation: raise TypeError if services is not a list, "
-        "and ValueError if any element is not a string.\n\n"
-        "Finally, explain in a comment above the function what the original bug was "
-        "and how your fix addresses it."
-    ),
-    "medium": (
-        "You are a solo developer building a lightweight cron-like task scheduler "
-        "called `cron_lite` for your microservice monitoring setup. The system "
-        "monitors several Python microservices and needs to run health checks, "
-        "log rotation, and metric aggregation on configurable intervals. Implement "
-        "everything in a single Python module using only the standard library "
-        "(datetime, dataclasses, threading, functools, typing, enum).\n\n"
-        "=== Component 1: Cron Expression Parser ===\n\n"
-        "1. **CronExpression dataclass** (from dataclasses):\n"
-        "   - Fields: minute (str), hour (str), day_of_month (str), month (str), "
-        "   day_of_week (str)\n"
-        "   - Each field uses standard cron syntax:\n"
-        "     * `*` matches any valid value\n"
-        "     * `*/N` matches every Nth value (e.g., `*/15` for every 15 minutes)\n"
-        "     * `N-M` matches any value in the range N through M inclusive\n"
-        "     * `N` matches exactly the value N\n"
-        "     * Comma-separated values like `1,15` are NOT required for this version\n"
-        "   - Include a class method `from_string(cls, expr: str) -> CronExpression` "
-        "   that splits on whitespace and validates each field has exactly one of the "
-        "   four supported formats. Raise ValueError with a descriptive message if "
-        "   any field is empty, has too many tokens, or contains invalid numbers.\n\n"
-        "2. **ScheduledTask dataclass**:\n"
-        "   - Fields:\n"
-        "     * name (str): unique identifier for the task\n"
-        "     * cron (CronExpression): the schedule to follow\n"
-        "     * handler (callable): the function to invoke when the schedule fires\n"
-        "     * args (tuple): positional arguments to pass the handler, default ()\n"
-        "     * enabled (bool): whether the task is active, default True\n"
-        "   - Include `__repr__` that shows name, cron string, and enabled status\n\n"
-        "3. **Scheduler class**:\n"
-        "   - `__init__()` — initializes an empty internal list of ScheduledTask "
-        "   objects and a threading.Lock for thread safety\n"
-        "   - `add_task(task: ScheduledTask) -> None` — thread-safe insertion into "
-        "   the internal list. If a task with the same name already exists, raise "
-        "   ValueError('Task already exists: <name>')\n"
-        "   - `remove_task(name: str) -> bool` — removes by name, returns True if "
-        "   found and removed, False otherwise\n"
-        "   - `enable_task(name: str) -> bool` — sets enabled=True, returns True "
-        "   if found\n"
-        "   - `disable_task(name: str) -> bool` — sets enabled=False, returns True "
-        "   if found\n"
-        "   - `run_now(name: str) -> bool` — immediately invokes the handler for "
-        "   the named task with its stored args. Returns True if found, False "
-        "   otherwise\n"
-        "   - `start() -> None` — launches one background threading.Thread per "
-        "   enabled task. Each thread runs `_scheduler_loop` for that task\n"
-        "   - `stop() -> None` — sets an internal threading.Event to signal all "
-        "   threads to exit, then joins each thread with a 5-second timeout\n"
-        "   - `_scheduler_loop(task: ScheduledTask) -> None` — infinite loop that "
-        "   checks every 30 seconds whether the current time matches the task's "
-        "   cron expression. On match, calls the handler in a try/except block, "
-        "   logging any exceptions to stdout\n"
-        "   - `_is_match(field: str, value: int) -> bool` — core matching logic:\n"
-        "     * `*` returns True for any value\n"
-        "     * `*/N` returns True when value modulo N equals zero\n"
-        "     * `N-M` returns True when N <= value <= M\n"
-        "     * exact number: converts field to int and compares with value\n"
-        "     * Raises ValueError for unrecognized field formats\n"
-        "   - `_current_cron() -> dict` — returns a dict mapping field names to "
-        "   their current integer values (minute, hour, day_of_month, month, "
-        "   day_of_week) using datetime.datetime.now()\n\n"
-        "4. **Utility function**:\n"
-        "   - `next_run_times(cron: CronExpression, count: int = 5) -> list[datetime]` "
-        "   that computes and returns the next *count* datetime objects after the "
-        "   current time that would match the cron expression. Iterate minute-by-"
-        "   minute from now upward. Do NOT modify the input cron expression. "
-        "   Stop once *count* matches are found or after checking 525600 minutes "
-        "   (one year) to prevent infinite loops.\n\n"
-        "=== Component 2: Demo Block ===\n\n"
-        "The `if __name__ == '__main__':` block must:\n"
-        "1. Parse two cron expressions: `*/5 * * * *` (every 5 minutes) and "
-        "   `0 9 * * *` (daily at 9 AM)\n"
-        "2. Create two ScheduledTask objects with simple lambda handlers that "
-        "   print a timestamped message\n"
-        "3. Create a Scheduler, add both tasks, start it, sleep for 3 seconds, "
-        "   then print all registered task names and their cron strings, and "
-        "   finally call stop()\n"
-        "4. Call next_run_times on the first cron expression with count=3 and "
-        "   print the results\n\n"
-        "=== Quality Requirements ===\n\n"
-        "- All classes and functions must have docstrings\n"
-        "- Type hints on all public methods, properties, and function signatures\n"
-        "- Thread-safe task registration and lifecycle management using threading.Lock\n"
-        "- Proper error handling: ValueError for invalid cron expressions and "
-        "   duplicate task names, KeyError for unknown task names\n"
-        "- The `_is_match` method must correctly handle all four cron field formats "
-        "   (*, */N, N-M, and exact number)\n"
-        "- Use threading.Timer or threading.Thread for background scheduling (no "
-        "   external libraries)\n"
-        "- Code must be PEP 8 compliant with meaningful variable names\n"
-        "- The entire implementation must fit in this single module file\n\n"
-        "=== Implementation Notes ===\n\n"
-        "- Use `datetime.datetime.now()` for current time\n"
-        "- Use `datetime.timedelta(minutes=1)` for time arithmetic\n"
-        "- Use `functools.wraps` if wrapping the handler for logging\n"
-        "- Do NOT use the `schedule` or `APScheduler` third-party packages\n"
-        "- Use `threading.Event()` for clean thread shutdown signaling\n"
-        "- Document the cron field validation rules in a module-level docstring"
-    ),
-    "large": (
-        "You are designing a lightweight distributed task queue system for a solo "
-        "developer who needs something between a simple in-process queue and a full "
-        "Redis-backed Celery setup. The system must handle background job processing "
-        "for a microservice that sends emails, generates PDF reports, processes "
-        "payments, and runs analytics. Implement everything in a single Python module "
-        "called `mini_queue` using only the Python standard library "
-        "(threading, queue, json, uuid, datetime, logging, dataclasses, enum, "
-        "typing, http.server, contextlib).\n\n"
-        "=== Architecture Overview ===\n\n"
-        "The system consists of four major layers:\n"
-        "1. **Task model layer** — serializable job descriptions with status tracking\n"
-        "2. **Queue backend layer** — in-memory priority queue with thread safety\n"
-        "3. **Worker pool layer** — threaded consumers that process tasks\n"
-        "4. **HTTP API layer** — optional REST-like interface for remote task submission\n\n"
-        "=== Component 1: Task Model ===\n\n"
-        "1. **TaskStatus** (enum.IntEnum):\n"
-        "   Define the following statuses with these integer values:\n"
-        "   - PENDING = 0\n"
-        "   - QUEUED = 1\n"
-        "   - RUNNING = 2\n"
-        "   - COMPLETED = 3\n"
-        "   - FAILED = 4\n"
-        "   - RETRY = 5\n"
-        "   Include a docstring explaining that this is an IntEnum so it can be "
-        "serialized to integers in JSON. Document what each status means in terms "
-        "of the task lifecycle.\n\n"
-        "2. **TaskRecord** (dataclass):\n"
-        "   Fields with detailed type annotations:\n"
-        "   - task_id (str): UUID4-generated unique identifier, set in __post_init__\n"
-        "   - name (str): logical task name (e.g., 'email_send', 'pdf_generate')\n"
-        "   - payload (dict): JSON-serializable input data passed to the handler\n"
-        "   - status (TaskStatus): current status, defaults to TaskStatus.PENDING\n"
-        "   - priority (int): 1=lowest to 10=highest, default 5\n"
-        "   - result (dict | None): output data after successful completion, default None\n"
-        "   - error (str | None): error message if FAILED, default None\n"
-        "   - created_at (str): ISO format timestamp from datetime.datetime.utcnow\n"
-        "   - updated_at (str): ISO format timestamp, updated on each status change\n"
-        "   - attempts (int): number of processing attempts, default 0\n"
-        "   - max_retries (int): maximum retry attempts before permanent failure, "
-        "   default 3\n"
-        "   - worker (str | None): name of the worker that last processed it, "
-        "   default None\n\n"
-        "   Methods (each with docstring and type hints):\n"
-        "   - `to_dict() -> dict`: serialize all fields to a plain dict suitable "
-        "   for json.dumps. Must NOT include any non-serializable objects.\n"
-        "   - `from_dict(data: dict) -> TaskRecord`: class method that deserializes "
-        "   from a dict. Must convert status back to TaskStatus enum. Raise KeyError "
-        "   if required fields are missing.\n"
-        "   - `mark_running(worker: str) -> None`: set status to RUNNING, update "
-        "   worker name and updated_at timestamp\n"
-        "   - `mark_completed(result: dict) -> None`: set status to COMPLETED, "
-        "   store result dict, update updated_at. Raise RuntimeError if status is "
-        "   not RUNNING.\n"
-        "   - `mark_failed(error: str) -> None`: set status to FAILED, store error "
-        "   message, increment attempts, update updated_at\n"
-        "   - `should_retry() -> bool`: return True if attempts < max_retries\n\n"
-        "3. **TaskRecord validation**:\n"
-        "   In `__post_init__`, validate that:\n"
-        "   - priority is between 1 and 10 inclusive, raise ValueError otherwise\n"
-        "   - name is a non-empty string, raise ValueError otherwise\n"
-        "   - payload is a dict, raise TypeError otherwise\n"
-        "   Generate task_id using uuid.uuid4().hex if not provided\n"
-        "   Set created_at and updated_at using datetime.datetime.utcnow().isoformat()\n\n"
-        "=== Component 2: Queue Backend ===\n\n"
-        "4. **PriorityQueueBackend** class:\n"
-        "   Internal state:\n"
-        "   - `_tasks`: dict mapping task_id (str) to TaskRecord\n"
-        "   - `_lock`: threading.Lock for thread-safe operations\n"
-        "   - `_condition`: threading.Condition(_lock) for blocking dequeue\n"
-        "   - `_queue_order`: list of task_ids in priority order (high priority first)\n\n"
-        "   Methods:\n"
-        "   - `__init__()`: initialize all internal state\n"
-        "   - `enqueue(task: TaskRecord) -> str`: "
-        "   - Validate task status is PENDING, raise ValueError otherwise\n"
-        "   - Set task status to QUEUED, update updated_at\n"
-        "   - Insert task_id into _queue_order maintaining priority sort (highest first)\n"
-        "   - Notify one waiting thread via _condition.notify_one()\n"
-        "   - Return task.task_id\n"
-        "   - `dequeue() -> TaskRecord | None`: "
-        "   - Acquire _lock\n"
-        "   - While _queue_order is empty AND no shutdown signal, call _condition.wait(timeout=1.0)\n"
-        "   - If _queue_order is empty after waking, return None\n"
-        "   - Pop highest priority task_id from _queue_order\n"
-        "   - Look up TaskRecord, verify status is QUEUED\n"
-        "   - Return the task (caller must mark it RUNNING)\n"
-        "   - `get_task(task_id: str) -> TaskRecord`: "
-        "   - Acquire _lock, look up task_id in _tasks\n"
-        "   - Raise KeyError(f'Task {task_id} not found') if missing\n"
-        "   - `list_tasks(status: TaskStatus | None = None) -> list[TaskRecord]`: "
-        "   - Acquire _lock\n"
-        "   - If status is None, return all tasks sorted by priority desc then created_at\n"
-        "   - Otherwise filter by status, same sorting\n"
-        "   - Return a copy list to avoid external mutation\n"
-        "   - `retry_task(task_id: str) -> bool`: "
-        "   - Acquire _lock\n"
-        "   - Get task, if status is not FAILED return False\n"
-        "   - If task.should_retry(), set status back to PENDING, re-enqueue\n"
-        "   - Return True if retried, False otherwise\n"
-        "   - `stats() -> dict`: "
-        "   - Acquire _lock\n"
-        "   - Return {status.name: count} for each TaskStatus value\n"
-        "   - Include a '_total' key with total task count\n\n"
-        "=== Component 3: Worker Pool ===\n\n"
-        "5. **HandlerRegistry** class:\n"
-        "   Internal state:\n"
-        "   - `_handlers`: dict mapping task_name (str) to callable handler\n"
-        "   - `_lock`: threading.Lock\n\n"
-        "   Methods:\n"
-        "   - `register(task_name: str, handler: callable) -> None`: "
-        "   - Validate task_name is non-empty string\n"
-        "   - Store handler under task_name, raise ValueError if duplicate\n"
-        "   - `get_handler(task_name: str) -> callable`: "
-        "   - Return registered handler, raise KeyError if not found\n"
-        "   - `list_handlers() -> dict[str, callable]`: "
-        "   - Return a shallow copy of the internal handlers dict\n"
-        "   - `has_handler(task_name: str) -> bool`: "
-        "   - Return True if handler is registered for task_name\n\n"
-        "6. **Worker** class:\n"
-        "   Internal state:\n"
-        "   - `_name`: str — unique worker identifier (e.g., 'worker-0')\n"
-        "   - `_backend`: PriorityQueueBackend reference\n"
-        "   - `_registry`: HandlerRegistry reference\n"
-        "   - `_logger`: logging.Logger configured for this worker\n"
-        "   - `_running`: threading.Event — True while the worker is active\n"
-        "   - `_thread`: threading.Thread | None — the processing thread\n\n"
-        "   Methods:\n"
-        "   - `__init__(name: str, backend: PriorityQueueBackend, registry: HandlerRegistry)`: "
-        "   - Validate name is non-empty\n"
-        "   - Set up logging: logger = logging.getLogger(f'worker.{name}'), "
-        "   set level to logging.INFO, add a StreamHandler with format "
-        "   '[%(name)s] %(levelname)s: %(message)s'\n"
-        "   - Store backend and registry references\n"
-        "   - Initialize _running to False, _thread to None\n"
-        "   - `start() -> None`: "
-        "   - If _running is True, return (already started)\n"
-        "   - Set _running to True\n"
-        "   - Create and start a new threading.Thread targeting _process_loop\n"
-        "   - Store thread reference in _thread\n"
-        "   - Log 'Worker started'\n"
-        "   - `stop() -> None`: "
-        "   - Set _running to False\n"
-        "   - Notify _condition on backend to wake any blocked dequeue\n"
-        "   - If _thread is not None, join with timeout=10 seconds\n"
-        "   - Log 'Worker stopped'\n"
-        "   - `_process_loop() -> None`: "
-        "   - Main processing loop: while self._running:\n"
-        "     - Call task = self._backend.dequeue()\n"
-        "     - If task is None, continue (no tasks available)\n"
-        "     - Call self._handle_task(task)\n"
-        "   - `_handle_task(task: TaskRecord) -> None`: "
-        "   - Increment task.attempts\n"
-        "   - Mark task as RUNNING with worker name\n"
-        "   - Log 'Processing task {task_id} ({name}, attempt {attempts})'\n"
-        "   - Try:\n"
-        "     - Get handler from registry for task.name\n"
-        "     - Call handler(task.payload)\n"
-        "     - Mark task as COMPLETED with {\"output\": result}\n"
-        "     - Log 'Task {task_id} completed successfully'\n"
-        "   - Except Exception as exc:\n"
-        "     - Mark task as FAILED with str(exc)\n"
-        "     - If task.should_retry():\n"
-        "       - Set task status to RETRY\n"
-        "       - Log 'Task {task_id} marked for retry ({attempts}/{max_retries})'\n"
-        "     - Else:\n"
-        "       - Log 'Task {task_id} permanently failed: {error}'\n\n"
-        "7. **TaskQueue** facade class:\n"
-        "   Internal state:\n"
-        "   - `_backend`: PriorityQueueBackend\n"
-        "   - `_registry`: HandlerRegistry\n"
-        "   - `_workers`: list[Worker]\n"
-        "   - `_lock`: threading.Lock for worker list management\n\n"
-        "   Methods:\n"
-        "   - `__init__()`: create backend and registry, initialize empty workers list\n"
-        "   - `submit(name: str, payload: dict, priority: int = 5) -> str`: "
-        "   - Create a TaskRecord with the given name, payload, and priority\n"
-        "   - Enqueue the task, return task_id\n"
-        "   - `register_handler(task_name: str, handler: callable) -> None`: "
-        "   - Register a handler in the registry\n"
-        "   - `create_worker(name: str) -> Worker`: "
-        "   - Create a Worker instance but do NOT start it\n"
-        "   - `start_workers(count: int = 3) -> list[Worker]`: "
-        "   - Create and start *count* workers with names 'worker-0', 'worker-1', etc.\n"
-        "   - Store in _workers list under lock protection\n"
-        "   - Return the list of started workers\n"
-        "   - `get_result(task_id: str) -> dict | None`: "
-        "   - Get task from backend, if status is COMPLETED return result dict\n"
-        "   - Return None if task not found or not completed\n"
-        "   - `get_stats() -> dict`: delegate to backend.stats()\n"
-        "   - `get_task_status(task_id: str) -> TaskStatus`: "
-        "   - Get task and return its current status\n"
-        "   - Raise KeyError if task not found\n"
-        "   - `shutdown() -> None`: "
-        "   - Acquire _lock, stop all workers, clear _workers list\n"
-        "   - `retry_failed(task_id: str) -> bool`: "
-        "   - Delegate to backend.retry_task(task_id)\n\n"
-        "=== Component 4: HTTP API ===\n\n"
-        "8. **APIHandler** (inherits http.server.BaseHTTPRequestHandler):\n"
-        "   Class attribute:\n"
-        "   - `task_queue: TaskQueue` — set by create_app before serving\n\n"
-        "   Methods:\n"
-        "   - `__init__(self, request, client_address, server)`: call super().__init__\n"
-        "   - `log_message(format, *args) -> None`: override to suppress default logging\n"
-        "   - `_get_body() -> bytes`: read Content-Length header, read and return body\n"
-        "   - `send_json(status_code: int, data: dict) -> None`: "
-        "   - Set response headers: Content-Type to application/json, "
-        "   Content-Length to len of encoded body\n"
-        "   - Write json.dumps(data) encoded as UTF-8\n"
-        "   - `do_GET() -> None`: "
-        "   - Parse path using urllib.parse.urlparse\n"
-        "   - If path == '/stats': get stats from task_queue, send 200 with JSON\n"
-        "   - If path starts with '/tasks/': extract task_id, get result, "
-        "   send 200 with result dict or 404 if not found\n"
-        "   - Else: send 404 with error message\n"
-        "   - `do_POST() -> None`: "
-        "   - Parse path using urllib.parse.urlparse\n"
-        "   - If path == '/submit': read body, parse JSON, extract name/payload/priority, "
-        "   submit to task_queue, send 201 with {task_id, status}\n"
-        "   - If body is invalid JSON: send 400 with error message\n"
-        "   - Else: send 404 with error message\n\n"
-        "9. **create_app(task_queue: TaskQueue, host: str, port: int) -> None**:\n"
-        "   - Set APIHandler.task_queue = task_queue\n"
-        "   - Create http.server.HTTPServer((host, port), APIHandler)\n"
-        "   - Print 'MiniQueue server running on http://{host}:{port}'\n"
-        "   - Call server.serve_forever()\n\n"
-        "=== Demo Block ===\n\n"
-        "The `if __name__ == '__main__':` block must:\n"
-        "1. Create a TaskQueue instance\n"
-        "2. Register two handlers:\n"
-        "   a) `echo` handler — returns {\"echoed\": payload, \"processed_by\": \"echo-worker\"}\n"
-        "      The handler should accept a dict and return it with an added \"_processed_by\" key\n"
-        "   b) `uppercase` handler — uppercases all string values in the payload dict\n"
-        "      Uses a recursive approach to handle nested dicts and lists\n"
-        "3. Start 2 workers using start_workers(2)\n"
-        "4. Submit 5 tasks with varying priorities:\n"
-        "   - Task 1: name='echo', payload={'message': 'hello'}, priority=3\n"
-        "   - Task 2: name='uppercase', payload={'name': 'world'}, priority=7\n"
-        "   - Task 3: name='echo', payload={'message': 'world'}, priority=5\n"
-        "   - Task 4: name='uppercase', payload={'greeting': 'hi'}, priority=10\n"
-        "   - Task 5: name='echo', payload={'message': 'test'}, priority=1\n"
-        "5. Wait up to 10 seconds for all tasks to reach COMPLETED status:\n"
-        "   - Poll every 0.5 seconds\n"
-        "   - Check each task's status via get_task_status\n"
-        "6. Print final stats from get_stats()\n"
-        "7. Print results for each task ID via get_result\n"
-        "8. Shutdown workers via shutdown()\n\n"
-        "=== Quality Requirements ===\n\n"
-        "- ALL classes must have comprehensive docstrings explaining their purpose\n"
-        "- Type hints on ALL public methods, properties, constructor parameters, "
-        "   and function signatures\n"
-        "- Thread-safe operations using threading.Lock and threading.Condition\n"
-        "- Proper error handling throughout with descriptive error messages\n"
-        "- Use dataclasses for all data models (TaskRecord)\n"
-        "- Use enum.IntEnum for TaskStatus with documented values\n"
-        "- Use the logging module for worker activity (configured per-worker)\n"
-        "- Code must be PEP 8 compliant with meaningful variable names\n"
-        "- Handle edge cases:\n"
-        "  - Empty queue dequeue (blocking with timeout)\n"
-        "  - Invalid JSON in HTTP requests (400 response)\n"
-        "  - Unknown task names in HandlerRegistry (KeyError)\n"
-        "  - Concurrent worker access to shared state (lock protection)\n"
-        "  - Duplicate task registration in HandlerRegistry (ValueError)\n"
-        "  - Invalid priority values outside 1-10 range (ValueError)\n"
-        "- The entire implementation must fit in this single module file\n"
-        "- Do NOT use any third-party libraries\n"
-        "- Use uuid.uuid4().hex for task IDs\n"
-        "- Use datetime.datetime.utcnow().isoformat() for timestamps\n"
-        "- Use json.dumps and json.loads for serialization\n"
-        "- Workers must use threading.Thread, NOT multiprocessing\n"
-        "- Use contextlib.closing or try/finally for worker cleanup\n"
-        "- Document the priority ordering convention in a module-level comment\n"
-        "- Include a module docstring describing the mini_queue package purpose"
-    ),
-}
+# ------------------------------------------------------------------
+# Fixture loader
+# ------------------------------------------------------------------
+
+def _load_prompt(name: str) -> str:
+    """Load the speed prompt fixture for *name* from disk.
+
+    Args:
+        name: One of ``"small"``, ``"medium"``, or ``"large"``.
+
+    Returns:
+        The prompt text.
+
+    Raises:
+        ValueError: If the name is unknown or the file cannot be read.
+    """
+    filename = PROMPT_FILES.get(name)
+    if filename is None:
+        raise ValueError(
+            f"Unknown evaluation speed prompt: {name!r}. "
+            f"Expected one of {sorted(PROMPT_FILES)}."
+        )
+
+    # Resolve relative to this package's directory
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(pkg_dir)
+    fixture_path = os.path.join(project_root, "tasks", "speed_prompts", filename)
+
+    if not os.path.isfile(fixture_path):
+        raise FileNotFoundError(
+            f"Speed prompt fixture not found for {name!r}: {fixture_path}"
+        )
+
+    with open(fixture_path, "r", encoding="utf-8") as fh:
+        return fh.read()
+
+
+# ------------------------------------------------------------------
+# Cached prompts (loaded on first access)
+# ------------------------------------------------------------------
+
+_SPEED_PROMPTS_CACHE: Dict[str, str] | None = None
+
+
+def _get_speed_prompts() -> Dict[str, str]:
+    """Return a cached dict of all speed prompts, loading from fixtures once."""
+    global _SPEED_PROMPTS_CACHE
+    if _SPEED_PROMPTS_CACHE is None:
+        _SPEED_PROMPTS_CACHE = {}
+        for name in PROMPT_FILES:
+            _SPEED_PROMPTS_CACHE[name] = _load_prompt(name)
+    return _SPEED_PROMPTS_CACHE
+
+
+# Public accessor -- use this instead of direct dict access
+SPEED_PROMPTS: Dict[str, str] = _get_speed_prompts()
 
 
 def get_speed_prompt(name: str) -> str:
     """Return the canonical speed prompt for the given size label.
+
+    Prompts are loaded from Markdown fixture files on first call and cached
+    thereafter.
 
     Args:
         name: One of ``"small"``, ``"medium"``, or ``"large"``.
@@ -442,9 +123,11 @@ def get_speed_prompt(name: str) -> str:
     Raises:
         ValueError: If *name* is not a recognized prompt label.
     """
-    if name not in SPEED_PROMPTS:
+    if name not in PROMPT_FILES:
         raise ValueError(
             f"Unknown evaluation speed prompt: {name!r}. "
-            f"Expected one of {sorted(SPEED_PROMPTS)}."
+            f"Expected one of {sorted(PROMPT_FILES)}."
         )
+    # Ensure cache is populated
+    _get_speed_prompts()
     return SPEED_PROMPTS[name]
