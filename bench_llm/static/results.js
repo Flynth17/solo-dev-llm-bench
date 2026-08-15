@@ -93,113 +93,116 @@ if (envFilterEl) {
 // Render Results (Raw Speed / Past Runs)
 // ---------------------------------------------------------------------------
 function renderResults() {
-    resultsPanel.classList.remove("hidden");
-    chartsPanel.classList.remove("hidden");
-    emptyState.classList.add("hidden");
-    resultsContainer.innerHTML = "";
+    // Only render Raw Speed content when Raw Speed view is active
+    if (activeView !== "raw") {
+        return;
+    }
 
-    if (filteredRuns.length === 0) {
+    var runs = filteredRuns;
+
+    // Update count
+    if (resultsCountEl) {
+        if (runs.length === 0) {
+            resultsCountEl.textContent = "";
+        } else {
+            // Group by run_id for counting
+            var runIds = {};
+            for (var i = 0; i < runs.length; i++) {
+                var rid = runs[i].run_id || "";
+                if (rid) runIds[rid] = true;
+            }
+            resultsCountEl.textContent = runs.length + " entries across " + Object.keys(runIds).length + " run" + (Object.keys(runIds).length !== 1 ? "s" : "");
+        }
+    }
+
+    if (runs.length === 0) {
         resultsPanel.classList.add("hidden");
         chartsPanel.classList.add("hidden");
         emptyState.classList.remove("hidden");
         return;
     }
 
-    // Group by run_id
+    emptyState.classList.add("hidden");
+    resultsPanel.classList.remove("hidden");
+    resultsContainer.innerHTML = "";
+
+    // Group by run_id (newest first — already ordered from backend)
     var groups = {};
     var order = [];
-    for (var i = 0; i < filteredRuns.length; i++) {
-        var run = filteredRuns[i];
+    for (var i = 0; i < runs.length; i++) {
+        var run = runs[i];
         var rid = run.run_id || "";
         if (!rid) continue;
         if (!groups[rid]) {
-            groups[rid] = { timestamp: run.timestamp || "", model: run.model_key || run.model_display_name || "", runs: [] };
+            groups[rid] = { runs: [], timestamp: run.timestamp || "", model: run.model_key || run.model_display_name || "", hardware_label: run.hardware_label || "", execution_environment: run.execution_environment || "", connection_type: run.connection_type || "" };
             order.push(rid);
         }
         groups[rid].runs.push(run);
     }
 
-    // Sort by timestamp descending
-    order.sort(function (a, b) {
-        var ta = groups[a].timestamp || "";
-        var tb = groups[b].timestamp || "";
-        return tb.localeCompare(ta);
-    });
-
-    for (var gi = 0; gi < order.length; gi++) {
-        var rid = order[gi];
+    // Render each run group
+    for (var idx = 0; idx < order.length; idx++) {
+        var rid = order[idx];
         var group = groups[rid];
-        var card = document.createElement("div");
-        card.className = "benchmark-run-card";
-        card.setAttribute("data-run-id", rid);
+        var div = document.createElement("div");
+        div.className = "history-run";
 
-        // Header
+        // Header with badges
         var header = document.createElement("div");
-        header.className = "run-header";
+        header.className = "history-run-header";
 
-        var modelSpan = document.createElement("span");
-        modelSpan.className = "badge badge-model";
-        modelSpan.textContent = group.model;
-        modelSpan.title = "Model";
-        header.appendChild(modelSpan);
-
-        var tsSpan = document.createElement("span");
-        tsSpan.className = "run-timestamp";
-        tsSpan.textContent = formatTimestamp(group.timestamp);
-        header.appendChild(tsSpan);
-
-        card.appendChild(header);
-
-        // Runs in this group
-        var runs = group.runs;
-        for (var ri = 0; ri < runs.length; ri++) {
-            var r = runs[ri];
-            var row = document.createElement("div");
-            row.className = "run-row" + (r.cold_or_warm === "warm" ? " warm" : " cold");
-
-            var modelLabel = document.createElement("span");
-            modelLabel.className = "run-model";
-            modelLabel.textContent = r.model_display_name || r.model_key || "";
-            row.appendChild(modelLabel);
-
-            var tpsSpan = document.createElement("span");
-            tpsSpan.className = "run-tps";
-            tpsSpan.textContent = fmt2(r.tokens_per_second) + " tok/s";
-            row.appendChild(tpsSpan);
-
-            var coldWarm = document.createElement("span");
-            coldWarm.className = "badge badge-" + (r.cold_or_warm === "warm" ? "warm" : "cold");
-            coldWarm.textContent = r.cold_or_warm === "warm" ? "Warm" : "Cold";
-            row.appendChild(coldWarm);
-
-            var ttftSpan = document.createElement("span");
-            ttftSpan.className = "run-ttft";
-            ttftSpan.textContent = "TTFT: " + formatTtft(r.ttft_seconds);
-            row.appendChild(ttftSpan);
-
-            card.appendChild(row);
+        var badges = "";
+        if (group.model) {
+            badges += '<span class="badge badge-model">' + escapeHtml(group.model) + '</span>';
+        }
+        if (group.hardware_label) {
+            badges += '<span class="badge badge-hardware">' + escapeHtml(group.hardware_label) + '</span>';
+        }
+        if (group.execution_environment) {
+            badges += '<span class="badge badge-env">' + escapeHtml(group.execution_environment) + '</span>';
+        }
+        if (group.connection_type && group.connection_type !== "None") {
+            badges += '<span class="badge badge-conn">' + escapeHtml(group.connection_type) + '</span>';
         }
 
-        // Actions
-        var actions = document.createElement("div");
-        actions.className = "run-actions";
+        // Build delete button HTML
+        var deleteBtnHtml = '<button class="delete-btn" title="Delete this run" data-run-id="' + escapeHtml(rid) + '" data-model="' + escapeHtml(group.model) + '" data-timestamp="' + escapeHtml(group.timestamp) + '">&#x1F5D1;</button>';
 
-        var delBtn = document.createElement("button");
-        delBtn.className = "delete-btn";
-        delBtn.textContent = "Delete";
-        delBtn.title = "Delete this benchmark run";
-        delBtn.setAttribute("data-run-id", rid);
-        delBtn.setAttribute("data-model", group.model);
-        delBtn.setAttribute("data-timestamp", group.timestamp);
-        actions.appendChild(delBtn);
+        header.innerHTML = '<span>Run #' + (idx + 1) + ' <span class="timestamp">(' + formatTimestamp(group.timestamp) + ')</span></span>' + badges + deleteBtnHtml;
+        div.appendChild(header);
 
-        card.appendChild(actions);
-        resultsContainer.appendChild(card);
-    }
+        // Compute aggregates
+        var tpsValues = group.runs.filter(function (r) { return r.tokens_per_second > 0; }).map(function (r) { return r.tokens_per_second; });
+        var warmRuns = group.runs.filter(function (r) { return r.cold_or_warm === "warm"; });
+        var warmTps = warmRuns.filter(function (r) { return r.tokens_per_second > 0; }).map(function (r) { return r.tokens_per_second; });
+        var warmTtfts = warmRuns.map(function (r) { return parseFloat(r.ttft_seconds) || 0; });
 
-    // Update results count
-    if (resultsCountEl) {
-        resultsCountEl.textContent = "Showing " + filteredRuns.length + " result(s) from " + order.length + " run(s)";
+        var aggHtml = '<div class="aggregate" style="margin-top:0.5rem">';
+        if (tpsValues.length > 0) {
+            var avg = tpsValues.reduce(function (a, b) { return a + b; }, 0) / tpsValues.length;
+            aggHtml += '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + avg.toFixed(2) + '</div></div>';
+            aggHtml += '<div class="aggregate-item"><div class="label">Min tok/s</div><div class="value">' + Math.min.apply(null, tpsValues).toFixed(2) + '</div></div>';
+            aggHtml += '<div class="aggregate-item"><div class="label">Max tok/s</div><div class="value">' + Math.max.apply(null, tpsValues).toFixed(2) + '</div></div>';
+        } else {
+            aggHtml += '<span class="unavailable">No data</span>';
+        }
+        aggHtml += '</div>';
+
+        var warmHtml = "";
+        if (warmTps.length > 0) {
+            var warmAvg = warmTps.reduce(function (a, b) { return a + b; }, 0) / warmTps.length;
+            var warmAvgTtft = warmTtfts.reduce(function (a, b) { return a + b; }, 0) / warmTtfts.length;
+            warmHtml = '<div class="warm-aggregate" style="margin-top:0.5rem">' +
+                '<div class="aggregate-item"><div class="label">Warm Avg</div><div class="value">' + warmAvg.toFixed(2) + ' tok/s</div></div>' +
+                '<div class="aggregate-item"><div class="label">Warm TTFT</div><div class="value">' + formatTtft(warmAvgTtft) + '</div></div>' +
+            '</div>';
+        } else {
+            warmHtml = '<div class="warm-aggregate" style="margin-top:0.5rem"><span class="unavailable">Unavailable</span></div>';
+        }
+
+        div.insertAdjacentHTML("beforeend", aggHtml);
+        div.insertAdjacentHTML("beforeend", warmHtml);
+        resultsContainer.appendChild(div);
     }
 
     // Render historical comparison chart
