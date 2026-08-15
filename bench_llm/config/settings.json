@@ -3,7 +3,7 @@
     "model": "glm-4.7-flash",
     "iterations": 5,
     "prompt": "Write a short story about a robot learning to feel emotions.",
-    "max_tokens": 1024,
+    "max_tokens": 100000,
     "temperature": 0,
     "hardware_label": "",
     "execution_environment": "Local",

@@ -39,10 +39,10 @@ async def run_benchmark_endpoint(config: dict):
     # Validate max_tokens
     try:
         max_tokens = int(config.get("max_tokens", 500))
-        if max_tokens < 1 or max_tokens > 10000:
+        if max_tokens < 1 or max_tokens > 10000000:
             raise ValueError
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="max_tokens must be an integer between 1 and 10000")
+        raise HTTPException(status_code=400, detail="max_tokens must be an integer between 1 and 10000000")
 
     # Validate temperature
     try:
