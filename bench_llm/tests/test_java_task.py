@@ -576,3 +576,171 @@ class TestRunJavaCorrectnessTask:
         # List output will be joined, so the code won't be valid Java
         # but it should not crash
         assert result.task_name == "java_correctness"
+
+
+# ------------------------------------------------------------------
+# Test 14: LM Studio reasoning/message block extraction (regression A-G)
+# ------------------------------------------------------------------
+
+def _reasoning_blocks_response():
+    """Realistic LM Studio chat response: reasoning block(s) + final message."""
+    return [
+        {"type": "reasoning", "content": "thinking about the bugs..."},
+        {"type": "message", "content": _correct_code()},
+    ]
+
+
+class TestReasoningMessageExtraction:
+    """Regression tests for LM Studio reasoning-capable response shapes.
+
+    body["output"] may be a list of blocks:
+      [{"type": "reasoning", "content": "<thinking>"},
+       {"type": "message",   "content": "<final Java source>"}]
+    normalize_llm_output() must return ONLY the final message content and
+    never leak Python dict repr text into generated_code.
+    """
+
+    # A) reasoning + message -> only the Java message content
+    def test_reasoning_plus_message_returns_only_java(self):
+        result = normalize_llm_output(_reasoning_blocks_response())
+        assert "thinking about the bugs" not in result
+        assert "public class Solution" in result
+        assert result == _correct_code().strip()
+
+    # B) multiple reasoning blocks followed by message -> last message only
+    def test_multiple_reasoning_then_message(self):
+        response = [
+            {"type": "reasoning", "content": "first thinking chunk"},
+            {"type": "reasoning", "content": "second thinking chunk"},
+            {"type": "message", "content": _correct_code()},
+        ]
+        result = normalize_llm_output(response)
+        assert "first thinking chunk" not in result
+        assert "second thinking chunk" not in result
+        assert result == _correct_code().strip()
+
+    # C) reasoning only, no message -> no dict repr leakage
+    def test_reasoning_only_no_dict_repr(self):
+        response = [
+            {"type": "reasoning", "content": "I will now produce the code."},
+        ]
+        result = normalize_llm_output(response)
+        assert "{'type':" not in result
+        assert "'type': 'reasoning'" not in result
+        # Safe fallback extracts textual content only.
+        assert "produce the code" in result
+
+    def test_reasoning_only_empty_content_no_dict_repr(self):
+        response = [{"type": "reasoning", "content": ""}]
+        result = normalize_llm_output(response)
+        assert "{'type':" not in result
+        assert result == ""
+
+    # D) existing string output still works
+    def test_string_still_works(self):
+        code = _correct_code()
+        assert normalize_llm_output("  " + code.strip() + "\n") == code.strip()
+
+    # E) existing dict output still works
+    def test_dict_still_works(self):
+        d = {"output": "public class Solution { }"}
+        assert normalize_llm_output(d) == "public class Solution { }"
+
+    # F) existing list-of-strings behavior still works
+    def test_list_of_strings_still_works(self):
+        parts = ["public class Solution {", "}"]
+        result = normalize_llm_output(parts)
+        assert result == "public class Solution {\n}"
+
+    # G) realistic reasoning+message response validates as 7/7, score 1.0
+    def test_reasoning_plus_message_validates_7_of_7(self):
+        from src.java_validator import validate_java_solution
+
+        normalized = normalize_llm_output(_reasoning_blocks_response())
+        generated_code = _strip_fences(normalized)
+        assert "thinking" not in generated_code.lower()
+        assert "{'type':" not in generated_code
+
+        result = validate_java_solution(generated_code)
+        assert result.compile_success is True
+        assert result.passed_tests == 7
+        assert result.total_tests == 7
+        assert result.score == 1.0
+        assert result.passed is True
+
+
+class TestRunJavaReasoningMessageE2E:
+    """End-to-end run_java_correctness_task with LM Studio reasoning shape."""
+
+    @pytest.mark.asyncio
+    async def test_run_with_reasoning_message_blocks_scores_7(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "output": _reasoning_blocks_response(),
+            "stats": {
+                "input_tokens": 389,
+                "total_output_tokens": 594,
+                "tokens_per_second": 62.0,
+                "time_to_first_token_seconds": 0.2,
+            },
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await run_java_correctness_task(
+                lm_studio_url="http://localhost:1234",
+                model="gemma-4-31b-qat",
+                temperature=0.0,
+                max_output_tokens=1024,
+                hardware_label="local",
+                connection_type="local",
+            )
+
+        assert result.passed_tests == 7
+        assert result.total_tests == 7
+        assert result.score == 1.0
+        assert result.compile_success is True
+        # generated_code must contain ONLY the final Java answer, never
+        # reasoning text or dict repr artifacts.
+        assert "public class Solution" in result.generated_code
+        assert "thinking about the bugs" not in result.generated_code
+        assert "{'type':" not in result.generated_code
+
+    @pytest.mark.asyncio
+    async def test_run_with_reasoning_only_no_crash(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "output": [{"type": "reasoning", "content": "still thinking..."}],
+            "stats": {
+                "input_tokens": 389,
+                "total_output_tokens": 594,
+                "tokens_per_second": 62.0,
+                "time_to_first_token_seconds": 0.2,
+            },
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await run_java_correctness_task(
+                lm_studio_url="http://localhost:1234",
+                model="glm-4.7-flash",
+                temperature=0.0,
+                max_output_tokens=1024,
+                hardware_label="local",
+                connection_type="local",
+            )
+
+        # No dict repr contamination; compile fails cleanly (score 0).
+        assert "{'type':" not in result.generated_code
+        assert result.compile_success is False
+        assert result.score == 0.0

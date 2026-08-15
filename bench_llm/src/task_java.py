@@ -58,7 +58,10 @@ def normalize_llm_output(output: Any) -> str:
     Handles:
     - str → returned as-is (trimmed)
     - dict → extracted from 'output', 'text', or 'response' key
-    - list → joined
+    - list/tuple of LM Studio chat blocks ({type, content}) → prefer the LAST
+      block with type == "message" (the final answer), discarding reasoning
+      blocks. Never serialize dict objects via str(dict).
+    - list/tuple of strings → joined
     """
     if isinstance(output, str):
         return output.strip()
@@ -72,17 +75,46 @@ def normalize_llm_output(output: Any) -> str:
                 # Nested dict with text
                 if isinstance(val, dict) and "text" in val:
                     return val["text"].strip()
-        # Fallback: join all string values
+        # Fallback: join all string values only (never str(dict)).
         parts = []
         for v in output.values():
             if isinstance(v, str):
                 parts.append(v)
-        return "\n".join(parts).strip() if parts else str(output)
+        return "\n".join(parts).strip()
 
     if isinstance(output, (list, tuple)):
-        return "\n".join(str(item) for item in output).strip()
+        # LM Studio chat format: list of {"type": ..., "content": ...} blocks.
+        # Search from the END and prefer the LAST block with type == "message"
+        # (the final answer), discarding reasoning/thinking blocks.
+        for item in reversed(list(output)):
+            if isinstance(item, dict) and item.get("type") == "message":
+                content = item.get("content", "")
+                if isinstance(content, str):
+                    return content.strip()
+                # Some endpoints emit content as a list of parts.
+                if isinstance(content, (list, tuple)):
+                    parts = [str(p) for p in content if isinstance(p, (str, int, float))]
+                    return "\n".join(parts).strip()
 
-    return str(output).strip()
+        # No "message" block found: safe fallback that extracts textual content
+        # only. Never serialize dict objects with str(dict). Preserves the old
+        # list-of-strings behavior for non-reasoning responses.
+        parts = []
+        for item in output:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                for key in ("content", "text", "output"):
+                    val = item.get(key)
+                    if isinstance(val, str) and val.strip():
+                        parts.append(val)
+                        break
+        return "\n".join(parts).strip()
+
+    # Last resort: stringify only non-dict scalars to avoid dict repr leakage.
+    if isinstance(output, (int, float)):
+        return str(output).strip()
+    return ""
 
 
 # ------------------------------------------------------------------
