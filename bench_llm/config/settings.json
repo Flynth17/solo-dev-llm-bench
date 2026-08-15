@@ -1,6 +1,6 @@
 {
     "lm_studio_url": "http://localhost:1234",
-    "model": "",
+    "model": "glm-4.7-flash",
     "iterations": 5,
     "prompt": "Write a short story about a robot learning to feel emotions.",
     "max_tokens": 1024,
