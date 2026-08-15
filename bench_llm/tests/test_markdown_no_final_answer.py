@@ -122,13 +122,13 @@ class TestFailureReasonEvaluationMapping(TestCase):
 
     def test_no_final_answer_survives_evaluation_mapping(self):
         """failure_reason='no_final_answer' must be present in correctness_results[0]."""
-        # Simulate what run_markdown_task returns on no_final_answer
+        # Simulate what run_markdown_task returns on no_final_answer (CRITICAL: final_errors = initial_errors)
         md_result = {
             "task_name": "Markdownlint Default",
             "task_type": "markdown",
             "model": "test-model",
             "initial_errors": 6,
-            "final_errors": None,
+            "final_errors": 6,
             "errors_fixed": 0,
             "score": 0.0,
             "passed": False,
@@ -263,6 +263,57 @@ class TestTTFTMapping(TestCase):
         }
 
         self.assertEqual(correctness_row["ttft_seconds"], 0.3421)
+
+    def test_no_final_answer_result_has_complete_scoring_fields(self):
+        """Verify all scoring fields are present and numeric for no_final_answer."""
+        md_result = {
+            "task_name": "Markdownlint Default",
+            "task_type": "markdown",
+            "model": "test-model",
+            "initial_errors": 6,
+            "final_errors": 6,
+            "errors_fixed": 0,
+            "score": 0.0,
+            "passed": False,
+            "output_tokens": 0,
+            "input_tokens": 0,
+            "tokens_per_second": 0.0,
+            "ttft_seconds": None,
+            "wall_time_seconds": 1.23,
+            "corrected_output": "",
+            "corrected_violations": [],
+            "dependency_message": "markdownlint available",
+            "validator_available": True,
+            "failure_reason": "no_final_answer",
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "hardware_label": "",
+            "execution_environment": "Local",
+            "connection_type": "",
+        }
+
+        # Simulate evaluation route mapping
+        correctness_row = {
+            "test_type": "markdown",
+            "test_label": "Markdownlint Default",
+            "score": md_result["score"],
+            "passed": md_result["passed"],
+            "initial_errors": md_result["initial_errors"],
+            "final_errors": md_result["final_errors"],
+            "errors_fixed": md_result["errors_fixed"],
+            "tokens_per_second": md_result["tokens_per_second"],
+            "ttft_seconds": md_result.get("ttft_seconds"),
+            "wall_time_seconds": md_result["wall_time_seconds"],
+            "output_tokens": md_result["output_tokens"],
+            "input_tokens": md_result["input_tokens"],
+            "corrected_violations": md_result.get("corrected_violations", []),
+            "failure_reason": md_result.get("failure_reason"),
+        }
+
+        # All four scoring fields must survive mapping as numeric values
+        self.assertEqual(correctness_row["initial_errors"], 6)
+        self.assertEqual(correctness_row["final_errors"], 6)
+        self.assertEqual(correctness_row["errors_fixed"], 0)
+        self.assertEqual(correctness_row["score"], 0.0)
 
     def test_ttft_none_when_missing(self):
         """When TTFT is missing, it should be None (dashboard shows —)."""

@@ -235,6 +235,7 @@ async def run_markdown_task(
 
     # If no final message found, short-circuit with failure result.
     # initial_errors is already populated from the canonical fixture validation above.
+    # CRITICAL: final_errors = initial_errors (not None) so benchmark result is complete/numeric.
     if not generated_text:
         tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
         return {
@@ -242,7 +243,7 @@ async def run_markdown_task(
             "task_type": TASK_DEFINITION["task_type"],
             "model": model,
             "initial_errors": initial_errors,
-            "final_errors": None,
+            "final_errors": initial_errors,
             "errors_fixed": 0,
             "score": 0.0,
             "passed": False,
