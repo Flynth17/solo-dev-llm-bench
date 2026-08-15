@@ -462,6 +462,9 @@ async function runEvaluation() {
     if (document.getElementById("eval-correctness-java").checked) {
         correctnessTests.push("java");
     }
+    if (document.getElementById("eval-correctness-unsolvable").checked) {
+        correctnessTests.push("unsolvable");
+    }
 
     if (speedTests.length === 0 && correctnessTests.length === 0) {
         showStatus("Select at least one speed test or correctness test.", "error");
