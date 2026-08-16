@@ -432,6 +432,88 @@ if (runEvaluationBtn) {
     runEvaluationBtn.addEventListener("click", runEvaluation);
 }
 
+// ---------------------------------------------------------------------------
+// Evaluation progress bar helpers
+// ---------------------------------------------------------------------------
+
+function showEvalProgress(totalTests, selectedTestNames) {
+    // Build list of test labels with icons for the progress panel
+    var labels = [];
+    var speedLabels = {"small":"Small Prompt","medium":"Medium Prompt","large":"Large Prompt"};
+    var corrLabels = {"markdown":"Markdownlint Default","python":"Python Correctness","java":"Java Correctness","unsolvable":"Unsolvable Recognition"};
+
+    for (var i = 0; i < selectedTestNames.length; i++) {
+        if (speedLabels[selectedTestNames[i]]) {
+            labels.push({name: speedLabels[selectedTestNames[i]], type: "speed"});
+        } else if (corrLabels[selectedTestNames[i]]) {
+            labels.push({name: corrLabels[selectedTestNames[i]], type: "correctness"});
+        } else {
+            labels.push({name: selectedTestNames[i], type: "other"});
+        }
+    }
+
+    var progressHtml = '<div id="eval-progress-bar" class="eval-progress">' +
+        '<h4>Running Evaluation</h4>' +
+        '<div class="eval-progress-status">0 / ' + totalTests + ' completed</div>' +
+        '<div class="progress-bar-container"><div id="eval-progress-fill" class="progress-bar-fill"></div></div>';
+
+    for (var i = 0; i < labels.length; i++) {
+        var statusIcon = '\u23F3'; // hourglass
+        progressHtml += '<div id="eval-step-' + i + '" class="eval-progress-item">' +
+            '<span class="eval-progress-icon">' + statusIcon + '</span> ' +
+            escapeHtml(labels[i].name) + '</div>';
+    }
+
+    progressHtml += '</div>';
+    resultsContainer.innerHTML = progressHtml;
+}
+
+function updateEvalProgress(completedIndex, completedName, isWaiting) {
+    var totalTests = document.querySelectorAll(".eval-progress-item").length;
+    var fill = document.getElementById("eval-progress-fill");
+    var statusEl2 = document.getElementById("eval-progress-status-text");
+    if (!fill) return;
+
+    // Update icon for the just-completed step
+    var completedItem = document.getElementById("eval-step-" + completedIndex);
+    if (completedItem) {
+        completedItem.querySelector(".eval-progress-icon").textContent = '\u2713';
+        completedItem.className = "eval-progress-item eval-progress-done";
+    }
+
+    // Update status text
+    var statusText = document.querySelector(".eval-progress-status");
+    if (statusText) {
+        statusText.textContent = (completedIndex + 1) + ' / ' + totalTests + ' completed';
+    }
+
+    // Show "Preparing next test..." message after last step
+    if (isWaiting && completedIndex < totalTests - 1) {
+        var waitMsg = document.getElementById("eval-progress-wait-msg");
+        if (!waitMsg) {
+            var bar = document.getElementById("eval-progress-bar");
+            if (bar) {
+                waitMsg = document.createElement("div");
+                waitMsg.id = "eval-progress-wait-msg";
+                waitMsg.className = "eval-progress-wait";
+                waitMsg.textContent = "\u23F1 Preparing next test\u2026";
+                bar.appendChild(waitMsg);
+            }
+        } else {
+            waitMsg.style.display = "";
+        }
+    } else {
+        var waitMsg = document.getElementById("eval-progress-wait-msg");
+        if (waitMsg) {
+            waitMsg.style.display = "none";
+        }
+    }
+
+    // Update progress bar fill width
+    var pct = ((completedIndex + 1) / totalTests) * 100;
+    fill.style.width = pct + "%";
+}
+
 async function runEvaluation() {
     var model = modelSelect.value.trim();
     if (!model) {
@@ -486,7 +568,14 @@ async function runEvaluation() {
 
     disableRun(true);
     showStatus("Running evaluation\u2026", "info");
-    hideResults();
+
+    // Combine speed + correctness into a single ordered list for progress tracking
+    var allTests = speedTests.concat(correctnessTests);
+
+    // Show initial progress bar
+    resultsPanel.classList.remove("hidden");
+    hideHistory();
+    showEvalProgress(allTests.length, allTests);
 
     try {
         var resp = await fetch("/api/evaluation/run", {
@@ -503,28 +592,42 @@ async function runEvaluation() {
         var data = await resp.json();
         clearStatus();
 
-        // Display evaluation results
-        resultsPanel.classList.remove("hidden");
+        // Clear progress bar and build results
         resultsContainer.innerHTML = "";
 
-        // Build summary
+        // Build summary with new CORRECTNESS format
         var summary = data.summary || {};
-        var summaryDiv = document.createElement("div");
-        summaryDiv.className = "results-group";
-
-        // Per-test correctness summary rows (data-driven, not hardcoded)
         var allCorrectnessResults = data.correctness_results || [];
-        var passedCount = 0;
+        var speedResultsList = data.speed_results || [];
+
+        // Calculate correctness score: average(score * 100) from selected tests
+        var correctnessScore = null;
+        if (allCorrectnessResults.length > 0) {
+            var totalPct = 0;
+            for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
+                totalPct += (allCorrectnessResults[ci].score || 0) * 100;
+            }
+            correctnessScore = Math.round(totalPct / allCorrectnessResults.length);
+        }
+
+        // Count perfect vs partial: score >= 100 is perfect, < 100 is partial
+        var perfectCount = 0;
+        var partialCount = 0;
+        for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
+            if ((allCorrectnessResults[ci].score || 0) >= 1.0) {
+                perfectCount++;
+            } else {
+                partialCount++;
+            }
+        }
+
+        // Build per-test summary rows (data-driven, not hardcoded)
         var perTestSummaryHtml = "";
         for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
             var cr = allCorrectnessResults[ci];
             var testPct = Math.round((cr.score || 0) * 100);
-            // Always use PASS semantics: score represents percentage PASSED
             var testStatus = 'PASS';
             var testColor = cr.passed ? '#22c55e' : '#ef4444';
-            if (cr.passed) {
-                passedCount++;
-            }
             perTestSummaryHtml +=
                 '<div class="aggregate-item">' +
                     '<div class="label">' + escapeHtml(cr.test_label || cr.test_type).toUpperCase() + '</div>' +
@@ -532,14 +635,19 @@ async function runEvaluation() {
                 '</div>';
         }
 
-        // Tests Passed metric (only if there are correctness results)
-        var totalCount = allCorrectnessResults.length;
-        var testsPassedHtml = "";
-        if (totalCount > 0) {
-            testsPassedHtml =
-                '<div class="aggregate-item">' +
-                    '<div class="label">Tests Passed</div>' +
-                    '<div class="value">' + passedCount + ' / ' + totalCount + '</div>' +
+        // Build summary div
+        var summaryDiv = document.createElement("div");
+        summaryDiv.className = "results-group";
+
+        var correctnessSummaryHtml = "";
+        if (allCorrectnessResults.length > 0) {
+            var perfectLabel = perfectCount === 1 ? '1 perfect' : perfectCount + ' perfect';
+            var partialLabel = partialCount === 1 ? '1 partial' : partialCount + ' partial';
+            correctnessSummaryHtml =
+                '<h4>CORRECTNESS</h4>' +
+                '<div class="correctness-main-score">' +
+                    '<span class="correctness-value">' + correctnessScore + ' / 100</span>' +
+                    '<span class="correctness-detail">(' + perfectLabel + ' \u00B7 ' + partialLabel + ')</span>' +
                 '</div>';
         }
 
@@ -552,9 +660,23 @@ async function runEvaluation() {
                 '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(summary.avg_ttft_seconds) + '</div></div>' +
                 '<div class="aggregate-item"><div class="label">Total Wall (s)</div><div class="value">' + fmt2(summary.total_wall_time_seconds) + '</div></div>' +
                 perTestSummaryHtml +
-                testsPassedHtml +
             '</div>';
-        resultsContainer.appendChild(summaryDiv);
+
+        // Append correctness summary section if applicable
+        if (correctnessSummaryHtml) {
+            var corrSection = document.createElement("div");
+            corrSection.className = "results-group correctness-summary-section";
+            corrSection.innerHTML = correctnessSummaryHtml;
+            resultsContainer.appendChild(corrSection);
+        }
+
+        // Append per-test summary after the main aggregate
+        if (perTestSummaryHtml) {
+            var perTestDiv = document.createElement("div");
+            perTestDiv.className = "results-group";
+            perTestDiv.innerHTML = '<h4>Per-Test Scores</h4><div class="aggregate">' + perTestSummaryHtml + '</div>';
+            resultsContainer.appendChild(perTestDiv);
+        }
 
         // Correctness results
         var correctnessResults = data.correctness_results || [];

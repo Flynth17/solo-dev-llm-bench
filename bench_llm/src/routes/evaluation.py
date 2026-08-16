@@ -3,6 +3,7 @@
 Handles the Run Evaluation flow for speed + correctness tests.
 """
 
+import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
@@ -338,7 +339,8 @@ async def run_evaluation_endpoint(config: dict):
     correctness_results: list[dict] = []
     correctness_scores: list[float] = []
 
-    for test_name in correctness_tests:
+    total_correctness_tests = len(correctness_tests)
+    for idx, test_name in enumerate(correctness_tests):
         # Get or create canonical task_id once per evaluation run
         canonical_task_id = _get_or_create_canonical_task(test_name)
 
@@ -400,6 +402,10 @@ async def run_evaluation_endpoint(config: dict):
             })
             correctness_scores.append(md_result["score"])
 
+            # Delay before next correctness task (skip after last)
+            if idx < total_correctness_tests - 1:
+                await asyncio.sleep(3)
+
         elif test_name == "python":
             from src.task_python import run_python_correctness_task
 
@@ -452,6 +458,10 @@ async def run_evaluation_endpoint(config: dict):
                 "input_tokens": py_result["input_tokens"],
             })
             correctness_scores.append(py_result["score"])
+
+            # Delay before next correctness task (skip after last)
+            if idx < total_correctness_tests - 1:
+                await asyncio.sleep(3)
 
         elif test_name == "java":
             from src.task_java import run_java_correctness_task
@@ -506,6 +516,10 @@ async def run_evaluation_endpoint(config: dict):
             })
             correctness_scores.append(java_result.score)
 
+            # Delay before next correctness task (skip after last)
+            if idx < total_correctness_tests - 1:
+                await asyncio.sleep(3)
+
         elif test_name == "unsolvable":
             from src.task_unsolvable import run_unsolvable_task
 
@@ -559,6 +573,10 @@ async def run_evaluation_endpoint(config: dict):
                 "generated_response": us_result.generated_response,
             })
             correctness_scores.append(us_result.score)
+
+            # Delay before next correctness task (skip after last)
+            if idx < total_correctness_tests - 1:
+                await asyncio.sleep(3)
 
     total_wall_time = round(time.time() - total_wall_start, 2)
 
