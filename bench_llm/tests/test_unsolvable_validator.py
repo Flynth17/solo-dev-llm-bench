@@ -442,6 +442,30 @@ class TestU15MissingInvalidExplanation:
         assert result.passed is True
 
 
+# ------------------------------------------------------------------
+# U1.7 — Direct Logical Contradiction class
+# ------------------------------------------------------------------
+
+class TestU17DirectLogicalContradiction:
+    """Test direct-logical-contradiction classification (U1.7)."""
+
+    def test_direct_logical_contradiction_passes(self):
+        """Exact proven response from the task spec should PASS with score 1.0."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: Direct Logical Contradiction\n"
+            "CONFLICT: R1, R2\n"
+            'EXPLANATION: classify(0) cannot simultaneously return "zero" and "positive".'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+
+# ------------------------------------------------------------------
+# U1.5 — Code fence stripping tests (unchanged)
+# ------------------------------------------------------------------
+
 class TestU15CodeFenceStripping:
     """Test Markdown code fence stripping works."""
 
