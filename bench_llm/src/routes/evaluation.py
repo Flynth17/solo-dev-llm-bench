@@ -18,7 +18,6 @@ import src.task_manager
 logger = __import__("logging").getLogger("solo_dev_llm_bench")
 router = APIRouter()
 
-
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
@@ -255,7 +254,6 @@ async def run_evaluation_endpoint(config: dict):
     for test_name in speed_tests:
         test_wall_start = time.time()
 
-        # Load canonical prompt from fixture
         try:
             prompt_text = get_speed_prompt(test_name)
         except ValueError as e:
@@ -577,6 +575,7 @@ async def run_evaluation_endpoint(config: dict):
             # Delay before next correctness task (skip after last)
             if idx < total_correctness_tests - 1:
                 await asyncio.sleep(3)
+
 
     total_wall_time = round(time.time() - total_wall_start, 2)
 

@@ -193,7 +193,7 @@ async def run_markdown_task(
 
     start_time = time.perf_counter()
     ttft = None
-    
+
     async with httpx.AsyncClient(timeout=3000) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
@@ -298,7 +298,6 @@ async def run_markdown_task(
             "connection_type": connection_type,
         }
 
-    # Validate corrected (the actual final message, not reasoning text)
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, dir=tempfile.gettempdir()
     ) as f:

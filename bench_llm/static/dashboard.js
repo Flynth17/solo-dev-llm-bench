@@ -38,10 +38,8 @@ function hideResults() {
     resultsContainer.innerHTML = "";
 }
 
-function hideHistory() {
-    historyPanel.classList.add("hidden");
-    historyContainer.innerHTML = "";
-}
+// NOTE: hideHistory() was removed. The old embedded history panel was intentionally replaced
+// by the external Past Results navigation (results.html + task-history-container).
 
 function disableRun(disabled) {
     runBtn.disabled = disabled;
@@ -225,7 +223,7 @@ async function loadResults() {
         var allRuns = data.results || [];
         renderHistory(allRuns);
     } catch (_) {
-        hideHistory();
+        // Old: hideHistory(); — now obsolete (see NOTE above)
     }
 }
 
@@ -422,15 +420,15 @@ async function runBenchmark() {
 
 runBtn.addEventListener("click", runBenchmark);
 
-// ---------------------------------------------------------------------------
-// Run Evaluation (speed tests only)
-// ---------------------------------------------------------------------------
-
 var runEvaluationBtn = document.getElementById("run-evaluation");
 
 if (runEvaluationBtn) {
     runEvaluationBtn.addEventListener("click", runEvaluation);
 }
+
+// ---------------------------------------------------------------------------
+// Run Evaluation (speed tests only)
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Evaluation progress bar helpers
@@ -572,9 +570,8 @@ async function runEvaluation() {
     // Combine speed + correctness into a single ordered list for progress tracking
     var allTests = speedTests.concat(correctnessTests);
 
-    // Show initial progress bar
+    // Show initial progress bar (hideHistory() call removed — obsolete, see NOTE above)
     resultsPanel.classList.remove("hidden");
-    hideHistory();
     showEvalProgress(allTests.length, allTests);
 
     try {
