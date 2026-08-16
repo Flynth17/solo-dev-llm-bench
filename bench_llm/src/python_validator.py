@@ -81,7 +81,7 @@ def validate_python_solution(
             # Note: removed "-x" so all tests run even if some fail
             # This gives accurate partial scoring for partial solutions
             proc = subprocess.run(
-                ["python", "-m", "pytest", "--tb=short", "-q", str(test_file)],
+                ["python", "-m", "pytest", "--assert=plain", "--tb=short", "-q", str(test_file)],
                 cwd=str(workspace),
                 capture_output=True,
                 text=True,
