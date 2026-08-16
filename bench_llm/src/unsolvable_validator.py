@@ -50,6 +50,7 @@ _VALID_CLASSES: Set[str] = frozenset({
     "self-contradictory",
     "logically-contradictory",
     "direct-logical-contradiction",
+    "logical-contradiction",
 })
 
 

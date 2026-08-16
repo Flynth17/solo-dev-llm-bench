@@ -463,6 +463,26 @@ class TestU17DirectLogicalContradiction:
 
 
 # ------------------------------------------------------------------
+# U1.8 — Logical Contradiction class
+# ------------------------------------------------------------------
+
+class TestU18LogicalContradiction:
+    """Test logical-contradiction classification (U1.8)."""
+
+    def test_logical_contradiction_passes(self):
+        """Proven response with CLASS: Logical Contradiction should PASS with score 1.0."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: Logical Contradiction\n"
+            "CONFLICT: R1, R2\n"
+            'EXPLANATION: classify(0) cannot return both "zero" and "positive".'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+
+# ------------------------------------------------------------------
 # U1.5 — Code fence stripping tests (unchanged)
 # ------------------------------------------------------------------
 
