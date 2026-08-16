@@ -273,6 +273,8 @@ async def run_python_correctness_task(
     start_time = time.perf_counter()
     ttft = None
 
+    print("[PYTHON] START")
+
     async with httpx.AsyncClient(timeout=300.0) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
@@ -280,9 +282,37 @@ async def run_python_correctness_task(
 
     elapsed = time.perf_counter() - start_time
 
+    print("[PYTHON] LM_RESPONSE_RECEIVED")
+    stats_raw = body.get("stats", {})
+    print(f"  input_tokens: {stats_raw.get('input_tokens', 'N/A')}")
+    print(f"  output_tokens: {stats_raw.get('total_output_tokens', 'N/A')}")
+
     # 4. Extract final message (Act P5.1 — discard reasoning blocks)
     raw_output = body.get("output", body.get("text", ""))
     generated_code, failure_reason = _extract_final_message(raw_output)
+
+    print("[PYTHON] FINAL_MESSAGE_EXTRACTED")
+    if generated_code:
+        code_length = len(generated_code)
+        add_fix = "YES" if ("a + b" in generated_code or "return a + b" in generated_code) else "NO"
+        multiply_fix = "YES" if ("return result" in generated_code and "result = x * y" in generated_code) else "NO"
+        is_even_fix = "YES" if ("n % 2 == 0" in generated_code or "== True" not in generated_code.split("is_even")[1].split("def ")[0][:300] if "is_even" in generated_code else "NO") else "NO"
+        # More robust is_even fix check
+        is_even_fix = "NO"
+        for line in generated_code.splitlines():
+            stripped = line.strip()
+            if "is_even" in stripped and "def " not in stripped:
+                continue
+            if "n % 2 == 0" in stripped or "n%2==0" in stripped:
+                is_even_fix = "YES"
+                break
+        print(f"  code_length: {code_length}")
+        print(f"  contains add fix: {add_fix}")
+        print(f"  contains multiply fix: {multiply_fix}")
+        print(f"  contains is_even fix: {is_even_fix}")
+    else:
+        print(f"  code_length: 0")
+        print(f"  failure_reason: {failure_reason}")
 
     # If no final message found, short-circuit with failure result.
     if not generated_code:
@@ -297,6 +327,12 @@ async def run_python_correctness_task(
         _save_latest_python_output("")
 
         tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
+        print("[PYTHON] COMPLETE")
+        print(f"  score: 0.0")
+        print(f"  passed: False")
+        print(f"  passed_tests: 0")
+        print(f"  failed_tests: {expected_tests}")
+        print(f"  total_tests: {expected_tests}")
         return {
             "task_name": TASK_DEFINITION["name"],
             "task_type": TASK_DEFINITION["task_type"],
@@ -325,6 +361,7 @@ async def run_python_correctness_task(
 
     # 6. Save exact submitted code to runtime file (Act P5.1)
     _save_latest_python_output(generated_code)
+    print("[PYTHON] RUNTIME_SAVED")
 
     # 7. Extract token stats
     stats = body.get("stats", {})
@@ -332,12 +369,29 @@ async def run_python_correctness_task(
     input_tokens = stats.get("input_tokens", 0)
 
     # 8. Validate with python_validator.py
+    print("[PYTHON] VALIDATION_START")
     validation_result = validate_python_solution(generated_code, test_code)
+    print("[PYTHON] VALIDATION_RESULT")
+    print(f"  passed_tests: {validation_result.passed_tests}")
+    print(f"  failed_tests: {validation_result.failed_tests}")
+    print(f"  total_tests: {validation_result.total_tests}")
+    print(f"  score: {validation_result.score}")
+    print(f"  passed: {validation_result.passed}")
+    print(f"  exit_code: {validation_result.exit_code}")
+    if validation_result.stdout:
+        print("  stdout:")
+        for vline in validation_result.stdout.splitlines():
+            print(f"    {vline}")
+    if validation_result.stderr:
+        print("  stderr:")
+        for vline in validation_result.stderr.splitlines():
+            print(f"    {vline}")
 
-    # 8. Compute performance metadata
+    # 9. Compute performance metadata
     tokens_per_second = output_tokens / elapsed if elapsed > 0 else 0
 
-    return {
+    # Build final result dict
+    final_result = {
         "task_name": TASK_DEFINITION["name"],
         "task_type": TASK_DEFINITION["task_type"],
         "model": model,
@@ -353,8 +407,29 @@ async def run_python_correctness_task(
         "wall_time_seconds": round(elapsed, 4),
         "generated_code": generated_code,
         "validator_error": validation_result.error,
+        # Preserved subprocess evidence (Act P5.12)
+        "exit_code": validation_result.exit_code,
+        "timed_out": validation_result.timed_out,
+        "stdout": validation_result.stdout,
+        "stderr": validation_result.stderr,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hardware_label": hardware_label,
         "execution_environment": execution_environment,
         "connection_type": connection_type,
     }
+
+    # 10. Persist result
+    print("[PYTHON] PERSISTING_RESULT")
+    print(f"  score: {final_result['score']}")
+    print(f"  passed: {final_result['passed']}")
+    print(f"  passed_tests: {final_result['passed_tests']}")
+    print(f"  failed_tests: {final_result['failed_tests']}")
+    print(f"  total_tests: {final_result['total_tests']}")
+
+    print("[PYTHON] COMPLETE")
+    print(f"  score: {final_result['score']}")
+    print(f"  passed: {final_result['passed']}")
+    print(f"  passed_tests: {final_result['passed_tests']}/{final_result['total_tests']}")
+    print(f"  failed_tests: {final_result['failed_tests']}")
+
+    return final_result
