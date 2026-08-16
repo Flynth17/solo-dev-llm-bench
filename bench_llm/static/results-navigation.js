@@ -45,12 +45,15 @@ function switchView(view) {
         // Task results mode — hide performance data, show task results
         if (filterBar) filterBar.classList.add("hidden");
         resultsPanel.classList.add("hidden");
-        if (chartsPanel) chartsPanel.classList.add("hidden");
+        if (chartsPanel) chartsPanel.classList.remove("hidden");
         // Set active task type from view
         activeTaskType = view;
-        // Load and render tasks
+        // Load and render tasks + comparison chart for correctness tabs.
         allTasks = [];
-        loadTasks().then(function () { renderTasks(); });
+        loadTasks().then(function () {
+            renderCorrectnessComparisonChart(allTasks);
+            renderTasks();
+        });
     }
 }
 

@@ -441,3 +441,275 @@ function restoreExpandedModels(expandedIndices) {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Correctness Comparison Chart — grouped model bars (score × 100 = % PASS)
+// Used for Markdown / Python / Java / Unsolvable tabs.
+// Metric-specific: score-based, NOT tok/s.
+// ---------------------------------------------------------------------------
+
+function renderCorrectnessComparisonChart(taskRuns) {
+    // Only render when a correctness tab is active
+    if (activeView === "raw") return;
+    if (!taskRuns || taskRuns.length === 0) {
+        chartsPanel.classList.add("hidden");
+        return;
+    }
+
+    // Group by model: keep only the most recent run per model.
+    var modelMap = {};
+    for (var i = 0; i < taskRuns.length; i++) {
+        var r = taskRuns[i];
+        var mk = r.model || "(unknown)";
+        if (!modelMap[mk]) {
+            modelMap[mk] = r;
+        } else {
+            // Keep the newer run (task_runs are newest-first, but compare timestamps explicitly).
+            if ((r.timestamp || "") > (modelMap[mk].timestamp || "")) {
+                modelMap[mk] = r;
+            }
+        }
+    }
+
+    var models = [];
+    for (var k in modelMap) {
+        if (Object.prototype.hasOwnProperty.call(modelMap, k)) {
+            models.push({ model: k, run: modelMap[k] });
+        }
+    }
+
+    if (models.length === 0) {
+        chartsPanel.classList.add("hidden");
+        return;
+    }
+
+    // Determine score × 100 for each model.
+    var maxScore = 0;
+    for (var mi2 = 0; mi2 < models.length; mi2++) {
+        var s = Math.round((models[mi2].run.score || 0) * 100);
+        if (s > maxScore) maxScore = s;
+    }
+
+    // Sort: score desc, then timestamp desc, then model name asc.
+    models.sort(function (a, b) {
+        var sa = Math.round((a.run.score || 0) * 100);
+        var sb = Math.round((b.run.score || 0) * 100);
+        if (sa !== sb) return sb - sa; // descending score
+        if ((a.run.timestamp || "") > (b.run.timestamp || "")) return -1;
+        if ((a.run.timestamp || "") < (b.run.timestamp || "")) return 1;
+        var na = a.model.toLowerCase();
+        var nb = b.model.toLowerCase();
+        if (na < nb) return -1;
+        if (na > nb) return 1;
+        return 0;
+    });
+
+    // Determine tied top score for BEST treatment.
+    var topScore = models.length > 0 ? Math.round((models[0].run.score || 0) * 100) : 0;
+    var bestCount = 0;
+    for (var bi = 0; bi < models.length; bi++) {
+        if (Math.round((models[bi].run.score || 0) * 100) === topScore) bestCount++;
+    }
+
+    chartsPanel.classList.remove("hidden");
+    renderCorrectnessChartRows(models, maxScore, topScore, bestCount);
+}
+
+function renderCorrectnessChartRows(models, maxScore, topScore, bestCount) {
+    var container = document.getElementById("charts-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    // Compute chart dimensions from container width.
+    var containerWidth = container.clientWidth || 700;
+    var margin = { top: 20, right: 100, bottom: 10, left: Math.max(200, containerWidth * 0.22) };
+    var chartW = containerWidth - margin.left - margin.right;
+    if (chartW < 400) chartW = 400;
+    var rowH = 50;
+    var h = Math.max(rowH * models.length + 60, rowH + 120);
+
+    // SVG background grid — pointer-events: none passes clicks to model rows.
+    var svg = svgCreate("svg", {
+        width: "100%",
+        height: h,
+        viewBox: "0 0 " + (chartW + margin.left + margin.right) + " " + h,
+        "aria-label": "Historical correctness comparison by model (% PASS)"
+    });
+    svg.style.width = "100%";
+    svg.style.maxWidth = (chartW + margin.left + margin.right) + "px";
+    svg.style.display = "block";
+    svg.style.pointerEvents = "none";
+    // Background grid lines at 0%, 25%, 50%, 75%, 100%.
+    svg.appendChild(svgCreate("rect", {
+        x: margin.left, y: margin.top, width: chartW, height: rowH * models.length + 40,
+        fill: "transparent"
+    }));
+    var ticks = [0, 25, 50, 75, 100];
+    for (var t = 0; t < ticks.length; t++) {
+        var val = ticks[t];
+        var gx = margin.left + (val / 100) * chartW;
+        svg.appendChild(svgCreate("line", {
+            x1: gx, y1: margin.top, x2: gx, y2: margin.top + rowH * models.length + 40,
+            stroke: "#333", "stroke-width": val === 0 ? 1 : 0.5
+        }));
+        var xLabel = svgCreate("text", {
+            x: gx, y: h - 2,
+            fill: "#111", "font-size": "10", "text-anchor": "middle"
+        });
+        xLabel.textContent = val + "%";
+        svg.appendChild(xLabel);
+    }
+    container.appendChild(svg);
+
+    // Model rows — sorted highest score first.
+    for (var mi3 = 0; mi3 < models.length; mi3++) {
+        var m = models[mi3];
+        var y = margin.top + mi3 * rowH;
+        var barH = 35;
+        var displayScore = Math.round((m.run.score || 0) * 100);
+        var barW = (displayScore / 100) * chartW;
+
+        // Model name label (left of bar).
+        var nameLabel = svgCreate("text", {
+            x: margin.left - 8, y: y + 28,
+            fill: "#111", "font-size": "11", "text-anchor": "end",
+            "font-family": "monospace"
+        });
+        nameLabel.textContent = m.model;
+        svg.appendChild(nameLabel);
+
+        // Bar track.
+        svg.appendChild(svgCreate("rect", {
+            x: margin.left, y: y + 5, width: chartW, height: barH,
+            fill: "#1a1a2e", rx: 4, opacity: 0.5
+        }));
+        // Bar fill.
+        svg.appendChild(svgCreate("rect", {
+            x: margin.left, y: y + 5, width: Math.max(barW, 4), height: barH,
+            fill: "#50d890", rx: 4, opacity: 0.85
+        }));
+
+        // Value label (right of bar).
+        var valLabel = svgCreate("text", {
+            x: margin.left + Math.max(barW, 4) + 6, y: y + 28,
+            fill: "#111", "font-size": "11", "font-family": "monospace"
+        });
+        valLabel.textContent = displayScore + "% PASS";
+        svg.appendChild(valLabel);
+
+        // Date below.
+        var dateLabel = svgCreate("text", {
+            x: margin.left - 8, y: y + 46,
+            fill: "#111", "font-size": "9", "text-anchor": "end"
+        });
+        dateLabel.textContent = formatTimestamp(m.run.timestamp);
+        svg.appendChild(dateLabel);
+
+        // BEST badge — SVG text near the bar end for tied top-scorers.
+        if (displayScore === topScore && bestCount > 1) {
+            var bestBadge = svgCreate("text", {
+                x: margin.left + Math.max(barW, 4) - 46, y: y + 28,
+                fill: "#FFD700", "font-size": "9", "font-family": "monospace",
+                "font-weight": "bold"
+            });
+            bestBadge.textContent = "★ BEST";
+            svg.appendChild(bestBadge);
+        } else if (displayScore === topScore && bestCount === 1) {
+            var bestBadge2 = svgCreate("text", {
+                x: margin.left + Math.max(barW, 4) - 46, y: y + 28,
+                fill: "#FFD700", "font-size": "9", "font-family": "monospace",
+                "font-weight": "bold"
+            });
+            bestBadge2.textContent = "★ BEST";
+            svg.appendChild(bestBadge2);
+        }
+
+        // Model row div for future expand/collapse.
+        var modelRow = document.createElement("div");
+        modelRow.className = "grouped-model-row";
+
+        // Header with badges.
+        var header = document.createElement("div");
+        header.className = "grouped-model-header";
+
+        // Expand arrow (hidden by default, will be visible when expand/collapse is implemented).
+        var arrow = document.createElement("span");
+        arrow.className = "expand-arrow";
+        arrow.textContent = "\u25B6"; // ▸
+        if (bestCount > 1) {
+            // Multi-BEST: show arrow for future expand functionality.
+            arrow.setAttribute("data-model-key", m.model);
+        } else {
+            arrow.style.visibility = "hidden";
+        }
+
+        // Model name with tooltip.
+        var modelName = document.createElement("span");
+        modelName.className = "grouped-model-name";
+        modelName.textContent = m.model;
+        modelName.title = m.model;
+
+        // BEST badge (only for top scorers).
+        var bestBadge = null;
+        if (displayScore === topScore) {
+            bestBadge = document.createElement("span");
+            bestBadge.className = "best-badge";
+            bestBadge.textContent = "BEST";
+        }
+
+        // Score value.
+        var scoreVal = document.createElement("span");
+        scoreVal.className = "grouped-model-best";
+        scoreVal.textContent = displayScore + "% PASS";
+
+        header.appendChild(arrow);
+        header.appendChild(modelName);
+        if (bestBadge) {
+            header.appendChild(bestBadge);
+        }
+        header.appendChild(scoreVal);
+        modelRow.appendChild(header);
+
+        // Children container for future expand/collapse.
+        var childrenDiv = document.createElement("div");
+        childrenDiv.id = "children-" + mi3;
+        childrenDiv.className = "grouped-model-children";
+        childrenDiv.style.display = "none";
+        childrenDiv.setAttribute("data-model-index", mi3);
+
+        modelRow.appendChild(childrenDiv);
+        container.appendChild(modelRow);
+    }
+
+    // Legend.
+    var legendY = 14;
+    var legendItems = [
+        { color: "#50d890", label: "% PASS (latest run)" },
+        { color: "#FFD700", label: "★ BEST" }
+    ];
+    var legendX = margin.left;
+    for (var l2 = 0; l2 < legendItems.length; l2++) {
+        var item2 = legendItems[l2];
+        svg.appendChild(svgCreate("rect", {
+            x: legendX, y: legendY - 4, width: 8, height: 8,
+            fill: item2.color, rx: 1
+        }));
+        var legText = svgCreate("text", {
+            x: legendX + 11, y: legendY + 3,
+            fill: "#111", "font-size": "10"
+        });
+        legText.textContent = item2.label;
+        svg.appendChild(legText);
+        legendX += 14 + item2.label.length * 6.5;
+    }
+
+    // Save state for future expand/collapse.
+    _currentGroupedModels = models.map(function (m, idx) { return ({ model: m.model, best: m.run, others: [] }); });
+    _currentChartW = chartW;
+    _currentMarginLeft = margin.left;
+    _currentMarginRight = margin.right;
+    _currentXMax = 100;
+
+    // Attach delegated handler.
+    _initDelegatedExpand();
+}
