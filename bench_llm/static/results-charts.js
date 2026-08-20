@@ -21,9 +21,13 @@ function renderHistoryCharts() {
         var run = filteredRuns[i];
         var rid = run.run_id || "";
         if (!rid) continue;
+        // Persist per-run quantization so the chart label can show it alongside the timestamp.
+        var q = (run && run.model_quantization) ? String(run.model_quantization).trim() : "";
         if (!groups[rid]) {
-            groups[rid] = { timestamp: run.timestamp || "", model: run.model_key || run.model_display_name || "", runs: [] };
+            groups[rid] = { timestamp: run.timestamp || "", model: run.model_key || run.model_display_name || "", quant: q, runs: [] };
             order.push(rid);
+        } else if (q && !groups[rid].quant) {
+            groups[rid].quant = q;
         }
         groups[rid].runs.push(run);
     }
@@ -83,6 +87,17 @@ function renderHistoryCharts() {
 
     // Sort models by best avgWarmTps descending
     modelOrder.sort(function (a, b) { return modelGroups[b].best.avgWarmTps - modelGroups[a].best.avgWarmTps; });
+
+    // Build display labels that include quantization when present.
+    function _buildRunLabel(group) {
+        var parts = [group.model];
+        if (group.quant) {
+            parts.push(group.quant + " \u00B7 " + formatTimestamp(group.timestamp));
+        } else {
+            parts.push(formatTimestamp(group.timestamp));
+        }
+        return parts.join("\n");
+    }
 
     var groupedModels = [];
     for (var gi = 0; gi < modelOrder.length; gi++) {
@@ -207,11 +222,13 @@ function renderGroupedModelChart(groupedModels) {
             arrow.style.visibility = "hidden";
         }
 
-        // Model name with tooltip for full name
+        // Model name + quantization/timestamp as secondary metadata line.
+        var displayLabel = _buildRunLabel(gm);
+        // Header model-name element (two visual lines via whitespace-pre-wrap).
         var modelName = document.createElement("span");
         modelName.className = "grouped-model-name";
-        modelName.textContent = displayName;
-        modelName.title = displayName;
+        modelName.textContent = displayLabel;
+        modelName.title = gm.model;
 
         // BEST badge
         var bestBadge = document.createElement("span");
@@ -240,14 +257,24 @@ function renderGroupedModelChart(groupedModels) {
             x: margin.left, y: barY, width: Math.max(barW, 4), height: 35,
             fill: "#50d890", rx: 4, opacity: 0.85
         }));
-        // Model name label (left of bar) — dark text for readability
-        var nameLabel = svgCreate("text", {
-            x: margin.left - 8, y: y + 30,
+        // SVG name label — two-line layout (model / quant · timestamp) when available.
+        var nameLabelY = y + 26;
+        var nameLabel1 = svgCreate("text", {
+            x: margin.left - 8, y: nameLabelY,
             fill: "#111", "font-size": "11", "text-anchor": "end",
             "font-family": "monospace"
         });
-        nameLabel.textContent = displayName;
-        svg.appendChild(nameLabel);
+        nameLabel1.textContent = displayName;
+        svg.appendChild(nameLabel1);
+        if (gm.quant) {
+            var nameLabel2 = svgCreate("text", {
+                x: margin.left - 8, y: nameLabelY + 13,
+                fill: "#555", "font-size": "9", "text-anchor": "end",
+                "font-family": "monospace"
+            });
+            nameLabel2.textContent = gm.quant + " \u00B7 " + formatTimestamp(gm.best.timestamp);
+            svg.appendChild(nameLabel2);
+        }
         // Value label (right of bar) — dark text for readability
         var valLabel = svgCreate("text", {
             x: margin.left + Math.max(barW, 4) + 6, y: y + 30,
