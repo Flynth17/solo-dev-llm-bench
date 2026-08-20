@@ -22,6 +22,7 @@ CSV_HEADERS = [
     "run_id",
     "model_key",
     "model_display_name",
+    "model_quantization",
     "hardware_label",
     "execution_environment",
     "connection_type",
@@ -44,6 +45,7 @@ SQLITE_COLUMNS = [
     ("run_id", "TEXT"),
     ("model_key", "TEXT"),
     ("model_display_name", "TEXT"),
+    ("model_quantization", "TEXT"),
     ("hardware_label", "TEXT"),
     ("execution_environment", "TEXT"),
     ("connection_type", "TEXT"),
@@ -131,6 +133,7 @@ class ResultsStore:
                     run_id TEXT,
                     model_key TEXT,
                     model_display_name TEXT,
+                    model_quantization TEXT,
                     hardware_label TEXT,
                     execution_environment TEXT,
                     connection_type TEXT,
@@ -147,6 +150,14 @@ class ResultsStore:
                     temperature REAL
                 )
             """)
+            # Ensure the model_quantization column exists on databases created before this field.
+            cols_cursor = conn.execute("PRAGMA table_info(runs)")
+            existing_cols = {row[1] for row in cols_cursor.fetchall()}
+            if "model_quantization" not in existing_cols:
+                conn.execute(
+                    "ALTER TABLE runs ADD COLUMN model_quantization TEXT DEFAULT ''"
+                )
+            conn.commit()
             # Metadata table for migration tracking
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS metadata (

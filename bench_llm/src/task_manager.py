@@ -75,7 +75,14 @@ def init_tasks_table() -> None:
 
                 created_at      TEXT    NOT NULL
             )
-        """)
+            """)
+        # Ensure the model_quantization column exists on tables created before this field.
+        cols_cursor = conn.execute("PRAGMA table_info(task_runs)")
+        existing_cols = {row[1] for row in cols_cursor.fetchall()}
+        if "model_quantization" not in existing_cols:
+            conn.execute(
+                "ALTER TABLE task_runs ADD COLUMN model_quantization TEXT DEFAULT ''"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -233,19 +240,21 @@ def create_task_run(
     ttft_seconds: float | None = None,
     wall_time_seconds: float | None = None,
     result: dict | None = None,
+    model_quantization: str | None = None,
 ) -> dict:
     """Persist a task run result and return it."""
     now = datetime.now(timezone.utc).isoformat()
     conn = _get_conn()
     try:
+        init_tasks_table()
         conn.execute(
             """INSERT INTO task_runs
                (task_id, task_name, task_type, model, timestamp,
                 passed, score,
                 initial_errors, final_errors, errors_fixed,
                 output_tokens, input_tokens, tokens_per_second, ttft_seconds, wall_time_seconds,
-                result, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                result, created_at, model_quantization)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 task_id,
                 task_name,
@@ -264,6 +273,7 @@ def create_task_run(
                 wall_time_seconds,
                 _json(result) if result else None,
                 now,
+                model_quantization or "",
             ),
         )
         conn.commit()
@@ -287,6 +297,7 @@ def create_task_run(
             "wall_time_seconds": wall_time_seconds,
             "result": result,
             "created_at": now,
+            "model_quantization": model_quantization or "",
         }
         return row
     finally:

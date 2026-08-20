@@ -40,6 +40,30 @@ async def fetch_models(lm_studio_url: str) -> list[dict]:
     return models
 
 
+async def resolve_model_quantization(lm_studio_url: str, model_key: str) -> str:
+    """Resolve the exact quantization string for a selected model key from the live LM Studio registry.
+
+    Returns an empty string when the model is unknown or the registry does not expose a
+    quantization value. Never infers or parses quantization from the model name.
+    """
+    try:
+        models = await fetch_models(lm_studio_url)
+    except Exception:
+        return ""
+
+    for m in models:
+        if m.get("key") == model_key:
+            q = m.get("quantization", "")
+            if isinstance(q, str):
+                return q or ""
+            if isinstance(q, dict):
+                name = q.get("name") or q.get("display_name")
+                return str(name) if name else ""
+            if q:
+                return str(q)
+    return ""
+
+
 async def run_benchmark(
     lm_studio_url: str,
     model: str,
@@ -51,6 +75,7 @@ async def run_benchmark(
     execution_environment: str = "Local",
     connection_type: str = "",
     prompt_name: str = "",
+    model_quantization: str = "",
 ) -> dict:
     """Run benchmark against LM Studio's /api/v1/chat endpoint.
 
@@ -116,6 +141,7 @@ async def run_benchmark(
                 "output_tokens": stats.get("total_output_tokens", 0),
                 "model_load_time_seconds": stats.get("model_load_time_seconds", None),
                 "wall_time_seconds": round(elapsed, 4),
+                "model_quantization": model_quantization or "",
             }
             runs.append(run_result)
 

@@ -240,6 +240,13 @@ async def run_evaluation_endpoint(config: dict):
     execution_environment = config.get("execution_environment", "Local")
     connection_type = config.get("connection_type", "")
 
+    # Resolve exact quantization for the selected model from the live registry (shared by both speed and correctness rows).
+    try:
+        from src.benchmark import resolve_model_quantization as _resolve_mq
+        model_quantization = await _resolve_mq(lm_studio_url, model)
+    except Exception:
+        model_quantization = ""
+
     # Speed tests use a fixed output budget (1024 tokens) regardless of UI setting.
     # Correctness tests use the user-selected max_output_tokens value.
     SPEED_OUTPUT_TOKENS = 1024
@@ -296,6 +303,7 @@ async def run_evaluation_endpoint(config: dict):
                 "run_id": run_id,
                 "model_key": model_key,
                 "model_display_name": model_display_name,
+                "model_quantization": model_quantization,
                 "hardware_label": hardware_label,
                 "execution_environment": execution_environment,
                 "connection_type": connection_type,
@@ -380,6 +388,7 @@ async def run_evaluation_endpoint(config: dict):
                 ttft_seconds=md_result.get("ttft_seconds"),
                 wall_time_seconds=md_result["wall_time_seconds"],
                 result=md_result,
+                model_quantization=model_quantization,
             )
 
             correctness_results.append({
@@ -439,6 +448,7 @@ async def run_evaluation_endpoint(config: dict):
                 ttft_seconds=py_result.get("ttft_seconds"),
                 wall_time_seconds=py_result["wall_time_seconds"],
                 result=py_result,
+                model_quantization=model_quantization,
             )
 
             correctness_results.append({
@@ -495,6 +505,7 @@ async def run_evaluation_endpoint(config: dict):
                 ttft_seconds=java_result.ttft_seconds,
                 wall_time_seconds=java_result.wall_time_seconds,
                 result=java_result.to_dict(),
+                model_quantization=model_quantization,
             )
 
             correctness_results.append({
@@ -552,6 +563,7 @@ async def run_evaluation_endpoint(config: dict):
                 ttft_seconds=us_result.ttft_seconds,
                 wall_time_seconds=us_result.wall_time_seconds,
                 result=us_result.to_dict(),
+                model_quantization=model_quantization,
             )
 
             correctness_results.append({

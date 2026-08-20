@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 import src.app_state
-from src.benchmark import run_benchmark
+from src.benchmark import run_benchmark, resolve_model_quantization
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -80,6 +80,9 @@ async def run_benchmark_endpoint(config: dict):
     model_key = benchmark_result["model"]
     model_display_name = benchmark_result.get("model", model_key)
 
+    # Resolve exact quantization for the selected model from the live registry.
+    model_quantization = await resolve_model_quantization(lm_studio_url, model_key)
+
     results_store = _get_results_store()
     for run in benchmark_result["runs"]:
         row = {
@@ -87,6 +90,7 @@ async def run_benchmark_endpoint(config: dict):
             "run_id": run_id,
             "model_key": model_key,
             "model_display_name": model_display_name,
+            "model_quantization": model_quantization,
             "hardware_label": hardware_label,
             "execution_environment": execution_environment,
             "connection_type": connection_type,
