@@ -25,11 +25,19 @@ def main():
     print("Press Ctrl+C to stop the server.")
     print()
 
+    # Derive the application source directory from this file's location.
+    # This restricts WatchFiles to only monitor src/*.py files,
+    # preventing runtime-generated Python files (e.g., latest_output.py)
+    # from triggering backend reloads.
+    SRC_DIR = Path(__file__).resolve().parent
+    sys.path.insert(0, str(PROJECT_DIR))
+
     uvicorn.run(
         "src.main:app",
         host="127.0.0.1",
         port=8000,
         reload=True,
+        reload_dirs=[str(SRC_DIR)],
     )
 
 
