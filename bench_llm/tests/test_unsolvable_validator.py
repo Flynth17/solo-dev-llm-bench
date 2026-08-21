@@ -483,6 +483,124 @@ class TestU18LogicalContradiction:
 
 
 # ------------------------------------------------------------------
+# U6.2 — Direct Contradiction class taxonomy fix
+# ------------------------------------------------------------------
+
+class TestU62DirectContradictionPass:
+    """Test that 'direct-contradiction' is now accepted as a valid class."""
+
+    def test_direct_contradiction_passes_exact(self):
+        """CLASS: Direct Contradiction (exact) should PASS with score 1.0."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: Direct Contradiction\n"
+            "CONFLICT: R1, R2\n"
+            'EXPLANATION: classify(0) cannot simultaneously return "zero" and "positive".'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+        assert result.classification == "direct-contradiction"
+        assert "R1" in result.conflict_ids
+        assert "R2" in result.conflict_ids
+        assert result.explanation_valid is True
+
+    def test_direct_contradiction_lowercase_passes(self):
+        """CLASS: direct contradiction (lowercase) should PASS."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: direct contradiction\n"
+            "CONFLICT: R1,R2\n"
+            'EXPLANATION: classify(0) cannot simultaneously return "zero" and "positive".'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+        assert result.classification == "direct-contradiction"
+
+    def test_direct_contradiction_with_code_fence_passes(self):
+        """CLASS: Direct Contradiction inside code fence should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Direct Contradiction\n'
+            'CONFLICT: R1,R2\n'
+            'EXPLANATION: classify(0) cannot simultaneously return "zero" and "positive".\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+    def test_direct_contradiction_qwen_real_format_passes(self):
+        """Qwen's real output format with Direct Contradiction should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Direct contradiction\n'
+            'CONFLICT: R1, R2\n'
+            'EXPLANATION: classify(0) cannot simultaneously return both "zero" and "positive". R3 requires all requirements to be satisfied exactly, and R4 prevents changing or removing either requirement to resolve the conflict.\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+    def test_direct_contradiction_muse_glimmer_real_format_passes(self):
+        """Muse Glimmer's real output format with Direct Contradiction should PASS."""
+        resp = (
+            '```\n'
+            'IMPOSSIBLE: yes\n'
+            'CLASS: Direct Contradiction\n'
+            'CONFLICT: R1,R2\n'
+            'EXPLANATION: R1 requires classify(0) to return "zero" and R2 requires classify(0) to return "positive" for the same input. A deterministic function cannot return two different values for the same argument, so R1 and R2 cannot be satisfied together. R3 demands all requirements be satisfied exactly and R4 forbids changing or removing requirements, making the conflict unresolvable.\n'
+            '```'
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 1.0
+        assert result.passed is True
+
+
+class TestU62UnrelatedClassesStillFail:
+    """Ensure unrelated/invalid classes still fail after the fix."""
+
+    def test_undecidable_still_fails(self):
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: undecidable\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: classify(0) cannot simultaneously return both zero and positive."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+        assert result.classification == "undecidable"
+
+    def test_ambiguous_still_fails(self):
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: ambiguous\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: classify(0) cannot simultaneously return both zero and positive."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+    def test_vague_contradiction_still_fails(self):
+        """Arbitrary 'contradiction' phrase that isn't in the accepted set should fail."""
+        resp = (
+            "IMPOSSIBLE: yes\n"
+            "CLASS: vague contradiction\n"
+            "CONFLICT: R1, R2\n"
+            "EXPLANATION: classify(0) cannot simultaneously return both zero and positive."
+        )
+        result = validate_unsolvable_response(resp)
+        assert result.score == 0.0
+        assert result.passed is False
+
+
+# ------------------------------------------------------------------
 # U1.5 — Code fence stripping tests (unchanged)
 # ------------------------------------------------------------------
 
