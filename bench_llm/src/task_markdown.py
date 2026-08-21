@@ -104,23 +104,29 @@ def _extract_final_message(raw_output: Any) -> tuple[str | None, str]:
           - content is the extracted final message string, or None if not found
           - reason is a failure code like "no_final_answer" or ""
     """
+    # Use lstrip only: preserve trailing newlines (markdownlint MD047) while
+    # removing any accidental leading blank lines from reasoning blocks.
+    def _lstrip_only(s: str) -> str:
+        return s.lstrip()
+
     if isinstance(raw_output, str):
-        return raw_output.strip(), ""
+        return _lstrip_only(raw_output), ""
 
     if isinstance(raw_output, dict):
         for key in ("output", "text", "response", "content"):
             if key in raw_output:
                 val = raw_output[key]
                 if isinstance(val, str):
-                    return val.strip(), ""
+                    return _lstrip_only(val), ""
                 if isinstance(val, dict) and "text" in val:
-                    return val["text"].strip(), ""
+                    return _lstrip_only(val["text"]), ""
         # Fallback: join all string values only
         parts = []
         for v in raw_output.values():
             if isinstance(v, str):
                 parts.append(v)
-        return "\n".join(parts).strip() or None, "no_final_answer"
+        joined = "\n".join(parts)
+        return (_lstrip_only(joined) or None), "no_final_answer"
 
     if isinstance(raw_output, (list, tuple)):
         # Scan from the END for the last block with type == "message"
@@ -128,12 +134,13 @@ def _extract_final_message(raw_output: Any) -> tuple[str | None, str]:
             if isinstance(item, dict) and item.get("type") == "message":
                 content = item.get("content", "")
                 if isinstance(content, str):
-                    return content.strip(), ""
+                    return _lstrip_only(content), ""
                 # Content as list of parts (common with some LM Studio endpoints)
                 if isinstance(content, (list, tuple)):
                     parts = [str(p) for p in content if isinstance(p, (str, int, float))]
-                    joined = "\n".join(parts).strip()
-                    return joined or None, "no_final_answer" if not joined else ""
+                    joined = "\n".join(parts)
+                    result = _lstrip_only(joined)
+                    return result or None, "no_final_answer" if not result else ""
 
         # No "message" block found — model returned only reasoning/thinking
         return None, "no_final_answer"
