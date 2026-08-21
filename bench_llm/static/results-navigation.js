@@ -18,6 +18,9 @@ var activeView = "raw"; // "raw", "markdown", "python", "java", "unsolvable"
 function switchView(view) {
     activeView = view;
 
+    // Clear any stale chart content from the previous view before rendering.
+    if (chartsContainer) chartsContainer.innerHTML = "";
+
     // Update active button
     var navButtons2 = [navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
     for (var i = 0; i < navButtons2.length; i++) {
@@ -36,10 +39,12 @@ function switchView(view) {
         if (taskHistorySection) taskHistorySection.classList.add("hidden");
         if (filterBar) filterBar.classList.remove("hidden");
         resultsPanel.classList.remove("hidden");
-        if (chartsPanel) chartsPanel.classList.remove("hidden");
-        // Re-render chart
         if (filteredRuns.length > 0) {
+            if (chartsPanel) chartsPanel.classList.remove("hidden");
+            // Re-render chart
             renderHistoryCharts();
+        } else if (chartsPanel) {
+            chartsPanel.classList.add("hidden");
         }
     } else {
         // Task results mode — hide performance data, show task results

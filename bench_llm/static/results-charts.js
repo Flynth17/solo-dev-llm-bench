@@ -4,6 +4,17 @@
 // SVG Charts (copied from dashboard.js, adapted for grouped data)
 // ---------------------------------------------------------------------------
 
+// Build display labels that include quantization when present.
+function _buildRunLabel(group) {
+    var parts = [group.model];
+    if (group.quant) {
+        parts.push(group.quant + " \u00B7 " + formatTimestamp(group.timestamp));
+    } else {
+        parts.push(formatTimestamp(group.timestamp));
+    }
+    return parts.join("\n");
+}
+
 function renderHistoryCharts() {
     // Only render chart when Raw Speed view is active
     if (activeView !== "raw") {
@@ -87,17 +98,6 @@ function renderHistoryCharts() {
 
     // Sort models by best avgWarmTps descending
     modelOrder.sort(function (a, b) { return modelGroups[b].best.avgWarmTps - modelGroups[a].best.avgWarmTps; });
-
-    // Build display labels that include quantization when present.
-    function _buildRunLabel(group) {
-        var parts = [group.model];
-        if (group.quant) {
-            parts.push(group.quant + " \u00B7 " + formatTimestamp(group.timestamp));
-        } else {
-            parts.push(formatTimestamp(group.timestamp));
-        }
-        return parts.join("\n");
-    }
 
     var groupedModels = [];
     for (var gi = 0; gi < modelOrder.length; gi++) {

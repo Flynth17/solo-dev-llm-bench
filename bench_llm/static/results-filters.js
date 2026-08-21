@@ -15,7 +15,6 @@ function applyFilters() {
     var modelFilter = (filterModelInput.value || "").toLowerCase().trim();
     var hardwareFilter = (filterHardwareInput.value || "").toLowerCase().trim();
     var envFilter = filterEnvSelect.value;
-
     filteredRuns = allRuns.filter(function (run) {
         if (modelFilter) {
             var modelKey = (run.model_key || "").toLowerCase();

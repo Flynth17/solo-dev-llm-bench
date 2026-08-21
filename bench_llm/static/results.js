@@ -36,60 +36,6 @@ async function loadResults() {
 }
 
 // ---------------------------------------------------------------------------
-// Filters
-// ---------------------------------------------------------------------------
-function applyFilters() {
-    var modelFilter = (document.getElementById("filter-model").value || "").toLowerCase();
-    var hardwareFilter = (document.getElementById("filter-hardware").value || "").toLowerCase();
-    var envFilter = document.getElementById("filter-env").value || "";
-
-    filteredRuns = allRuns.filter(function (r) {
-        if (modelFilter && !(r.model_key || "").toLowerCase().includes(modelFilter) && !(r.model_display_name || "").toLowerCase().includes(modelFilter)) {
-            return false;
-        }
-        if (hardwareFilter && !(r.hardware || "").toLowerCase().includes(hardwareFilter)) {
-            return false;
-        }
-        if (envFilter && (r.environment || "") !== envFilter) {
-            return false;
-        }
-        return true;
-    });
-
-    renderResults();
-}
-
-// Clear filters button
-var clearFiltersBtn = document.getElementById("clear-filters");
-if (clearFiltersBtn) {
-    clearFiltersBtn.addEventListener("click", function () {
-        document.getElementById("filter-model").value = "";
-        document.getElementById("filter-hardware").value = "";
-        document.getElementById("filter-env").value = "";
-        applyFilters();
-    });
-}
-
-// Debounced filter inputs
-var filterInputs = ["filter-model", "filter-hardware"];
-for (var fi = 0; fi < filterInputs.length; fi++) {
-    (function (id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        var timer;
-        el.addEventListener("input", function () {
-            clearTimeout(timer);
-            timer = setTimeout(function () { applyFilters(); }, 300);
-        });
-    })(filterInputs[fi]);
-}
-
-var envFilterEl = document.getElementById("filter-env");
-if (envFilterEl) {
-    envFilterEl.addEventListener("change", function () { applyFilters(); });
-}
-
-// ---------------------------------------------------------------------------
 // Render Results (Raw Speed / Past Runs)
 // ---------------------------------------------------------------------------
 function renderResults() {
