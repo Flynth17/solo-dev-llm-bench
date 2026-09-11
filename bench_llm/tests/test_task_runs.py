@@ -335,7 +335,8 @@ class TestBenchmarkHistoryUnaffected(unittest.TestCase):
         import tempfile
 
         db_path = os.path.join(tempfile.gettempdir(), "test_benchmark.db")
-        store = ResultsStore(db_path=Path(db_path))
+        csv_path = os.path.join(tempfile.gettempdir(), "test_benchmark.csv")
+        store = ResultsStore(csv_path=Path(csv_path), db_path=Path(db_path))
 
         # Add a benchmark run
         store.add_run({
@@ -365,7 +366,7 @@ class TestBenchmarkHistoryUnaffected(unittest.TestCase):
         # Clean up
         try:
             os.unlink(db_path)
-            os.unlink(db_path + "-csv")
+            os.unlink(csv_path)
         except OSError:
             pass
 
@@ -416,6 +417,61 @@ class TestAllExistingTestsStillPass(unittest.TestCase):
         import src.benchmark
         import src.task_manager
         # If any module has a syntax error, this will fail
+
+
+class TestResultsStoreDoesNotPolluteProductionCSV(unittest.TestCase):
+    """Regression: ResultsStore with temp db_path must not touch the production CSV."""
+
+    def test_temp_store_preserves_production_csv(self):
+        import hashlib
+        from src.results import ResultsStore, _DEFAULT_CSV_PATH
+        from pathlib import Path
+        import tempfile
+
+        # Record production CSV checksum before
+        with open(_DEFAULT_CSV_PATH, "rb") as f:
+            before_hash = hashlib.md5(f.read()).hexdigest()
+
+        db_path = os.path.join(tempfile.gettempdir(), "test_pollution.db")
+        csv_path = os.path.join(tempfile.gettempdir(), "test_pollution.csv")
+        try:
+            store = ResultsStore(csv_path=Path(csv_path), db_path=Path(db_path))
+            store.add_run({
+                "timestamp": "2026-01-01T00:00:00Z",
+                "run_id": "pollution-test-001",
+                "model_key": "test-model",
+                "model_display_name": "Test Model",
+                "hardware_label": "CPU",
+                "execution_environment": "Local",
+                "connection_type": "",
+                "iteration": 1,
+                "cold_or_warm": "cold",
+                "tokens_per_second": 100.0,
+                "ttft_seconds": 0.5,
+                "input_tokens": 128,
+                "output_tokens": 256,
+                "model_load_time_seconds": None,
+                "wall_time_seconds": 3.0,
+                "prompt_name": "test",
+                "max_output_tokens": 500,
+                "temperature": 0,
+            })
+            # Verify temp store has our row
+            all_runs = store.get_all()
+            self.assertTrue(len(all_runs) >= 1)
+            self.assertEqual(all_runs[0]["run_id"], "pollution-test-001")
+        finally:
+            try:
+                os.unlink(db_path)
+                os.unlink(csv_path)
+            except OSError:
+                pass
+
+        # Verify production CSV was NOT modified
+        with open(_DEFAULT_CSV_PATH, "rb") as f:
+            after_hash = hashlib.md5(f.read()).hexdigest()
+        self.assertEqual(before_hash, after_hash,
+                         "ResultsStore with temp paths must not modify the production CSV")
 
 
 if __name__ == "__main__":

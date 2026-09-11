@@ -92,6 +92,26 @@ def init_tasks_table() -> None:
 # Public API
 # ------------------------------------------------------------------
 
+def _next_task_number() -> int:
+    """Return the next monotonic task number, never reusing deleted IDs."""
+    conn = _get_conn()
+    try:
+        cursor = conn.execute("SELECT task_id FROM tasks")
+        max_num = 0
+        for (task_id,) in cursor:
+            parts = task_id.rsplit("-", 1)
+            if len(parts) == 2:
+                try:
+                    num = int(parts[1])
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    pass
+        return max_num + 1
+    finally:
+        conn.close()
+
+
 def create_task(
     name: str,
     task_type: str,
@@ -100,7 +120,7 @@ def create_task(
 ) -> dict:
     """Create a new benchmark task and return it."""
     now = datetime.now(timezone.utc).isoformat()
-    task_id = f"task-{name[:20]}-{len(_list_all()) + 1:03d}"
+    task_id = f"task-{name[:20]}-{_next_task_number():03d}"
     row: dict[str, Any] = {
         "task_id": task_id,
         "name": name,
