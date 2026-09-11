@@ -241,11 +241,9 @@ async def run_evaluation_endpoint(config: dict):
     connection_type = config.get("connection_type", "")
 
     # Resolve exact quantization for the selected model from the live registry (shared by both speed and correctness rows).
-    try:
-        from src.benchmark import resolve_model_quantization as _resolve_mq
-        model_quantization = await _resolve_mq(lm_studio_url, model)
-    except Exception:
-        model_quantization = ""
+    # The resolver distinguishes failure modes; errors map to a stable label rather than a silent empty string.
+    from src.benchmark import resolve_persisted_quantization as _resolve_mq
+    model_quantization = await _resolve_mq(lm_studio_url, model)
 
     # Speed tests use a fixed output budget (1024 tokens) regardless of UI setting.
     # Correctness tests use the user-selected max_output_tokens value.

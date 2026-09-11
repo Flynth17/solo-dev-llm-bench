@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import httpx
@@ -40,28 +41,91 @@ async def fetch_models(lm_studio_url: str) -> list[dict]:
     return models
 
 
-async def resolve_model_quantization(lm_studio_url: str, model_key: str) -> str:
-    """Resolve the exact quantization string for a selected model key from the live LM Studio registry.
+# Resolution statuses. These distinguish the failure modes so they are never
+# silently conflated into a single (misleading) quantization value downstream.
+QUANT_FOUND = "found"          # model present, usable quantization value available
+QUANT_ABSENT = "absent"        # model present but registry exposes no quantization metadata
+QUANT_MALFORMED = "malformed"  # quantization field present but not a usable value
+QUANT_NOT_FOUND = "not_found"  # model key absent from the registry
+QUANT_ERROR = "error"          # provider/lookup failure (network, HTTP, malformed JSON)
 
-    Returns an empty string when the model is unknown or the registry does not expose a
-    quantization value. Never infers or parses quantization from the model name.
-    """
+# Persisted label for each non-FOUND status in the model_quantization column.
+# FOUND uses its resolved value verbatim (see persisted_quantization).
+_QUANT_PERSIST_LABELS = {
+    QUANT_ABSENT: "metadata_absent",
+    QUANT_MALFORMED: "metadata_malformed",
+    QUANT_NOT_FOUND: "model_not_found",
+    QUANT_ERROR: "lookup_failed",
+}
+
+
+@dataclass(frozen=True)
+class QuantizationStatus:
+    """Result of resolving a model's exact quantization from the live registry."""
+
+    status: str
+    value: str = ""
+    detail: str = ""
+
+
+async def _resolve_quantization_status(lm_studio_url: str, model_key: str) -> QuantizationStatus:
+    """Resolve the exact quantization for a model key, distinguishing failure modes."""
     try:
         models = await fetch_models(lm_studio_url)
-    except Exception:
-        return ""
+    except Exception as exc:
+        return QuantizationStatus(
+            status=QUANT_ERROR, value="", detail=f"{type(exc).__name__}: {exc}"
+        )
 
     for m in models:
         if m.get("key") == model_key:
             q = m.get("quantization", "")
             if isinstance(q, str):
-                return q or ""
+                if q:
+                    return QuantizationStatus(status=QUANT_FOUND, value=q)
+                return QuantizationStatus(status=QUANT_ABSENT, value="")
             if isinstance(q, dict):
                 name = q.get("name") or q.get("display_name")
-                return str(name) if name else ""
-            if q:
-                return str(q)
-    return ""
+                if name:
+                    return QuantizationStatus(status=QUANT_FOUND, value=str(name))
+                return QuantizationStatus(
+                    status=QUANT_MALFORMED,
+                    value="",
+                    detail="quantization dict without name/display_name",
+                )
+            return QuantizationStatus(
+                status=QUANT_MALFORMED,
+                value="",
+                detail=f"unexpected quantization type: {type(q).__name__}",
+            )
+
+    return QuantizationStatus(
+        status=QUANT_NOT_FOUND, value="", detail=f"model key {model_key!r} not in registry"
+    )
+
+
+def persisted_quantization(status: QuantizationStatus) -> str:
+    """Map a resolution status to the value to persist in model_quantization.
+
+    FOUND returns the resolved value verbatim; every failure mode maps to a stable,
+    non-fabricated label so states are not conflated into a misleading value.
+    """
+    if status.status == QUANT_FOUND:
+        return status.value or ""
+    return _QUANT_PERSIST_LABELS.get(status.status, "lookup_failed")
+
+
+async def resolve_persisted_quantization(lm_studio_url: str, model_key: str) -> str:
+    """Resolve quantization and return the value to persist (distinguishing failure modes)."""
+    return persisted_quantization(await _resolve_quantization_status(lm_studio_url, model_key))
+
+
+async def resolve_model_quantization(lm_studio_url: str, model_key: str) -> str:
+    """Backward-compatible wrapper returning the raw resolved quantization string or ''.
+
+    Prefer :func:`resolve_persisted_quantization`, which distinguishes failure modes.
+    """
+    return (await _resolve_quantization_status(lm_studio_url, model_key)).value
 
 
 async def run_benchmark(
