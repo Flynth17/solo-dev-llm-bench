@@ -248,51 +248,66 @@ class TestRepeatedJavaEvaluations:
     async def test_repeated_java_evaluations_create_new_runs(self):
         """Repeated Java evaluations must create new task_run rows, not overwrite."""
         import src.task_manager as tm
+        import tempfile
 
-        # Create a task for Java
-        task = tm.create_task(name="Java Correctness", task_type="java", prompt="")
-        task_id = task["task_id"]
+        # Isolate writes: point DB_PATH at a throwaway temp SQLite file so this
+        # test never pollutes the production benchmark_results.db. create_task_run
+        # stays real (unmocked) so we still validate repeated-evaluation behavior.
+        _orig_db_path = tm.DB_PATH
+        _tmp_db = os.path.join(tempfile.gettempdir(), "test_repeated_java_eval.db")
+        if os.path.exists(_tmp_db):
+            os.unlink(_tmp_db)
+        tm.DB_PATH = _tmp_db
+        tm.init_tasks_table()
+        try:
+            # Create a task for Java
+            task = tm.create_task(name="Java Correctness", task_type="java", prompt="")
+            task_id = task["task_id"]
 
-        # Create two task runs
-        run1 = tm.create_task_run(
-            task_id=task_id,
-            task_name="Java Correctness",
-            task_type="java_correctness",
-            model="model-1",
-            timestamp="2025-01-01T00:00:00+00:00",
-            passed=True,
-            score=0.75,
-            output_tokens=200,
-            input_tokens=500,
-            tokens_per_second=50.0,
-            ttft_seconds=0.3,
-            wall_time_seconds=5.0,
-            result={"score": 0.75},
-        )
+            # Create two task runs
+            run1 = tm.create_task_run(
+                task_id=task_id,
+                task_name="Java Correctness",
+                task_type="java_correctness",
+                model="model-1",
+                timestamp="2025-01-01T00:00:00+00:00",
+                passed=True,
+                score=0.75,
+                output_tokens=200,
+                input_tokens=500,
+                tokens_per_second=50.0,
+                ttft_seconds=0.3,
+                wall_time_seconds=5.0,
+                result={"score": 0.75},
+            )
 
-        run2 = tm.create_task_run(
-            task_id=task_id,
-            task_name="Java Correctness",
-            task_type="java_correctness",
-            model="model-2",
-            timestamp="2025-01-02T00:00:00+00:00",
-            passed=False,
-            score=0.5,
-            output_tokens=150,
-            input_tokens=400,
-            tokens_per_second=40.0,
-            ttft_seconds=0.4,
-            wall_time_seconds=6.0,
-            result={"score": 0.5},
-        )
+            run2 = tm.create_task_run(
+                task_id=task_id,
+                task_name="Java Correctness",
+                task_type="java_correctness",
+                model="model-2",
+                timestamp="2025-01-02T00:00:00+00:00",
+                passed=False,
+                score=0.5,
+                output_tokens=150,
+                input_tokens=400,
+                tokens_per_second=40.0,
+                ttft_seconds=0.4,
+                wall_time_seconds=6.0,
+                result={"score": 0.5},
+            )
 
-        # Both runs should have different IDs (create_task_run returns "id" not "run_id")
-        assert run1["id"] != run2["id"]
+            # Both runs should have different IDs (create_task_run returns "id" not "run_id")
+            assert run1["id"] != run2["id"]
 
-        # Both should be retrievable
-        runs = tm.get_task_runs()
-        java_runs = [r for r in runs if r.get("task_type") == "java_correctness"]
-        assert len(java_runs) >= 2
+            # Both should be retrievable
+            runs = tm.get_task_runs()
+            java_runs = [r for r in runs if r.get("task_type") == "java_correctness"]
+            assert len(java_runs) >= 2
+        finally:
+            tm.DB_PATH = _orig_db_path
+            if os.path.exists(_tmp_db):
+                os.unlink(_tmp_db)
 
 
 # ------------------------------------------------------------------

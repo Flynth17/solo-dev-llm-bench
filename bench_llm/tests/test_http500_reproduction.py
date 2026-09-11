@@ -41,7 +41,8 @@ class TestMarkdownCorrectnessHttp500:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client), \
+             patch("src.task_manager.create_task_run"):
             resp = client.post("/api/evaluation/run", json={
                 "lm_studio_url": "http://127.0.0.1:1234",
                 "model": "test-model",
@@ -78,7 +79,8 @@ class TestMarkdownCorrectnessHttp500:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client), \
+             patch("src.task_manager.create_task_run"):
             resp = client.post("/api/evaluation/run", json={
                 "lm_studio_url": "http://127.0.0.1:1234",
                 "model": "test-model",
@@ -115,7 +117,8 @@ class TestMarkdownCorrectnessHttp500:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx.AsyncClient", return_value=mock_client), \
+             patch("src.task_manager.create_task_run"):
             resp = client.post("/api/evaluation/run", json={
                 "lm_studio_url": "http://127.0.0.1:1234",
                 "model": "test-model",

@@ -299,6 +299,14 @@ class TestIntegrationWithDB:
         import sqlite3
         import src.task_manager as tm
 
+        import tempfile
+
+        _orig_db_path = tm.DB_PATH
+        _tmp_db = os.path.join(tempfile.gettempdir(), "test_java_ttn.db")
+        if os.path.exists(_tmp_db):
+            os.unlink(_tmp_db)
+        tm.DB_PATH = _tmp_db
+
         # Ensure tables exist
         tm.init_tasks_table()
 
@@ -329,6 +337,9 @@ class TestIntegrationWithDB:
 
         finally:
             conn.close()
+            tm.DB_PATH = _orig_db_path
+            if os.path.exists(_tmp_db):
+                os.unlink(_tmp_db)
 
 
 # ------------------------------------------------------------------
@@ -351,6 +362,14 @@ class TestAPIEndpointReturnsCorrectData:
         app.include_router(tasks_router)
 
         client = TestClient(app)
+
+        import tempfile
+
+        _orig_db_path = tm.DB_PATH
+        _tmp_db = os.path.join(tempfile.gettempdir(), "test_java_ttn.db")
+        if os.path.exists(_tmp_db):
+            os.unlink(_tmp_db)
+        tm.DB_PATH = _tmp_db
 
         # Ensure tables exist and insert test data
         tm.init_tasks_table()
@@ -377,6 +396,9 @@ class TestAPIEndpointReturnsCorrectData:
 
         finally:
             conn.close()
+            tm.DB_PATH = _orig_db_path
+            if os.path.exists(_tmp_db):
+                os.unlink(_tmp_db)
 
 
 # ------------------------------------------------------------------
@@ -397,6 +419,14 @@ class TestJavaResultsTabPopulated:
         app = FastAPI()
         app.include_router(tasks_router)
         client = TestClient(app)
+
+        import tempfile
+
+        _orig_db_path = tm.DB_PATH
+        _tmp_db = os.path.join(tempfile.gettempdir(), "test_java_ttn.db")
+        if os.path.exists(_tmp_db):
+            os.unlink(_tmp_db)
+        tm.DB_PATH = _tmp_db
 
         tm.init_tasks_table()
         conn = sqlite3.connect(tm.DB_PATH)
@@ -421,3 +451,6 @@ class TestJavaResultsTabPopulated:
 
         finally:
             conn.close()
+            tm.DB_PATH = _orig_db_path
+            if os.path.exists(_tmp_db):
+                os.unlink(_tmp_db)
