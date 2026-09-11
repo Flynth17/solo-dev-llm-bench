@@ -72,9 +72,9 @@ class TestValidateSpeedTests:
 # ------------------------------------------------------------------
 
 class TestValidateCorrectnessTests:
-    def test_empty_list_raises(self) -> None:
-        with pytest.raises(HTTPException):
-            _validate_correctness_tests([])
+    def test_empty_list_allowed(self) -> None:
+        """Empty list is allowed (speed-only runs are valid)."""
+        assert _validate_correctness_tests([]) == []
 
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(HTTPException):
@@ -155,13 +155,44 @@ class TestEvaluationEndpointValidation:
         assert resp.status_code == 400
 
     def test_empty_correctness_tests_only(self) -> None:
-        """Empty correctness_tests should reject."""
-        resp = client.post("/api/evaluation/run", json={
+        """Empty correctness_tests is accepted.
+
+        The speed run that would otherwise require a live LM Studio server is
+        mocked so the assertion depends only on request validation, not on
+        whether an LM Studio instance is up or down.
+        """
+        mock_speed_result = {
+            "run_id": "speed-run-1",
+            "timestamp": "2024-01-01T00:00:00+00:00",
             "model": "test-model",
-            "speed_tests": ["small"],
-            "correctness_tests": [],
-        })
-        assert resp.status_code == 400
+            "runs": [
+                {
+                    "iteration": 1,
+                    "cold_or_warm": "warm",
+                    "tokens_per_second": 200.0,
+                    "ttft_seconds": 0.5,
+                    "input_tokens": 100,
+                    "output_tokens": 100,
+                    "wall_time_seconds": 1.0,
+                }
+            ],
+        }
+        with patch("src.benchmark.run_benchmark", return_value=mock_speed_result):
+            # Neutralize persistence for this focused test without changing
+            # production code: patch the exact add_run reference that
+            # src.routes.evaluation obtains via _get_results_store(). The mocked
+            # benchmark still returns a valid non-empty run so the route exercises
+            # the successful 200 path, but no row is written to SQLite/CSV.
+            from src.routes.evaluation import _get_results_store
+
+            results_store = _get_results_store()
+            with patch.object(results_store, "add_run"):
+                resp = client.post("/api/evaluation/run", json={
+                    "model": "test-model",
+                    "speed_tests": ["small"],
+                    "correctness_tests": [],
+                })
+        assert resp.status_code == 200, f"Expected acceptance (200), got {resp.status_code}: {resp.text}"
 
     def test_unknown_correctness_test(self) -> None:
         resp = client.post("/api/evaluation/run", json={

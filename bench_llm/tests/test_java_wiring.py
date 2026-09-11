@@ -155,10 +155,9 @@ class TestEvaluationRejectsUnknown:
         with pytest.raises(HTTPException):
             _validate_correctness_tests(["javascript"])
 
-    def test_empty_list_rejected(self):
-        """Empty list must be rejected."""
-        with pytest.raises(HTTPException):
-            _validate_correctness_tests([])
+    def test_empty_list_allowed(self):
+        """Empty list is allowed (speed-only runs are valid)."""
+        assert _validate_correctness_tests([]) == []
 
 
 # ------------------------------------------------------------------
