@@ -128,6 +128,46 @@ async def resolve_model_quantization(lm_studio_url: str, model_key: str) -> str:
     return (await _resolve_quantization_status(lm_studio_url, model_key)).value
 
 
+async def resolve_context_capacity(lm_studio_url: str, model: str) -> dict[str, int | None]:
+    """Resolve the configured maximum context window for a model.
+
+    Returns ``{"model_max_context": ..., "loaded_context": ...}`` where each value
+    is an int or ``None``.  Strictly best-effort and never fabricated: on any
+    failure (404, network error, malformed JSON) or when the field is absent we
+    return ``None`` rather than assume a default context size.
+
+    Reliable configured-max source in this environment's LM Studio API is
+    ``max_context_length`` on ``GET /api/v1/models`` — the same registry endpoint
+    already fetched for quantization. ``loaded_context`` is intentionally left
+    ``None``: no reliable API field exposes the currently-loaded context size, and
+    inferring it from prompt tokens is not permitted. Do not substitute an assumed
+    default (see Act 7 notes).
+    """
+    result: dict[str, int | None] = {"model_max_context": None, "loaded_context": None}
+    try:
+        url = f"{lm_studio_url}{MODELS_ENDPOINT}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return result
+            data = resp.json()
+    except Exception:
+        # Any failure (connection error, malformed JSON, non-JSON body) -> unavailable.
+        return result
+
+    models = data.get("models", data) if isinstance(data, dict) else []
+    for m in models:
+        if not isinstance(m, dict):
+            continue
+        if m.get("key") == model:
+            ctx = m.get("max_context_length")
+            if isinstance(ctx, int) and ctx > 0:
+                # Configured maximum context window (reliable machine-readable source).
+                result["model_max_context"] = ctx
+            break
+    return result
+
+
 async def run_benchmark(
     lm_studio_url: str,
     model: str,
@@ -166,6 +206,7 @@ async def run_benchmark(
         - connection_type: str
         - prompt_name: str
         - iterations: int
+        - benchmark_duration_seconds: float (total elapsed across every request of this invocation)
         - runs: list[dict]  (per-iteration results)
         - aggregate: dict    (avg/min/max tokens/sec)
         - warm_aggregate: dict (warm-only avg tokens/sec and TTFT)
@@ -183,6 +224,9 @@ async def run_benchmark(
     runs: list[dict] = []
     run_id = str(uuid.uuid4())
 
+    # Total elapsed across every request of this benchmark invocation. Distinct from
+    # per-iteration wall_time_seconds, which measures a single request.
+    loop_start = time.perf_counter()
     async with httpx.AsyncClient(timeout=300.0) as client:
         for i in range(1, iterations + 1):
             start = time.perf_counter()
@@ -208,6 +252,8 @@ async def run_benchmark(
                 "model_quantization": model_quantization or "",
             }
             runs.append(run_result)
+
+    benchmark_duration_seconds = round(time.perf_counter() - loop_start, 4)
 
     # Compute overall aggregate (all iterations)
     tps_values = [r["tokens_per_second"] for r in runs if r["tokens_per_second"] > 0]
@@ -250,6 +296,7 @@ async def run_benchmark(
         "connection_type": connection_type,
         "prompt_name": prompt_name,
         "iterations": iterations,
+        "benchmark_duration_seconds": benchmark_duration_seconds,
         "runs": runs,
         "aggregate": aggregate,
         "warm_aggregate": warm_aggregate,

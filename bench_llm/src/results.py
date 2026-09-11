@@ -37,6 +37,24 @@ CSV_HEADERS = [
     "prompt_name",
     "max_output_tokens",
     "temperature",
+    # --- Act 7: reproducible/comparable run metadata (additive) ---
+    # Context (kept distinct — never conflated with one another).
+    "model_max_context",
+    "loaded_context",
+    "prompt_tokens",
+    # Machine / environment snapshot (stable fields; None when unavailable).
+    "cpu_model",
+    "cpu_logical_cores",
+    "cpu_physical_cores",
+    "installed_ram_bytes",
+    "gpu_model",
+    "total_vram_bytes",
+    "os_platform",
+    "os_version",
+    "nvidia_driver_version",
+    "python_version",
+    # Invocation-level timing (distinct from per-request wall_time_seconds).
+    "benchmark_duration_seconds",
 ]
 
 # SQLite column types matching CSV_HEADERS
@@ -60,6 +78,43 @@ SQLITE_COLUMNS = [
     ("prompt_name", "TEXT"),
     ("max_output_tokens", "INTEGER"),
     ("temperature", "REAL"),
+    # --- Act 7: additive metadata columns (types mirror CSV_HEADERS order) ---
+    ("model_max_context", "INTEGER"),
+    ("loaded_context", "INTEGER"),
+    ("prompt_tokens", "INTEGER"),
+    ("cpu_model", "TEXT"),
+    ("cpu_logical_cores", "INTEGER"),
+    ("cpu_physical_cores", "INTEGER"),
+    ("installed_ram_bytes", "INTEGER"),
+    ("gpu_model", "TEXT"),
+    ("total_vram_bytes", "INTEGER"),
+    ("os_platform", "TEXT"),
+    ("os_version", "TEXT"),
+    ("nvidia_driver_version", "TEXT"),
+    ("python_version", "TEXT"),
+    # Invocation-level timing (distinct from per-request wall_time_seconds).
+    ("benchmark_duration_seconds", "REAL"),
+]
+
+# Columns added additively after initial schema creation. Existing databases
+# created before these fields gain them via ALTER TABLE so historical rows load
+# as NULL/None rather than failing. Values default to blank/None (unavailable).
+OPTIONAL_METADATA_COLUMNS = [
+    ("model_max_context", "INTEGER"),
+    ("loaded_context", "INTEGER"),
+    ("prompt_tokens", "INTEGER"),
+    ("cpu_model", "TEXT"),
+    ("cpu_logical_cores", "INTEGER"),
+    ("cpu_physical_cores", "INTEGER"),
+    ("installed_ram_bytes", "INTEGER"),
+    ("gpu_model", "TEXT"),
+    ("total_vram_bytes", "INTEGER"),
+    ("os_platform", "TEXT"),
+    ("os_version", "TEXT"),
+    ("nvidia_driver_version", "TEXT"),
+    ("python_version", "TEXT"),
+    # Invocation-level timing (distinct from per-request wall_time_seconds).
+    ("benchmark_duration_seconds", "REAL"),
 ]
 
 # Blank placeholder for missing values
@@ -157,6 +212,14 @@ class ResultsStore:
                 conn.execute(
                     "ALTER TABLE runs ADD COLUMN model_quantization TEXT DEFAULT ''"
                 )
+            # Additive, backward-compatible metadata columns (Act 7). Databases
+            # created before these fields gain them via ALTER so historical rows
+            # simply load as NULL/None instead of crashing.
+            for _col, _type in OPTIONAL_METADATA_COLUMNS:
+                if _col not in existing_cols:
+                    conn.execute(
+                        f"ALTER TABLE runs ADD COLUMN {_col} {_type} DEFAULT ''"
+                    )
             conn.commit()
             # Metadata table for migration tracking
             conn.execute("""

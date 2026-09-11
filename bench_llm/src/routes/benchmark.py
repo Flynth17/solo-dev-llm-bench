@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 import src.app_state
-from src.benchmark import run_benchmark, resolve_persisted_quantization
+from src.benchmark import (
+    run_benchmark,
+    resolve_persisted_quantization,
+    resolve_context_capacity,
+)
+from src.hardware import snapshot_hardware
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -84,6 +89,11 @@ async def run_benchmark_endpoint(config: dict):
     # distinguishing failure modes so they are not conflated in stored results.
     model_quantization = await resolve_persisted_quantization(lm_studio_url, model_key)
 
+    # Act 7: capture machine snapshot + context capacity ONCE per invocation,
+    # then reuse across all iteration rows (stable fields, not recomputed per row).
+    hardware_snapshot = snapshot_hardware()
+    context_capacity = await resolve_context_capacity(lm_studio_url, model)
+
     results_store = _get_results_store()
     for run in benchmark_result["runs"]:
         row = {
@@ -103,9 +113,32 @@ async def run_benchmark_endpoint(config: dict):
             "output_tokens": run["output_tokens"],
             "model_load_time_seconds": run.get("model_load_time_seconds"),
             "wall_time_seconds": run["wall_time_seconds"],
+            # Total elapsed across every request of this invocation. Identical value
+            # on each row (mirrors how run_id/timestamp are shared); distinct from the
+            # per-request wall_time_seconds above.
+            "benchmark_duration_seconds": benchmark_result["benchmark_duration_seconds"],
             "prompt_name": prompt_name,
             "max_output_tokens": max_tokens,
             "temperature": temperature,
+            # --- Act 7: reproducible / comparable run metadata ---
+            # Context fields are kept distinct (never conflated):
+            #   prompt_tokens      = actual live context used by the request
+            #   model_max_context    = configured model max context (None if unavailable)
+            #   loaded_context       = loaded/n_ctx of running model  (None if unavailable)
+            "prompt_tokens": run["input_tokens"],
+            "model_max_context": context_capacity.get("model_max_context"),
+            "loaded_context": context_capacity.get("loaded_context"),
+            # Machine / environment snapshot (stable fields; None when unavailable).
+            "cpu_model": hardware_snapshot.get("cpu_model"),
+            "cpu_logical_cores": hardware_snapshot.get("cpu_logical_cores"),
+            "cpu_physical_cores": hardware_snapshot.get("cpu_physical_cores"),
+            "installed_ram_bytes": hardware_snapshot.get("installed_ram_bytes"),
+            "gpu_model": hardware_snapshot.get("gpu_model"),
+            "total_vram_bytes": hardware_snapshot.get("total_vram_bytes"),
+            "os_platform": hardware_snapshot.get("os_platform"),
+            "os_version": hardware_snapshot.get("os_version"),
+            "nvidia_driver_version": hardware_snapshot.get("nvidia_driver_version"),
+            "python_version": hardware_snapshot.get("python_version"),
         }
         results_store.add_run(row)
 
