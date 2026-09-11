@@ -76,7 +76,9 @@ class TestExtractFinalMessage(TestCase):
 
         content, reason = _extract_final_message("  # Title\n\nSome text.  ")
 
-        self.assertEqual(content, "# Title\n\nSome text.")
+        # Documented lstrip-only contract: leading whitespace is trimmed while
+        # trailing characters (spaces/newlines) are preserved for MD047.
+        self.assertEqual(content, "# Title\n\nSome text.  ")
         self.assertEqual(reason, "")
 
     def test_dict_with_output_key(self):
