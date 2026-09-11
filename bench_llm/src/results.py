@@ -180,6 +180,218 @@ def _blank_or(value):
     return str(value)
 
 
+# ----------------------------------------------------------------------
+# Reporting / presentation helpers (pure, no I/O).
+#
+# These derive *display-ready* values from stored rows WITHOUT mutating the
+# canonical byte/token fields.  Missing data is preserved as None/blank and is
+# never synthesised to zero: a missing metric is not equivalent to zero usage.
+# ----------------------------------------------------------------------
+
+_BYTES_UNITS = ("B", "KiB", "MiB", "GiB", "TiB")
+
+
+def format_bytes(value):
+    """Human-readable byte string for presentation.
+
+    Contract (missing data is never faked as zero):
+        None  -> None   (hardware/source unavailable)
+        ""    -> ""      (blank/unavailable preserved)
+        0     -> "0 B"   (a genuine, measured zero)
+        other -> KiB/MiB/GiB/TiB with one decimal place
+
+    Non-numeric or negative input is treated as unavailable (``None``) rather
+    than a fabricated number.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if value == "":
+            return ""
+    try:
+        size = float(int(value))
+    except (ValueError, TypeError):
+        return None
+    if size < 0:
+        # Negative is not a valid byte count -> unavailable.
+        return None
+    if size == 0:
+        return "0 B"
+    units_index = 0
+    while size >= 1024 and units_index < len(_BYTES_UNITS) - 1:
+        size /= 1024.0
+        units_index += 1
+    return f"{size:.1f} {_BYTES_UNITS[units_index]}"
+
+
+def context_utilisation_pct(row):
+    """Derive live-context utilisation percentage from a stored row.
+
+    Context is kept distinct from cumulative token counters: the numerator is
+    ``prompt_tokens`` (actual live input tokens for the request) and the
+    denominator is the largest available capacity among
+    ``model_max_context`` / ``loaded_context``.  Returns None whenever a valid
+    denominator does not exist, so callers never divide by zero and never
+    fabricate a percentage.
+    """
+    if not isinstance(row, dict):
+        return None
+
+    denom = None
+    for key in ("model_max_context", "loaded_context"):
+        cap = row.get(key)
+        try:
+            cap_val = float(int(cap))
+        except (ValueError, TypeError):
+            continue
+        if cap_val > 0 and (denom is None or cap_val > denom):
+            denom = cap_val
+
+    prompt_tokens = row.get("prompt_tokens")
+    try:
+        num = float(int(prompt_tokens))
+    except (ValueError, TypeError):
+        return None
+    if num <= 0 or not denom:
+        # No live context to measure against -> not calculable.
+        return None
+
+    return round(100.0 * num / denom, 2)
+
+
+def _comparison_bytes(row, key):
+    """Return (canonical_bytes_value, human_readable_or_None) for a byte field."""
+    raw = row.get(key)
+    return raw, format_bytes(raw)
+
+
+def build_comparison_summary(run):
+    """Compact, comparable snapshot of a single benchmark run.
+
+    Mirrors the existing comparison model (model / quantization / context /
+    speed / duration / resource utilisation) and augments it with the Act 7
+    machine snapshot and Act 8 runtime telemetry so two runs can be told apart
+    at a glance.  Canonical byte values are preserved alongside human-readable
+    presentation values; every field degrades to None/blank when unavailable.
+    """
+    if not isinstance(run, dict):
+        return {}
+
+    installed_ram_bytes, installed_ram = _comparison_bytes(run, "installed_ram_bytes")
+    total_vram_bytes, total_vram = _comparison_bytes(run, "total_vram_bytes")
+    peak_vram_bytes, peak_vram = _comparison_bytes(run, "vram_used_peak_bytes")
+    system_ram_peak_bytes, system_ram_peak = _comparison_bytes(
+        run, "system_ram_used_peak_bytes"
+    )
+    process_rss_peak_bytes, process_rss_peak = _comparison_bytes(
+        run, "process_rss_peak_bytes"
+    )
+
+    warm_tps = run.get("tokens_per_second")
+    try:
+        decode_speed = round(float(warm_tps), 2) if float(warm_tps) > 0 else None
+    except (ValueError, TypeError):
+        decode_speed = None
+
+    ttft = run.get("ttft_seconds")
+    try:
+        ttft_val = round(float(ttft), 3) if float(ttft) is not None and float(ttft) >= 0 else None
+    except (ValueError, TypeError):
+        ttft_val = None
+
+    duration = run.get("benchmark_duration_seconds")
+    try:
+        duration_val = round(float(duration), 2) if float(duration) > 0 else None
+    except (ValueError, TypeError):
+        duration_val = None
+
+    return {
+        # Identity / configuration
+        "model": run.get("model_display_name") or run.get("model_key") or "",
+        "model_key": run.get("model_key") or "",
+        "model_quantization": run.get("model_quantization") or "",
+        "hardware_label": run.get("hardware_label") or "",
+        # Context (kept distinct from cumulative counters)
+        "context_size": _largest_capacity(run),
+        "loaded_context": run.get("loaded_context"),
+        "prompt_tokens": run.get("prompt_tokens"),
+        "context_utilisation_pct": context_utilisation_pct(run),
+        # Timing (historical TTFT field name preserved)
+        "ttft_seconds": ttft_val,
+        "tokens_per_second": decode_speed,
+        "benchmark_duration_seconds": duration_val,
+        # Resource peaks
+        "peak_system_ram_bytes": system_ram_peak_bytes,
+        "peak_system_ram_human_readable": system_ram_peak,
+        "peak_process_rss_bytes": process_rss_peak_bytes,
+        "peak_process_rss_human_readable": process_rss_peak,
+        "peak_vram_bytes": peak_vram_bytes,
+        "peak_vram_human_readable": peak_vram,
+        # Runtime utilisation telemetry
+        "cpu_util_avg_pct": run.get("cpu_util_avg_pct"),
+        "cpu_util_peak_pct": run.get("cpu_util_peak_pct"),
+        "gpu_util_avg_pct": run.get("gpu_util_avg_pct"),
+        "gpu_util_peak_pct": run.get("gpu_util_peak_pct"),
+        "telemetry_sample_count": run.get("telemetry_sample_count"),
+        # Static machine snapshot
+        "cpu_model": run.get("cpu_model") or "",
+        "cpu_logical_cores": run.get("cpu_logical_cores"),
+        "cpu_physical_cores": run.get("cpu_physical_cores"),
+        "installed_ram_bytes": installed_ram_bytes,
+        "installed_ram_human_readable": installed_ram,
+        "gpu_model": run.get("gpu_model") or "",
+        "total_vram_bytes": total_vram_bytes,
+        "total_vram_human_readable": total_vram,
+        "nvidia_driver_version": run.get("nvidia_driver_version") or "",
+        "os_platform": run.get("os_platform") or "",
+        "os_version": run.get("os_version") or "",
+        "python_version": run.get("python_version") or "",
+    }
+
+
+def _largest_capacity(run):
+    """Return the largest available context capacity (max of known capacities)."""
+    if not isinstance(run, dict):
+        return None
+    best = None
+    for key in ("model_max_context", "loaded_context"):
+        cap = run.get(key)
+        try:
+            cap_val = int(cap)
+        except (ValueError, TypeError):
+            continue
+        if cap_val > 0 and (best is None or cap_val > best):
+            best = cap_val
+    return best
+
+
+def enriched_run(row):
+    """Return a presentation-ready copy of a stored run for reporting.
+
+    The canonical byte/token fields are preserved untouched; display-only keys
+    (human-readable RAM/VRAM, derived context utilisation and a compact
+    comparison summary) are added.  This never mutates the input row or the
+    persisted store.
+    """
+    if not isinstance(row, dict):
+        return {}
+
+    enriched = dict(row)
+    installed_ram_bytes = row.get("installed_ram_bytes")
+    total_vram_bytes = row.get("total_vram_bytes")
+    peak_vram_bytes = row.get("vram_used_peak_bytes")
+    system_ram_peak_bytes = row.get("system_ram_used_peak_bytes")
+
+    enriched["installed_ram"] = format_bytes(installed_ram_bytes)
+    enriched["total_vram"] = format_bytes(total_vram_bytes)
+    enriched["peak_vram"] = format_bytes(peak_vram_bytes)
+    enriched["peak_system_ram"] = format_bytes(system_ram_peak_bytes)
+    enriched["context_utilisation_pct"] = context_utilisation_pct(row)
+    enriched["comparison_summary"] = build_comparison_summary(enriched)
+    return enriched
+
+
 class ResultsStore:
     """Manages benchmark results in memory and on disk.
 
