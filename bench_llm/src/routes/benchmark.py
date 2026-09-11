@@ -12,6 +12,7 @@ from src.benchmark import (
     resolve_context_capacity,
 )
 from src.hardware import snapshot_hardware
+from src.telemetry import TelemetrySampler, TELEMETRY_SAMPLE_INTERVAL
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -62,6 +63,12 @@ async def run_benchmark_endpoint(config: dict):
     execution_environment = config.get("execution_environment", "Local")
     connection_type = config.get("connection_type", "")
 
+    # Act 8: runtime utilisation telemetry for this invocation. The sampler starts
+    # before the benchmark iterations and is always stopped afterwards (a finally block
+    # guarantees no background thread leaks on failure). Values are captured once per
+    # invocation and attached to every row below.
+    telemetry = TelemetrySampler(sample_interval=TELEMETRY_SAMPLE_INTERVAL)
+    telemetry.start()
     try:
         benchmark_result = await run_benchmark(
             lm_studio_url=lm_studio_url,
@@ -78,6 +85,8 @@ async def run_benchmark_endpoint(config: dict):
     except Exception as e:
         logger.error("Benchmark failed for model %s: %s — %s", model, type(e).__name__, e)
         raise HTTPException(status_code=502, detail=f"Benchmark failed: {e}")
+    finally:
+        telemetry_dict = telemetry.stop()
 
     # Persist each iteration as a separate CSV row
     run_id = benchmark_result["run_id"]
@@ -139,6 +148,22 @@ async def run_benchmark_endpoint(config: dict):
             "os_version": hardware_snapshot.get("os_version"),
             "nvidia_driver_version": hardware_snapshot.get("nvidia_driver_version"),
             "python_version": hardware_snapshot.get("python_version"),
+            # --- Act 8: runtime utilisation telemetry (one value per invocation,
+            #     shared across all rows) — None where a source was unavailable ---
+            "system_ram_used_start_bytes": telemetry_dict.get("system_ram_used_start_bytes"),
+            "system_ram_used_peak_bytes": telemetry_dict.get("system_ram_used_peak_bytes"),
+            "system_ram_used_end_bytes": telemetry_dict.get("system_ram_used_end_bytes"),
+            "process_rss_start_bytes": telemetry_dict.get("process_rss_start_bytes"),
+            "process_rss_peak_bytes": telemetry_dict.get("process_rss_peak_bytes"),
+            "process_rss_end_bytes": telemetry_dict.get("process_rss_end_bytes"),
+            "vram_used_start_bytes": telemetry_dict.get("vram_used_start_bytes"),
+            "vram_used_peak_bytes": telemetry_dict.get("vram_used_peak_bytes"),
+            "vram_used_end_bytes": telemetry_dict.get("vram_used_end_bytes"),
+            "cpu_util_avg_pct": telemetry_dict.get("cpu_util_avg_pct"),
+            "cpu_util_peak_pct": telemetry_dict.get("cpu_util_peak_pct"),
+            "gpu_util_avg_pct": telemetry_dict.get("gpu_util_avg_pct"),
+            "gpu_util_peak_pct": telemetry_dict.get("gpu_util_peak_pct"),
+            "telemetry_sample_count": telemetry_dict.get("telemetry_sample_count"),
         }
         results_store.add_run(row)
 

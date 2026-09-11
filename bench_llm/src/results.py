@@ -55,6 +55,25 @@ CSV_HEADERS = [
     "python_version",
     # Invocation-level timing (distinct from per-request wall_time_seconds).
     "benchmark_duration_seconds",
+    # --- Act 8: runtime utilisation telemetry (additive) ---
+    # System RAM in use.
+    "system_ram_used_start_bytes",
+    "system_ram_used_peak_bytes",
+    "system_ram_used_end_bytes",
+    # Current-process RSS.
+    "process_rss_start_bytes",
+    "process_rss_peak_bytes",
+    "process_rss_end_bytes",
+    # GPU VRAM in use (distinct from total_vram_bytes captured in Act 7).
+    "vram_used_start_bytes",
+    "vram_used_peak_bytes",
+    "vram_used_end_bytes",
+    # CPU / GPU utilisation.
+    "cpu_util_avg_pct",
+    "cpu_util_peak_pct",
+    "gpu_util_avg_pct",
+    "gpu_util_peak_pct",
+    "telemetry_sample_count",
 ]
 
 # SQLite column types matching CSV_HEADERS
@@ -94,6 +113,21 @@ SQLITE_COLUMNS = [
     ("python_version", "TEXT"),
     # Invocation-level timing (distinct from per-request wall_time_seconds).
     ("benchmark_duration_seconds", "REAL"),
+    # --- Act 8: runtime utilisation telemetry (additive) ---
+    ("system_ram_used_start_bytes", "INTEGER"),
+    ("system_ram_used_peak_bytes", "INTEGER"),
+    ("system_ram_used_end_bytes", "INTEGER"),
+    ("process_rss_start_bytes", "INTEGER"),
+    ("process_rss_peak_bytes", "INTEGER"),
+    ("process_rss_end_bytes", "INTEGER"),
+    ("vram_used_start_bytes", "INTEGER"),
+    ("vram_used_peak_bytes", "INTEGER"),
+    ("vram_used_end_bytes", "INTEGER"),
+    ("cpu_util_avg_pct", "REAL"),
+    ("cpu_util_peak_pct", "REAL"),
+    ("gpu_util_avg_pct", "REAL"),
+    ("gpu_util_peak_pct", "REAL"),
+    ("telemetry_sample_count", "INTEGER"),
 ]
 
 # Columns added additively after initial schema creation. Existing databases
@@ -115,6 +149,21 @@ OPTIONAL_METADATA_COLUMNS = [
     ("python_version", "TEXT"),
     # Invocation-level timing (distinct from per-request wall_time_seconds).
     ("benchmark_duration_seconds", "REAL"),
+    # --- Act 8: runtime utilisation telemetry (additive) ---
+    ("system_ram_used_start_bytes", "INTEGER"),
+    ("system_ram_used_peak_bytes", "INTEGER"),
+    ("system_ram_used_end_bytes", "INTEGER"),
+    ("process_rss_start_bytes", "INTEGER"),
+    ("process_rss_peak_bytes", "INTEGER"),
+    ("process_rss_end_bytes", "INTEGER"),
+    ("vram_used_start_bytes", "INTEGER"),
+    ("vram_used_peak_bytes", "INTEGER"),
+    ("vram_used_end_bytes", "INTEGER"),
+    ("cpu_util_avg_pct", "REAL"),
+    ("cpu_util_peak_pct", "REAL"),
+    ("gpu_util_avg_pct", "REAL"),
+    ("gpu_util_peak_pct", "REAL"),
+    ("telemetry_sample_count", "INTEGER"),
 ]
 
 # Blank placeholder for missing values

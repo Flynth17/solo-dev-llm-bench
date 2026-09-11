@@ -16,7 +16,6 @@ The returned value is a plain ``dict`` of JSON-serialisable primitives
 
 import os
 import platform
-import re
 import shutil
 import subprocess
 
@@ -64,6 +63,23 @@ def _python_version() -> str | None:
 # CPU model + core counts
 # ----------------------------------------------------------------------
 
+def _win32_processor_name() -> str | None:
+    """Return the Win32_Processor.Name marketing string, e.g.
+    'AMD Ryzen 9 9950X3D 16-Core Processor'. Best-effort; None on failure."""
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "Get-CimInstance Win32_Processor | "
+             "Select-Object -First 1 | "
+             "ForEach-Object { $_.Name }"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip() or None
+    except Exception:
+        pass
+    return None
+
 def _cpu_model() -> str | None:
     """Best-effort human-readable CPU model name, cross-platform."""
     system = platform.system()
@@ -84,9 +100,12 @@ def _cpu_model() -> str | None:
             if out.returncode == 0:
                 return out.stdout.strip() or None
             return None
-        # Windows (and other platforms): platform.processor() yields a model
-        # string on Windows; fall back to the generic processor identifier.
-        value = platform.processor()
+        # Windows: prefer the marketing name from Win32_Processor.Name (e.g.
+        # 'AMD Ryzen 9 9950X3D 16-Core Processor'); fall back to the generic
+        # processor identifier (platform.processor()) if CIM is unavailable.
+        value = _win32_processor_name()
+        if not value:
+            value = platform.processor()
         return value or None
     except Exception:
         return None
@@ -130,23 +149,59 @@ def _cpu_physical_cores() -> int | None:
 # Installed RAM
 # ----------------------------------------------------------------------
 
+def _win32_installed_ram_bytes() -> int | None:
+    """Return true installed physical RAM in bytes by summing the capacity of each
+    Win32_PhysicalMemory module. Reports actual DIMM capacity, unlike
+    Win32_ComputerSystem's TotalPhysicalMemory (which reflects only OS-visible RAM).
+    Best-effort; returns None if no modules report a capacity."""
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "Get-CimInstance Win32_PhysicalMemory | "
+             "Where-Object { $_.Capacity } | "
+             "ForEach-Object { [long] $_.Capacity } | "
+             "Measure-Object -Sum | "
+             "Select-Object -ExpandProperty Sum"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            value = _safe_int(result.stdout.strip())
+            if value is not None and value > 0:
+                return value
+    except Exception:
+        pass
+    return None
+
+
+def _win32_total_physical_memory() -> int | None:
+    """Fallback: OS-visible total physical memory via Win32_ComputerSystem.
+    Best-effort; returns None on failure."""
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            value = _safe_int(result.stdout.strip())
+            if value is not None and value > 0:
+                return value
+    except Exception:
+        pass
+    return None
+
+
 def _installed_ram_bytes() -> int | None:
     """Installed physical memory in bytes (no live utilisation sampling)."""
     system = platform.system()
     try:
         if system == "Windows":
-            # Dependency-free: query Win32_ComputerSystem via PowerShell.
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-Command",
-                 "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"],
-                capture_output=True, text=True, timeout=10,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                match = re.search(r"(\d+)", result.stdout)
-                if match:
-                    value = int(match.group(1))
-                    return value if value > 0 else None
-            return None
+            # Primary: sum each Win32_PhysicalMemory module's capacity (true
+            # installed capacity); fall back to the generic OS-visible total.
+            value = _win32_installed_ram_bytes()
+            if not value:
+                value = _win32_total_physical_memory()
+            return value
         if system == "Linux":
             with open("/proc/meminfo", "r", encoding="utf-8") as f:
                 for line in f:
