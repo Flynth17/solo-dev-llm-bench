@@ -16,24 +16,61 @@ class TestEvaluationPythonResultWiring(TestCase):
     """Verify evaluation route Python branch uses canonical runner result."""
 
     def test_canonical_runner_returns_correct_values(self):
-        """The canonical runner must return score=1.0 for correct code."""
+        """The canonical runner must return score=1.0 for correct code.
+
+        Self-contained: this test writes its own known-correct solution into
+        runtime/python/latest_output.py (instead of depending on whatever a prior
+        test left there — which was causing flaky, order-dependent failures) and
+        restores the original file afterwards in a finally block. The score
+        assertions are unchanged because a correct solution scores 1.0.
+        """
         from src.python_validator import validate_python_solution
 
-        # Read the corrected latest_output.py (the model's final submission)
         output_file = BENCH_ROOT / "runtime" / "python" / "latest_output.py"
-        solution_code = output_file.read_text(encoding="utf-8")
 
-        test_file = BENCH_ROOT / "tasks" / "python_correctness" / "test_solution.py"
-        test_code = test_file.read_text(encoding="utf-8")
+        # Known-correct solution that passes every test in test_solution.py
+        # (add, multiply, is_even) -> score must be 1.0.
+        correct_solution = '''\
 
-        result = validate_python_solution(solution_code, test_code)
+def add(a, b):
+    """Add two numbers and return the result."""
+    return a + b
 
-        # Canonical runner returns correct values for fixed code
-        self.assertEqual(result.score, 1.0, "score must be 1.0")
-        self.assertTrue(result.passed, "passed must be True")
-        self.assertEqual(result.total_tests, 6, "total_tests must be 6")
-        self.assertEqual(result.passed_tests, 6, "passed_tests must be 6")
-        self.assertEqual(result.failed_tests, 0, "failed_tests must be 0")
+
+def multiply(x, y):
+    """Multiply two numbers and return the result."""
+    return x * y
+
+
+def is_even(n):
+    """Return True if n is even, False otherwise."""
+    return n % 2 == 0
+'''
+
+        # Back up any pre-existing file so we can restore its exact state afterwards.
+        existed = output_file.exists()
+        original_content = output_file.read_text(encoding="utf-8") if existed else None
+        try:
+            output_file.write_text(correct_solution, encoding="utf-8")
+            solution_code = output_file.read_text(encoding="utf-8")
+
+            test_file = BENCH_ROOT / "tasks" / "python_correctness" / "test_solution.py"
+            test_code = test_file.read_text(encoding="utf-8")
+
+            result = validate_python_solution(solution_code, test_code)
+
+            # Canonical runner returns correct values for fixed code
+            self.assertEqual(result.score, 1.0, "score must be 1.0")
+            self.assertTrue(result.passed, "passed must be True")
+            self.assertEqual(result.total_tests, 6, "total_tests must be 6")
+            self.assertEqual(result.passed_tests, 6, "passed_tests must be 6")
+            self.assertEqual(result.failed_tests, 0, "failed_tests must be 0")
+        finally:
+            # Restore the original file state so other tests are unaffected.
+            if existed:
+                output_file.write_text(original_content, encoding="utf-8")
+            else:
+                output_file.unlink(missing_ok=True)
 
     def test_evaluation_response_structure_matches_runner_result(self):
         """The correctness_results entry for python must mirror py_result fields."""
