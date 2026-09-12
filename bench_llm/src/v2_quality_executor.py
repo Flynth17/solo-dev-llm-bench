@@ -15,10 +15,12 @@ Design rules honoured here:
 
   * **Exactly 25 live requests** -- python 1, java 12, markdown 1, evidence 10,
     drift 1. Not batched or split differently.
-  * **Explicit reasoning control** ``off|on``. Never silently fall back to the
-    model default. If LM Studio does not honour the requested state (as reported
-    by its own stats / response segments) the run is flagged incomplete/invalid
-    rather than pretended canonical.
+  * **Reasoning policy = ``inherit``.** The benchmark no longer overrides LM
+    Studio's reasoning setting via the request payload -- it runs the model exactly
+    as loaded/configured in LM Studio. It still observes and records what actually
+    happened (reasoning segments returned, ``reasoning_output_tokens``) and records
+    the loaded reasoning state if LM Studio exposes it, else ``not_exposed`` (never
+    inferred).
   * **Transport retry once**, and ONLY for genuine transport/server failures
     (connection error, timeout, HTTP 5xx). A wrong answer, compile failure,
     extraction/format/evidence/drift failure are never retried. The first valid
@@ -70,10 +72,11 @@ CHAT_ENDPOINT = "/api/v1/chat"
 # Reasoning-control constants
 # ---------------------------------------------------------------------------
 
-VALID_REASONING = ("off", "on")
-# Canonical benchmark rule: reasoning OFF for quality requests (matches
-# BENCHMARK_REASONING_MODE / src/benchmark.py). Sent explicitly -- never inherited.
-DEFAULT_REASONING = "off"
+# The V2 quality benchmark no longer overrides LM Studio's reasoning setting via the
+# /api/v1/chat request payload. It runs the model exactly as loaded/configured in
+# LM Studio (policy = "inherit") and records what was actually observed/loaded --
+# never inferring a requested state that is not exposed by LM Studio.
+REASONING_POLICY = "inherit"
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +318,10 @@ async def _resolve_model_config(lm_studio_url: str, model: str) -> dict[str, Any
         "model_quantization": quantization,
         "loaded_context": loaded_context,
         "model_max_context": capacity.get("model_max_context"),
-        "reasoning_mode": instance.get("reasoning_mode", DEFAULT_REASONING),
+        # LM Studio's registry / loaded-instance API does not expose a loaded
+        # reasoning state, and we no longer override it via the request. Record
+        # ``not_exposed`` rather than inferring one (do NOT default to off/on).
+        "reasoning_mode": "not_exposed",
         "flash_attention": instance.get("flash_attention"),
         "offload_kv_cache_to_gpu": instance.get("offload_kv_cache_to_gpu"),
         "eval_batch_size": instance.get("eval_batch_size"),
@@ -380,7 +386,6 @@ async def run_v2_quality_live(
     lm_studio_url: str,
     model: str,
     *,
-    reasoning: str = DEFAULT_REASONING,
     temperature: float = 0.0,
     max_output_tokens: int = 4096,
     chat_transport: Optional[Callable[[httpx.AsyncClient, str, dict], Awaitable[Any]]] = None,
@@ -390,21 +395,22 @@ async def run_v2_quality_live(
     Args:
         lm_studio_url: LM Studio server base URL (e.g. ``http://localhost:1234``).
         model: Loaded model key/identifier to run.
-        reasoning: Explicit inference-configuration control -- "off" or "on". Sent
-            in every request payload; never silently changed to the model default.
         temperature: Sampling temperature (0.0 for deterministic grading).
         max_output_tokens: Upper bound on output tokens per request.
         chat_transport: Optional injected async transport ``(client, url, payload) -> body``.
             Defaults to a real httpx POST; tests inject a stub so plumbing can be
             proven offline. When omitted the live LM Studio API is used.
 
-    Returns an in-memory dict with model/config identity, reasoning honour status,
-    configuration fingerprint + classification, per-request raw telemetry (including
-    failures), and aggregated validator results. No persistence occurs.
-    """
-    if reasoning not in VALID_REASONING:
-        raise ValueError(f"reasoning must be one of {VALID_REASONING}, got {reasoning!r}")
+    Reasoning policy is ``inherit`` -- the request payload carries no ``reasoning``
+    override; LM Studio runs with its loaded configuration. The result records the
+    inherit policy, the loaded reasoning state (or ``not_exposed``), and per-request
+    observed reasoning (segments + tokens).
 
+    Returns an in-memory dict with model/config identity, reasoning policy + recorded
+    loaded/observed reasoning, configuration fingerprint + classification, per-request
+    raw telemetry (including failures), and aggregated validator results. No persistence
+    occurs.
+    """
     base_url = lm_studio_url.rstrip("/")
     chat_url = f"{base_url}{CHAT_ENDPOINT}"
     transport = chat_transport or _httpx_chat
@@ -416,7 +422,6 @@ async def run_v2_quality_live(
 
     all_results: list[Any] = []
     records: list[dict[str, Any]] = []
-    observed_reasoning: list[Optional[bool]] = []
 
     async with httpx.AsyncClient(timeout=300.0) as client:
         for req in requests:
@@ -427,12 +432,10 @@ async def run_v2_quality_live(
                 "max_output_tokens": max_output_tokens,
                 "stream": False,
                 "store": False,
-                "reasoning": reasoning,
             }
 
             body, elapsed = await _invoke(transport, client, chat_url, payload)
             answer, reasoning_present = _response_text(body)
-            observed_reasoning.append(reasoning_present)
             telem = _telemetry(body, elapsed)
 
             extracted: Optional[str] = None
@@ -527,28 +530,15 @@ async def run_v2_quality_live(
         + len(list(evidence_scenarios())) + len(_drift.DRIFT_CASES)
     )
 
-    # --- Reasoning honour + classification (Act 11B, read-only). ---
-    def _honoured(observed: Optional[bool]) -> bool:
-        # Requested "off" is honoured iff no reasoning was produced; requested "on" is
-        # honoured iff reasoning WAS produced. "Not reported" cannot assert a violation.
-        want = reasoning == "on"
-        return (want == observed) if observed is not None else True
-
-    reasoning_honoured = all(_honoured(o) for o in observed_reasoning) and any(
-        o is not None for o in observed_reasoning
-    )
-
+    # --- Classification (Act 11B, read-only). Reasoning is inherited from LM Studio's
+    # loaded configuration -- we do not request a specific state, so there is no
+    # requested-vs-observed honour check. cfg already carries the recorded reasoning
+    # mode (loaded state or ``not_exposed``); it flows into the fingerprint as-is. ---
     fingerprint_run = dict(cfg)
-    fingerprint_run["reasoning_mode"] = reasoning  # what was actually requested/sent
     configuration_fingerprint = compute_configuration_fingerprint(fingerprint_run)
     classification = classify_run_for_result(fingerprint_run)
 
-    if not reasoning_honoured:
-        validity = "invalid_reasoning"
-    elif classification == "canonical" and bool(configuration_fingerprint):
-        validity = "canonical"
-    else:
-        validity = "incomplete"
+    validity = "canonical" if (classification == "canonical" and bool(configuration_fingerprint)) else "incomplete"
 
     return {
         "suite": "v2-quality",
@@ -560,8 +550,11 @@ async def run_v2_quality_live(
         "model_quantization": cfg.get("model_quantization"),
         "loaded_context": cfg.get("loaded_context"),
         "model_max_context": cfg.get("model_max_context"),
-        "reasoning_requested": reasoning,
-        "reasoning_honoured": reasoning_honoured,
+        # Reasoning policy = inherit: we do not override via the request. Record the
+        # loaded reasoning state if LM Studio exposes it, else ``not_exposed`` (never
+        # inferred). Per-request observed reasoning remains in each record below.
+        "reasoning_policy": REASONING_POLICY,
+        "loaded_reasoning_mode": cfg.get("reasoning_mode"),
         # Aggregate (checks_passed / total derived; logical_cases/result_entries structural).
         "logical_cases_attempted": logical_cases_attempted,
         "result_entries": result_entries,

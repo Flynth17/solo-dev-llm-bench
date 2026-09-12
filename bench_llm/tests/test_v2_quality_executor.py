@@ -116,7 +116,7 @@ class FakeTransport:
         raise AssertionError(f"stub received an unexpected prompt:\n{inp[:200]}")
 
 
-def _run_executor(monkeypatch, *, transport=None, reasoning=ex.DEFAULT_REASONING, reason=False):
+def _run_executor(monkeypatch, *, transport=None, reason=False):
     if transport is None:
         transport = FakeTransport(reason=reason)
 
@@ -125,7 +125,7 @@ def _run_executor(monkeypatch, *, transport=None, reasoning=ex.DEFAULT_REASONING
 
     monkeypatch.setattr(ex, "_resolve_model_config", fake_resolve)
     return asyncio_run(ex.run_v2_quality_live("http://localhost:1234", "test-model",
-                                             reasoning=reasoning, chat_transport=transport))
+                                             chat_transport=transport))
 
 
 def asyncio_run(coro):
@@ -236,32 +236,38 @@ def test_java_missing_solution_extraction_failure(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Reasoning control: explicit request + honour detection.
+# Reasoning policy = inherit: no override sent; observed/loaded state recorded.
+# (Act 11C-4C4.4 -- the benchmark runs LM Studio exactly as loaded/configured.)
 # ---------------------------------------------------------------------------
 
-def test_reasoning_off_is_honoured_when_no_reasoning_segments(monkeypatch):
-    res = _run_executor(monkeypatch, reasoning="off")  # default is off anyway
-    assert res["reasoning_requested"] == "off"
-    assert res["reasoning_honoured"] is True
+def test_request_payload_carries_no_reasoning_override(monkeypatch):
+    # The benchmark must NOT turn reasoning on/off via the request: every payload
+    # omits a ``reasoning`` field entirely (LM Studio uses its loaded config), and
+    # the result documents the inherit policy.
+    transport = FakeTransport(reason=False)
+    res = _run_executor(monkeypatch, transport=transport)
+    assert all("reasoning" not in p for _, p in transport.calls)
+    assert len(transport.calls) == 25
+    assert res["reasoning_policy"] == "inherit"
+
+
+def test_loaded_reasoning_state_recorded_not_inferred(monkeypatch):
+    # The stub resolver records a loaded reasoning state; the executor surfaces it
+    # verbatim (never infers one). Here the stub reports "off".
+    res = _run_executor(monkeypatch)
+    assert res["loaded_reasoning_mode"] == "off"
+
+
+def test_observed_reasoning_still_recorded_when_model_produces_it(monkeypatch):
+    # Even though we inherit (no override), reasoning segments/tokens the model
+    # actually produces are still observed and recorded per request -- not flagged.
+    res = _run_executor(monkeypatch, reason=True)  # stub leaks a reasoning segment
+    assert all(r["reasoning_observed_present"] is True for r in res["requests"])
+    assert all(r["reasoning_tokens"] > 0 for r in res["requests"])
+    # Inherit semantics: observed reasoning does NOT invalidate the run.
     assert res["validity"] in ("canonical", "incomplete")
-
-
-def test_reasoning_not_honoured_flags_invalid_but_results_remain(monkeypatch):
-    # Model leaks reasoning tokens even though we requested OFF -> not honoured.
-    res = _run_executor(monkeypatch, reason=True)
-    assert res["reasoning_requested"] == "off"
-    assert res["reasoning_honoured"] is False
-    assert res["validity"] == "invalid_reasoning"
     # The pipeline still completed and returned the (correct) benchmark results.
     assert (res["checks_passed"], res["checks_total"]) == (166, 166)
-
-
-def test_explicit_reasoning_on_is_sent_in_payload(monkeypatch):
-    transport = FakeTransport(reason=False)
-    _run_executor(monkeypatch, transport=transport, reasoning="on")
-    # Every request payload carried the explicitly requested ("on") reasoning state.
-    assert all(p["reasoning"] == "on" for _, p in transport.calls)
-    assert len(transport.calls) == 25
 
 
 # ---------------------------------------------------------------------------
@@ -335,8 +341,7 @@ def test_configuration_fingerprint_is_deterministic_and_present(monkeypatch):
     res = _run_executor(monkeypatch)
     fp = res["configuration_fingerprint"]
     assert isinstance(fp, str) and len(fp) == 64 and re.fullmatch(r"[0-9a-f]{64}", fp)
-    # Fingerprint changes when a material setting (reasoning mode) changes.
-    other = _run_executor(monkeypatch, reasoning="on") if False else None
+    # Classification is canonical or incomplete (never invalid_reasoning under inherit).
     assert res["classification"] in ("canonical", "incomplete")
 
 
