@@ -395,3 +395,121 @@ def test_returned_object_has_no_db_path_or_store_keys(monkeypatch):
     res = _run_executor(monkeypatch)
     for key in ("db_path", "csv_path", "store", "results_path"):
         assert key not in res
+
+
+# ---------------------------------------------------------------------------
+# Regression coverage for the real LM Studio /api/v1/chat response shape.
+#
+# The live endpoint returns segments whose text lives under ``content`` (not the
+# OpenAI-compatible ``text`` field). These lock that contract so a future edit to
+# the parser cannot silently regress to reading the wrong field -- which would turn
+# every model answer into an empty extraction failure. Items 1-5 map to the five
+# behaviours enumerated in Act 11C-4C4.3.
+# ---------------------------------------------------------------------------
+
+def _content_body(text: str, *, reason: bool = False) -> dict:
+    """Build a real LM Studio /api/v1/chat body: segments carry ``content``."""
+    out: list[dict] = []
+    if reason:
+        out.append({"type": "reasoning", "content": "thinking..."})
+    out.append({"type": "message", "content": text})
+    return {
+        "output": out,
+        "stats": {
+            "input_tokens": 100,
+            "total_output_tokens": 200,
+            "reasoning_output_tokens": 12 if reason else 0,
+            "time_to_first_token_seconds": 0.02,
+            "tokens_per_second": 500.0,
+        },
+    }
+
+
+class _ContentFakeTransport:
+    """Like FakeTransport, but emits the real LM Studio shape (``content``, not
+    ``text``). Mirrors every suite's prompt matcher so the full pipeline can be
+    driven on that exact response format -- proving the parser fix reaches the
+    extractors + frozen validators end-to-end, not just in isolation."""
+
+    def __init__(self, *, reason: bool = False):
+        self.reason = reason
+
+    async def __call__(self, client, url, payload) -> dict:
+        inp = payload.get("input", "")
+        if "Implement ALL of the following functions in a single Python module" in inp:
+            return _content_body(f"```python\n{_PY_REF}\n```\n", reason=self.reason)
+        for spec in _JAVA_SPECS:
+            if spec.method_signature in inp:
+                ref = _java.REFERENCE_SOLUTIONS[spec.id]
+                return _content_body(f"```java\n{ref}\n```\n", reason=self.reason)
+        if "repairing a Markdown document" in inp:
+            corrected = _md.load_corrected_fixture()
+            return _content_body(f"~~~\n{corrected}~~~\n", reason=self.reason)
+        for cid, scenario_text in evidence_scenarios().items():
+            if scenario_text in inp:
+                return _content_body(_ev.EVID_FIXTURES[cid]["good"], reason=self.reason)
+        if "OPERATING POLICY" in inp:
+            return _content_body(_drift.GOOD_RESPONSE, reason=self.reason)
+        raise AssertionError(f"stub received an unexpected prompt:\n{inp[:200]}")
+
+
+def test_content_shaped_stream_reaches_every_validator(monkeypatch):
+    # End-to-end regression guard: drive the whole pipeline on a real-shape response
+    # stream (segments carry ``content``) and assert it still grades at full marks,
+    # i.e. a content answer reaches each extractor + frozen validator unchanged.
+    res = _run_executor(monkeypatch, transport=_ContentFakeTransport())
+    assert len(res["requests"]) == 25
+    assert all(r["extraction_success"] for r in res["requests"])
+    assert (res["checks_passed"], res["checks_total"]) == (166, 166)
+
+
+def test_response_text_reads_message_content_field():
+    # Item 1: {"type":"message","content":"banana"} -> "banana".
+    body = {"output": [{"type": "message", "content": "banana"}], "stats": {}}
+    answer, reasoning = ex._response_text(body)
+    assert answer == "banana"
+    # No reasoning segment and no reasoning stat -> not determinable from this body.
+    assert reasoning is None
+
+
+def test_response_text_falls_back_to_text_field():
+    # Item 2: {"type":"message","text":"banana"} -> "banana" (OpenAI-compatible).
+    body = {"output": [{"type": "message", "text": "banana"}], "stats": {}}
+    answer, _ = ex._response_text(body)
+    assert answer == "banana"
+
+
+def test_reasoning_content_segment_detected_and_message_still_parsed():
+    # Item 3: a reasoning segment also carries ``content``; message text is graded.
+    segs = [
+        {"type": "reasoning", "content": "let me think this through"},
+        {"type": "message", "content": "ok"},
+    ]
+    body = {"output": segs, "stats": {}}
+    answer, reasoning = ex._response_text(body)
+    assert answer == "ok"            # only the message segment forms the graded text
+    assert reasoning is True          # reasoning observed (from a content segment)
+    assert ex._seg_text(segs[0]) == "let me think this through"
+    assert ex._seg_text(segs[1]) == "ok"
+
+
+def test_reasoning_off_is_determinable_and_honoured_with_content():
+    # Item 4: message-only content + reasoning_output_tokens==0 -> determinable False.
+    body = {"output": [{"type": "message", "content": "banana"}],
+            "stats": {"reasoning_output_tokens": 0}}
+    answer, reasoning = ex._response_text(body)
+    assert answer == "banana"
+    # False means no reasoning produced -> honoured when OFF was requested.
+    assert reasoning is False
+
+
+@pytest.mark.parametrize("body", [
+    {"output": [{}]},                  # segment missing type / text / content
+    {"output": [42, None, "str"]},     # non-dict / junk segments interspersed
+    {"output": []},                    # empty output list
+    {},                                # no output key at all
+])
+def test_malformed_or_empty_segments_handled_safely(body):
+    # Item 5: malformed/empty responses never raise; the parsed answer is None.
+    result = ex._response_text(body)
+    assert result[0] is None
