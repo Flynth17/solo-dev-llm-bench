@@ -10,6 +10,7 @@ from src.benchmark import (
     run_benchmark,
     resolve_persisted_quantization,
     resolve_context_capacity,
+    resolve_loaded_instance_config,
 )
 from src.hardware import snapshot_hardware
 from src.telemetry import TelemetrySampler, TELEMETRY_SAMPLE_INTERVAL
@@ -103,6 +104,11 @@ async def run_benchmark_endpoint(config: dict):
     hardware_snapshot = snapshot_hardware()
     context_capacity = await resolve_context_capacity(lm_studio_url, model)
 
+    # Act 11B: capture the loaded-instance inference configuration ONCE per
+    # invocation and reuse across all iteration rows (stable settings; KV cache
+    # quantization is recorded as unknown because the registry does not expose it).
+    instance_config = await resolve_loaded_instance_config(lm_studio_url, model)
+
     results_store = _get_results_store()
     for run in benchmark_result["runs"]:
         row = {
@@ -164,6 +170,35 @@ async def run_benchmark_endpoint(config: dict):
             "gpu_util_avg_pct": telemetry_dict.get("gpu_util_avg_pct"),
             "gpu_util_peak_pct": telemetry_dict.get("gpu_util_peak_pct"),
             "telemetry_sample_count": telemetry_dict.get("telemetry_sample_count"),
+            # --- Act 11B: V2 inference-configuration identity (first-class fields) ---
+            # loaded_context reflects the running model's configured/loaded window from
+            # the LM Studio registry (falls back to context_capacity when absent), kept
+            # distinct from model_max_context (model capability). reasoning is forced off.
+            "loaded_context": instance_config.get("loaded_context")
+            or context_capacity.get("loaded_context"),
+            "reasoning_mode": instance_config.get("reasoning_mode", "off"),
+            "flash_attention": instance_config.get("flash_attention"),
+            "offload_kv_cache_to_gpu": instance_config.get("offload_kv_cache_to_gpu"),
+            "eval_batch_size": instance_config.get("eval_batch_size"),
+            "physical_batch_size": instance_config.get("physical_batch_size"),
+            "parallel": instance_config.get("parallel"),
+            "num_experts": instance_config.get("num_experts"),
+            "speculative_draft_mtp": instance_config.get("speculative_draft_mtp"),
+            "speculative_draft_simple": instance_config.get("speculative_draft_simple"),
+            "speculative_draft_model": instance_config.get("speculative_draft_model") or "",
+            "speculative_draft_max_tokens": instance_config.get("speculative_draft_max_tokens"),
+            "speculative_draft_min_tokens": instance_config.get("speculative_draft_min_tokens"),
+            "speculative_draft_min_continue_probability": instance_config.get(
+                "speculative_draft_min_continue_probability"
+            ),
+            # KV cache quantization is not exposed by the registry -> unknown source.
+            "kv_cache_k_quantization": instance_config.get("kv_cache_k_quantization"),
+            "kv_cache_v_quantization": instance_config.get("kv_cache_v_quantization"),
+            "kv_cache_quantization_source": instance_config.get(
+                "kv_cache_quantization_source"
+            )
+            or "unknown",
+            "lmstudio_instance_config_json": instance_config.get("lmstudio_instance_config_json"),
         }
         results_store.add_run(row)
 

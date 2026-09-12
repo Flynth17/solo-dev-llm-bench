@@ -1,0 +1,20 @@
+{
+  "archive_label": "Pre-V2 / Legacy",
+  "description": "Immutable snapshot of the active BenchLLM benchmark store taken before resetting to a clean V2 boundary.",
+  "creation_timestamp": "2026-09-12T09:37:31.649398+00:00",
+  "source_branch": "feat/benchmark-v2",
+  "source_head_sha": "91d2a6c6cbac4b0795f816d74f38b2a12be81f68",
+  "runs_count": 452,
+  "task_runs_count": 209,
+  "csv_row_count": 452,
+  "csv_md5": "beaddf0589b2caf6bb5e99bc1863a45e",
+  "db_file": "benchmark_results.db",
+  "csv_file": "benchmark_results.csv",
+  "notes": [
+    "Contains genuine historical runs, older benchmark formats, seeded/synthetic rows,",
+    "runs without complete inference-configuration provenance, and the Act 10 telemetry run.",
+    "Preserved exactly as-is; individual rows are NOT classified real vs synthetic here.",
+    "These results predate the canonical BenchLLM V2 inference-configuration fingerprint",
+    "and are historical/non-canonical. Do not mix into the new canonical V2 leaderboard/comparison dataset."
+  ]
+}

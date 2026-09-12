@@ -234,6 +234,35 @@ function buildRunMetadata(group) {
     parts.push('<div class="aggregate-item"><div class="label">Context utilisation</div><div class="value">' + (util === null || util === undefined || util === "" ? "\u2014" : disp(util) + " %") + '</div></div>');
     parts.push('</div>');
 
+    // Inference configuration section (Act 11B)
+    if (s && (typeof s.reasoning_mode !== "undefined" || typeof s.kv_cache_k_quantization !== "undefined" ||
+              typeof s.flash_attention !== "undefined" || typeof s.speculative_draft_mtp !== "undefined" ||
+              s.configuration_fingerprint != null || s.result_classification != null)) {
+        var kvk = (typeof s.kv_cache_k_quantization !== "undefined") ? disp(s.kv_cache_k_quantization) : "\u2014";
+        var kvv = (typeof s.kv_cache_v_quantization !== "undefined") ? disp(s.kv_cache_v_quantization) : "\u2014";
+        var flash = (typeof s.flash_attention !== "undefined") ? (s.flash_attention ? "ON" : "OFF") : "\u2014";
+        parts.push('<div class="run-metadata"><div class="metadata-title">Inference configuration</div>');
+        parts.push('<div class="aggregate-item"><div class="label">Reasoning mode</div><div class="value">' + disp(s.reasoning_mode || "\u2014").toUpperCase() + '</div></div>');
+        parts.push('<div class="aggregate-item"><div class="label">KV cache quant (K / V)</div><div class="value">' + kvk + " / " + kvv + '</div></div>');
+        parts.push('<div class="aggregate-item"><div class="label">Flash attention</div><div class="value">' + flash + '</div></div>');
+        if (s.speculative_draft_mtp) {
+            var mtpMin = (typeof s.speculative_draft_min_tokens !== "undefined") ? disp(s.speculative_draft_min_tokens) : "";
+            var mtpMax = (typeof s.speculative_draft_max_tokens !== "undefined") ? disp(s.speculative_draft_max_tokens) : "";
+            var mtpCont = (typeof s.speculative_draft_min_continue_probability !== "undefined") ? disp(s.speculative_draft_min_continue_probability) : "";
+            parts.push('<div class="aggregate-item"><div class="label">MTP / speculative</div><div class="value">ON (' + mtpMin + " - " + mtpMax + " tokens" + (mtpCont ? ", keep prob " + mtpCont : "") + ') </div></div>');
+        } else {
+            parts.push('<div class="aggregate-item"><div class="label">MTP / speculative</div><div class="value">OFF</div></div>');
+        }
+        if (s.configuration_fingerprint != null) {
+            var fp = "" + s.configuration_fingerprint;
+            parts.push('<div class="aggregate-item"><div class="label">Config fingerprint</div><div class="value" title="' + disp(fp) + '">' + (fp.length > 16 ? fp.slice(0, 16) + "\u2026" : fp) + '</div></div>');
+        }
+        if (s.result_classification != null) {
+            parts.push('<div class="aggregate-item"><div class="label">Result classification</div><div class="value">' + disp(s.result_classification) + '</div></div>');
+        }
+        parts.push('</div>');
+    }
+
     // Machine snapshot section
     if (s && s.cpu_model) {
         var cores = [];

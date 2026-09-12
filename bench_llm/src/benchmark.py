@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 import httpx
 
+from src.results import normalize_loaded_instance_config
+
 # LM Studio native v1 API chat endpoint
 CHAT_ENDPOINT = "/api/v1/chat"
 MODELS_ENDPOINT = "/api/v1/models"
@@ -166,6 +168,47 @@ async def resolve_context_capacity(lm_studio_url: str, model: str) -> dict[str, 
                 result["model_max_context"] = ctx
             break
     return result
+
+
+async def resolve_loaded_instance_config(lm_studio_url: str, model: str) -> dict:
+    """Resolve the loaded-instance inference configuration for ``model`` (Act 11B).
+
+    Best-effort: reads ``GET /api/v1/models`` once and normalizes the matching
+    model's first loaded instance into first-class fields via
+    :func:`src.results.normalize_loaded_instance_config`. Returns defaults with
+    ``reasoning_mode = off`` and KV cache quantization recorded as unknown on any
+    failure, or when the model has no discoverable loaded instance. Never fabricates.
+    """
+    try:
+        url = f"{lm_studio_url}{MODELS_ENDPOINT}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return normalize_loaded_instance_config({})
+            data = resp.json()
+    except Exception:
+        # Any failure (connection error, malformed JSON, non-JSON body) -> unavailable.
+        return normalize_loaded_instance_config({})
+
+    models = data.get("models", data) if isinstance(data, dict) else []
+    for m in models:
+        if not isinstance(m, dict):
+            continue
+        instances = m.get("loaded_instances") or []
+        if not isinstance(instances, list) or not instances:
+            continue
+        # Prefer an instance whose id matches the model key; else first instance of a loaded model.
+        candidate = next(
+            (it for it in instances if isinstance(it, dict) and it.get("id") == model),
+            None,
+        )
+        if candidate is None and m.get("key") == model:
+            candidate = instances[0]
+        if candidate is not None:
+            return normalize_loaded_instance_config(candidate)
+
+    # Model has no discoverable loaded instance -> defaults, KV recorded unknown.
+    return normalize_loaded_instance_config({})
 
 
 async def run_benchmark(
