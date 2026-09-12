@@ -212,6 +212,11 @@ async def run_benchmark(
         - warm_aggregate: dict (warm-only avg tokens/sec and TTFT)
     """
     url = f"{lm_studio_url}{CHAT_ENDPOINT}"
+    # Canonical benchmark rule: reasoning is explicitly OFF for benchmark requests
+    # rather than inherited from the model's default. This keeps throughput/timing
+    # metrics free of reasoning/thinking tokens. Other generation params are
+    # unchanged. (The LM Studio registry may report a per-model reasoning default
+    # such as "on"; that is intentionally ignored here.)
     payload = {
         "model": model,
         "input": prompt,
@@ -219,6 +224,7 @@ async def run_benchmark(
         "max_output_tokens": max_tokens,
         "stream": False,
         "store": False,
+        "reasoning": "off",
     }
 
     runs: list[dict] = []
