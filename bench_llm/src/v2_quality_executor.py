@@ -144,6 +144,22 @@ def _drift_prompt() -> str:
 # part of the code/markdown/text being graded.
 # ---------------------------------------------------------------------------
 
+def _seg_text(seg: Any) -> str:
+    """Return the textual content of a chat response segment.
+
+    Prefers LM Studio's ``content`` field and falls back to the OpenAI-compatible
+    ``text`` field, so both live response shapes parse correctly. Returns "" when
+    neither is present (the segment carries no text).
+    """
+    if not isinstance(seg, dict):
+        return ""
+    for key in ("content", "text"):
+        value = seg.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
 def _response_text(body: Any) -> tuple[Optional[str], Optional[bool]]:
     """Return (answer_text, reasoning_observed).
 
@@ -151,7 +167,8 @@ def _response_text(body: Any) -> tuple[Optional[str], Optional[bool]]:
     'reasoning' segment or an explicit ``stats.reasoning_output_tokens`` field -- and
     None when it cannot be determined from this response. The answer text is built
     from *message* segments only (reasoning/thinking is presentation wrapping, not
-    the code/markdown/text being graded).
+    the code/markdown/text being graded); segment text is read via :func:`_seg_text`
+    (prefers ``content``, falls back to ``text``).
     """
     if not isinstance(body, dict):
         return None, None
@@ -175,7 +192,7 @@ def _response_text(body: Any) -> tuple[Optional[str], Optional[bool]]:
             if not isinstance(seg, dict):
                 continue
             seg_type = seg.get("type")
-            text = seg.get("text", "") or ""
+            text = _seg_text(seg)
             if seg_type == "reasoning":
                 reasoning_present = True
             elif seg_type == "message" and text:
@@ -188,8 +205,7 @@ def _response_text(body: Any) -> tuple[Optional[str], Optional[bool]]:
             reasoning_present = rp_stats
     # Fallback: no typed 'message' segments -> take any segment carrying text.
     if not message_parts and isinstance(segments, list):
-        message_parts = [seg.get("text", "") or "" for seg in segments
-                         if isinstance(seg, dict) and seg.get("text")]
+        message_parts = [_seg_text(seg) for seg in segments if _seg_text(seg)]
     answer = "\n".join(message_parts).strip() if message_parts else None
     return answer, reasoning_present
 
