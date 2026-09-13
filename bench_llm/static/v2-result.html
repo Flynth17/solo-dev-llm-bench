@@ -93,6 +93,18 @@
             <!-- Grouped diagnostic rows are injected here by JS, in canonical suite order. -->
             <div id="v2-failure-groups"></div>
         </section>
+
+        <!-- Request-level traceability (Act 9). Secondary to the failure inspector above.
+             Renders response.successes: request records whose extraction succeeded. This is
+             NOT benchmark success -- a request can extract successfully and still contribute
+             validation failures (see Failure Details). Collapsed by default; show on demand. -->
+        <section id="v2-request" class="panel v2-request-panel">
+            <h2>REQUEST DETAILS — <span id="v2-request-count">0</span> extraction-successful requests</h2>
+            <p id="v2-request-subtitle" class="v2-headline-counts">Extraction-successful request records (inspectional diagnostic metadata, not benchmark score)</p>
+            <button type="button" id="v2-request-toggle" class="v2-mini-btn v2-request-reveal" aria-expanded="false" aria-controls="v2-request-list">Show request details</button>
+            <p id="v2-request-empty" class="v2-muted v2-hidden">No extraction-successful request records were stored.</p>
+            <div id="v2-request-list"></div>
+        </section>
     </main>
 
     <script src="/static/v2-result.js"></script>

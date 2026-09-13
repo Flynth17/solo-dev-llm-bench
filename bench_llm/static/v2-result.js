@@ -24,9 +24,11 @@
     // DATA caches the authoritative API payload once so filtering never touches it.
     // FILTER holds active criteria (AND-combined). EXPANDED is a Set of locators that
     // are expanded; it persists across rebuilds so hidden rows retain their state.
-    var DATA = { suites: null, failures: null, orderedSuites: [], byKey: {}, byKeyItems: {} };
+    var DATA = { suites: null, failures: null, orderedSuites: [], byKey: {}, byKeyItems: {}, successes: [], reqOrder: [] };
     var FILTER = { suite: "", type: "", query: "" };
     var EXPANDED = new Set();
+    // Act 9: whether the collapsed Request Details section has been revealed. Default false.
+    var REQUEST_REVEALED = false;
     var SUITE_FILTER_BTNS = [];   // toolbar suite filter <button> refs
     var STRIP_CELLS = [];         // suite-strip cell <button> refs
     var SEARCH_TIMER = null;
@@ -242,6 +244,15 @@
         span.className = "v2-v v2-mono";
         span.textContent = value == null ? "N/A" : String(value);
         return span;
+    }
+
+    // Numeric cell (readable thousands grouping) for request diagnostics/telemetry.
+    function numSpan(v) {
+        var s = document.createElement("span");
+        s.className = "v2-v is-num";
+        if (v == null || v === "") { s.textContent = "N/A"; return s; }
+        s.textContent = typeof v === "number" ? Number(v).toLocaleString("en-US") : String(v);
+        return s;
     }
 
     // Canonical failed-check counts come from the authoritative suite aggregate
@@ -718,6 +729,229 @@
         body.appendChild(rawEl);
     }
 
+    // ---- Request traceability (Act 9) ---------------------------------
+
+    // Deterministic, URL-safe DOM id for request rows. Distinct prefix from failure
+    // rows so the two stable-anchor namespaces never collide (#req-...).
+    function makeReqId(loc) {
+        var slug = String(loc || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 120);
+        if (!slug) return "req";
+        return "req-" + slug;
+    }
+
+    // Render response.successes (request records whose extraction succeeded).
+    // This is a secondary, collapsed-by-default traceability section. It NEVER
+    // influences the canonical score/denominators -- those come only from body.run
+    // and body.suites, which are untouched here.
+    function renderRequests(suites, successes) {
+        DATA.successes = successes || [];
+        var countEl = by("v2-request-count");
+        if (countEl) countEl.textContent = String(DATA.successes.length);
+
+        // Bucket by canonical suite order, preserving source/request order within.
+        DATA.reqByKey = {};
+        DATA.reqOrder = [];
+        (suites || []).forEach(function (s) { DATA.reqByKey[s.suite] = []; });
+        (DATA.successes || []).forEach(function (r) {
+            if (!DATA.reqByKey[r.suite]) return;   // unknown-suite guard
+            if (!DATA.reqByKey[r.suite].length) DATA.reqOrder.push(r.suite);
+            DATA.reqByKey[r.suite].push(r);
+        });
+
+        var listEl = by("v2-request-list");
+        var emptyEl = by("v2-request-empty");
+        if (listEl) listEl.innerHTML = "";
+
+        // Collapsed by default: the reveal button controls visibility of the list.
+        REQUEST_REVEALED = false;
+        var toggle = by("v2-request-toggle");
+        if (toggle) {
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.textContent = "Show request details";
+            hide(listEl);
+            toggle.addEventListener("click", function () {
+                REQUEST_REVEALED = !REQUEST_REVEALED;
+                toggle.setAttribute("aria-expanded", String(REQUEST_REVEALED));
+                toggle.textContent = REQUEST_REVEALED ? "Hide request details" : "Show request details";
+                if (REQUEST_REVEALED) show(listEl); else hide(listEl);
+            });
+        }
+
+        // Zero extraction-successful requests: reveal the empty state, keep list hidden.
+        if (DATA.successes.length === 0) {
+            if (emptyEl) show(emptyEl);
+            return;
+        }
+        if (emptyEl) hide(emptyEl);
+
+        // One <section> per suite that has >=1 extraction-successful request.
+        DATA.reqOrder.forEach(function (key) {
+            if (listEl) listEl.appendChild(buildReqGroup(key, DATA.reqByKey[key]));
+        });
+    }
+
+    function buildReqGroup(suiteKey, items) {
+        var doc = document.createElement("section");
+        doc.className = "v2-failure-group v2-request-group";
+
+        var legend = document.createElement("div");
+        legend.className = "v2-group-legend";
+        var label = document.createElement("span");
+        label.className = "v2-group-label";
+        label.textContent = suiteDisplayLabel(suiteKey);
+        // Count is request RECORDS (not failed checks) -- distinct semantics from failures.
+        var counts = document.createElement("span");
+        counts.className = "v2-group-counts";
+        counts.textContent = plural(items.length, "request record");
+        legend.append(label, counts);
+
+        var rowsList = document.createElement("ul");
+        rowsList.className = "v2-failure-rows v2-request-rows";
+        (items || []).forEach(function (r) { rowsList.appendChild(buildReqRow(r)); });
+
+        doc.append(legend, rowsList);
+        return doc;
+    }
+
+    function reqDeepLinkUrlFor(r) {
+        return location.origin + location.pathname + "#" + makeReqId(r.locator);
+    }
+
+    function buildReqRow(r) {
+        var li = document.createElement("li");
+        li.className = "v2-failure-row v2-request-row";
+        li.id = makeReqId(r.locator);   // stable anchor target: #req-...
+
+        var toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "v2-row-toggle";
+        toggle.setAttribute("aria-label", "Toggle request details: " + r.request_id);
+
+        var glyph = document.createElement("span");
+        glyph.className = "v2-row-glyph";
+        glyph.textContent = "\u25b8";
+        glyph.setAttribute("aria-hidden", "true");
+
+        var kind = document.createElement("span");
+        kind.className = "v2-row-kind";
+        kind.textContent = suiteDisplayLabel(r.suite);
+
+        // Stable deep-link copy control (always available on the collapsed row).
+        var linkBtn = copyBtn(reqDeepLinkUrlFor(r), "link to this request record");
+
+        // Collapsed preview preserves exact API values (no normalization of display).
+        var preview = document.createElement("span");
+        preview.className = "v2-row-preview";
+        preview.textContent = r.request_id + " \u00b7 " + suiteDisplayLabel(r.suite) +
+            " \u00b7 extraction: " + String(r.extraction_classification);
+
+        toggle.append(glyph, kind, linkBtn, preview);
+
+        var body = document.createElement("div");
+        body.className = "v2-row-body";
+        buildReqBodyFields(r, body);
+
+        var isExp = EXPANDED.has(r.locator);
+        toggle.setAttribute("aria-expanded", String(isExp));
+        glyph.textContent = isExp ? "\u25be" : "\u25b8";
+        if (isExp) body.classList.remove("v2-hidden"); else body.classList.add("v2-hidden");
+
+        toggle.addEventListener("click", function () {
+            var nowOpen = EXPANDED.has(r.locator);
+            if (nowOpen) EXPANDED.delete(r.locator); else EXPANDED.add(r.locator);
+            toggle.setAttribute("aria-expanded", String(!nowOpen));
+            glyph.textContent = nowOpen ? "\u25b8" : "\u25be";
+            body.classList.toggle("v2-hidden", nowOpen);
+        });
+
+        li.append(toggle, body);
+        return li;
+    }
+
+    function buildReqBodyFields(r, body) {
+        // Request id (copyable stable identifier).
+        if (r.request_id) {
+            body.appendChild(fieldRow("Request id", monoText(r.request_id), [copyBtn(r.request_id, "request ID")]));
+        }
+        // Locator: read-model reference + deep-link key.
+        if (r.locator) {
+            body.appendChild(fieldRow("Locator", monoText(r.locator), [copyBtn(r.locator, "locator")]));
+        }
+        // Extraction classification (exact API value).
+        if (r.extraction_classification != null) {
+            body.appendChild(fieldRow("Extraction", monoText(r.extraction_classification)));
+        }
+
+        // Validator diagnostics: INSPECTIONAL ONLY. Never a benchmark denominator.
+        // The bogus per-request checks_total_validator (e.g. 9999) lives here and is
+        // explicitly labeled -- it never becomes a score, progress bar, or total.
+        var passed = r.checks_passed;
+        var recTotal = r.checks_total;   // read-model field: checks_total_validator
+        if (passed != null || recTotal != null) {
+            var dia = document.createElement("div");
+            dia.className = "v2-req-dia-block";
+            var dhead = document.createElement("div");
+            dhead.className = "v2-req-dia-head";
+            dhead.textContent = "Validator diagnostics -- diagnostic only, not a benchmark denominator";
+            dia.appendChild(dhead);
+            if (passed != null) {
+                dia.appendChild(fieldRow("Checks passed", numSpan(passed)));
+            }
+            if (recTotal != null) {
+                // Labeled as the recorded validator total; when it is the bogus
+                // diagnostic value it stays inside this amber block, never near score.
+                dia.appendChild(fieldRow("Recorded validator total", numSpan(recTotal)));
+            }
+            body.appendChild(dia);
+        }
+
+        // Request telemetry: only request-scoped values actually recorded. Omitted
+        // entirely when all null (avoid all-null rows); never suite-level telemetry.
+        var tel = r.telemetry || {};
+        var telFields = [
+            ["ttft_seconds", "TTFT (s)"],
+            ["prefill_throughput", "Prefill throughput (tok/s)"],
+            ["decode_throughput", "Decode throughput (tok/s)"],
+            ["reasoning_tokens", "Reasoning tokens"]
+        ];
+        var present = telFields.filter(function (t) { return tel[t[0]] != null; });
+        if (present.length) {
+            var telBox = document.createElement("div");
+            telBox.className = "v2-telemetry-block";
+            var thead = document.createElement("div");
+            thead.className = "v2-req-tel-head";
+            thead.textContent = "Request telemetry";
+            telBox.appendChild(thead);
+            present.forEach(function (t) {
+                telBox.appendChild(fieldRow(t[1], numSpan(tel[t[0]])));
+            });
+            body.appendChild(telBox);
+        }
+
+        // Optional raw record (compact JSON), same debugging aid as failures.
+        var rawToggle = document.createElement("button");
+        rawToggle.type = "button";
+        rawToggle.className = "v2-mini-btn v2-raw-toggle";
+        rawToggle.textContent = "Raw details \u25b8";
+        rawToggle.setAttribute("aria-expanded", "false");
+        var rawEl = document.createElement("pre");
+        rawEl.className = "v2-raw v2-hidden";
+        try { rawEl.textContent = JSON.stringify(r, null, 2); }
+        catch (e) { rawEl.textContent = String(r); }
+        rawToggle.addEventListener("click", function () {
+            var open = rawToggle.getAttribute("aria-expanded") === "true";
+            rawToggle.setAttribute("aria-expanded", String(!open));
+            rawToggle.textContent = open ? "Raw details \u25b8" : "Raw details \u25be";
+            if (open) hide(rawEl); else show(rawEl);
+        });
+        body.appendChild(rawToggle);
+        body.appendChild(rawEl);
+    }
+
     // ---- Init / fetch --------------------------------------------------
     function extractRunId() {
         var parts = location.pathname.split("/").filter(Boolean); // drop empty segments
@@ -768,6 +1002,7 @@
                 renderSuites(body.suites || []);
                 renderConfiguration(body.configuration, body.run);
                 renderFailures(body.suites || [], body.failures || []);
+                renderRequests(body.suites || [], body.successes || []);
 
                 wireInteractions(runId);
 
@@ -844,10 +1079,36 @@
         if (!hash || hash.length <= 1) return;
         var id = hash.slice(1);
         var locator = "";
+        var isRequest = false;
         (DATA.failures || []).forEach(function (f) {
             if (makeRowId(f.locator) === id) locator = f.locator;
         });
+        if (!locator) {
+            // Stable request-row anchor: #req-...
+            (DATA.successes || []).forEach(function (r) {
+                if (makeReqId(r.locator) === id) { locator = r.locator; isRequest = true; }
+            });
+        }
         if (!locator) return; // invalid fragment — ignore cleanly
+
+        if (isRequest) {
+            // Reveal the collapsed section, expand + scroll to the target row.
+            var toggle = by("v2-request-toggle");
+            if (toggle && !REQUEST_REVEALED) {
+                REQUEST_REVEALED = true;
+                toggle.setAttribute("aria-expanded", "true");
+                toggle.textContent = "Hide request details";
+                show(by("v2-request-list"));
+            }
+            EXPANDED.add(locator);
+            var relEl = by(id);
+            if (relEl) {
+                relEl.classList.add("v2-row-flash");
+                setTimeout(function () { relEl.classList.remove("v2-row-flash"); }, 1800);
+                relEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
 
         FILTER.suite = "";
         FILTER.type = "";
