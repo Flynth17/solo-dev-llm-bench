@@ -238,6 +238,11 @@ def _project_speed_point(row: dict) -> dict[str, Any]:
         # state/status kept verbatim so the UI renders them honestly.
         "state": state_raw or None,
         "status": status_raw or "completed",
+        # Metric version + legacy warning (Act 20). A missing/legacy row carries no metric
+        # version; only corrected runs (speed_metric_version == 2) are exempt from the
+        # cached-TTFT prefill warning. Never fabricate a version historical rows never had.
+        "speed_metric_version": _norm_int(row.get("speed_metric_version")),
+        "legacy_prefill_warning": _norm_int(row.get("speed_metric_version")) not in (2,),
     }
 
 
@@ -337,10 +342,21 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
 
     model_identifier = next((m for m in model_ids), _norm_str(first.get("model_key")))
 
+    # Act 20: a run is 'legacy' when any point was measured with the pre-fix cached-TTFT
+    # prefill semantics. Corrected runs (all points at metric version 2) show no warning.
+    legacy_prefill_warning = any(
+        bool(p.get("legacy_prefill_warning")) for p in points
+    )
+
     return {
         "run_id": rid,
         "model_identifier": model_identifier,
         "status": overall,
         "configuration": configuration,
         "points": points,
+        "speed_metric_version": next(
+            (p["speed_metric_version"] for p in points if p.get("speed_metric_version") is not None),
+            None,
+        ),
+        "legacy_prefill_warning": legacy_prefill_warning,
     }

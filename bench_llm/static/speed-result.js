@@ -121,6 +121,13 @@
             body.innerHTML = '<tr><td colspan="7" class="srb-none">No point data recorded.</td></tr>';
             return;
         }
+        // Act 20: legacy runs (no speed_metric_version == 2) still show their stored prefill
+        // values, but with an honest warning that they were derived from a cached TTFT.
+        if (run.legacy_prefill_warning) {
+            body.insertAdjacentHTML("afterbegin",
+                '<tr class="srb-legacy"><td colspan="7">Legacy prefill measurement \u2014 affected ' +
+                'by prompt-cache reuse.</td></tr>');
+        }
         for (var j = 0; j < points.length; j++) {
             body.insertAdjacentHTML("beforeend", pointRow(points[j]));
         }

@@ -4,6 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Optional
 
 import httpx
 
@@ -240,6 +241,7 @@ async def run_benchmark(
     connection_type: str = "",
     prompt_name: str = "",
     model_quantization: str = "",
+    full_prefill_prompt: Optional[str] = None,
 ) -> dict:
     """Run benchmark against LM Studio's /api/v1/chat endpoint.
 
@@ -256,6 +258,10 @@ async def run_benchmark(
         execution_environment: Local / Self-hosted / Cloud.
         connection_type: Local network / Remote connection (for self-hosted).
         prompt_name: Optional prompt identifier/name.
+        full_prefill_prompt: Optional cache-busting prompt used ONLY for iteration 1 -- the
+            authoritative FULL-PREFILL sample. Iterations 2..n always reuse the plain payload
+            (warm, cache-reused) and contribute only to generation throughput. This keeps a
+            cached TTFT from ever being turned into full-prefill throughput.
 
     Returns a dict with:
         - run_id: str (UUID for this benchmark run)
@@ -296,7 +302,15 @@ async def run_benchmark(
     async with httpx.AsyncClient(timeout=300.0) as client:
         for i in range(1, iterations + 1):
             start = time.perf_counter()
-            resp = await client.post(url, json=payload)
+            # Iteration 1 is the authoritative FULL-PREFILL sample. When a cache-busting
+            # full-prefill prompt was supplied (Standard Speed), iteration 1 uses it so it
+            # defeats LCP / KV-cache reuse; iterations 2..n keep the plain, warm payload and
+            # contribute only to generation throughput. A cached TTFT must never become
+            # full-prefill throughput.
+            request_payload = payload
+            if i == 1 and full_prefill_prompt is not None:
+                request_payload = {**payload, "input": full_prefill_prompt}
+            resp = await client.post(url, json=request_payload)
             resp.raise_for_status()
             elapsed = time.perf_counter() - start
 

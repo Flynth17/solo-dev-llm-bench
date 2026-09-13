@@ -6,7 +6,8 @@ calls the legacy executor -- it only inspects state and issues the two native mu
 endpoints:
 
     GET  /api/v1/models                  (authoritative state, reused via fetch_models)
-    POST /api/v1/models/load   {model}   (+ advisory n_ctx at the standard target)
+    POST /api/v1/models/load   {model}   (+ advisory context_length at the standard target,
+                                            + echo_load_config to confirm what was actually set)
     POST /api/v1/models/unload {instance_id}
 
 Design constraints honoured:
@@ -70,7 +71,7 @@ def standard_load_target(model_max_context):
     """Standard context target for a load: ``min(max, 262144)`` when known & positive.
 
     Returns an ``int`` at or below :data:`STANDARD_MAX_CONTEXT_TOKENS`, or ``None`` when
-    the maximum is unknown so the caller omits ``n_ctx`` rather than fabricating capacity
+    the maximum is unknown so the caller omits ``context_length`` rather than fabricating capacity
     or over-requesting a context window the model cannot actually hold.
     """
     if isinstance(model_max_context, int) and not isinstance(model_max_context, bool) \
@@ -204,13 +205,18 @@ async def load_model(
         )
 
     # Standard context target is derived purely from discovered metadata -- UI/API callers
-    # are never permitted to pass an arbitrary n_ctx / batch / tuning value.
+    # are never permitted to pass an arbitrary context_length / batch / tuning value.
     ctx = await resolve_context_capacity(base, key)
     target = standard_load_target(ctx.get("model_max_context"))
 
     payload = {"model": key}
+    # Production LM Studio native v1 REJECTS 'n_ctx' ("Unrecognized key(s): 'n_ctx'"). The
+    # supported advisory field is 'context_length'. It stays advisory only -- the ACTUAL
+    # applied context is authoritative from GET /api/v1/models, re-read after load below.
     if isinstance(target, int) and target > 0:
-        payload["n_ctx"] = target
+        payload["context_length"] = target
+    # Ask LM Studio to echo back the applied load config so we can confirm what was set.
+    payload["echo_load_config"] = True
 
     existing = await _get_models_or_conn_error(base, "load_failed")
 

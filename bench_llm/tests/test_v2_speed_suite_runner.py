@@ -512,6 +512,10 @@ def test_run_speed_persists_three_completed_rows_with_metrics(monkeypatch):
         assert row["input_tokens"] == 9001
         # Prefill is derived from the persisted input tokens + TTFT.
         assert row["prefill_tokens_per_second"] == pytest.approx(round(9001 / 0.13, 1), rel=1e-6)
+        # Act 20: corrected runs persist a metric version so legacy cached-TTFT prefill on
+        # older runs is flagged without rewriting history.
+        assert row["speed_metric_version"] == vs.SPEED_METRIC_VERSION
+        assert row["speed_metric_version"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -583,3 +587,40 @@ def test_run_speed_does_not_invoke_run_v2_quality_live_behaviourally(monkeypatch
         assert summary["status"] == "completed"
     finally:
         legacy.run_v2_quality_live = original
+
+
+# ---------------------------------------------------------------------------
+# Engine: Act 20 -- authoritative full-prefill sample is cache-busted.
+# ---------------------------------------------------------------------------
+
+def test_run_speed_threads_cache_busted_full_prefill_prompt(monkeypatch):
+    store = _patch_store(monkeypatch)
+    resolvers = _FakeResolvers(model_max_context=131072, loaded_context=131072)
+    monkeypatch.setattr(vs, "resolve_persisted_quantization", resolvers.resolve_persisted_quantization)
+    monkeypatch.setattr(vs, "resolve_context_capacity", resolvers.resolve_context_capacity)
+    monkeypatch.setattr(vs, "resolve_loaded_instance_config", resolvers.resolve_loaded_instance_config)
+
+    captured = {}
+
+    async def _fake_run_benchmark(**kwargs):
+        captured["plain"] = kwargs.get("prompt")
+        captured["full_prefill"] = kwargs.get("full_prefill_prompt")
+        return _bench_for(input_tokens=9001, ttft_seconds=0.13, tps=38.5)
+
+    monkeypatch.setattr(vs, "run_benchmark", _fake_run_benchmark)
+    summary = asyncio.run(vs.run_speed_suite(URL, MODEL))
+
+    assert summary["status"] == "completed"
+    fp = captured.get("full_prefill")
+    plain = captured.get("plain")
+    # Iteration 1 (the authoritative full-prefill sample) is cache-busted; iterations 2..5 use
+    # the plain payload. The buster is a deterministic prefix at the START of the prompt so it
+    # defeats LM Studio's longest-common-prefix KV-cache reuse.
+    assert isinstance(fp, str) and isinstance(plain, str)
+    assert fp != plain
+    assert fp.startswith("[speed-run:")
+    assert fp.endswith(plain)  # buster sits before the shared filler
+    # And every completed row of a corrected run persists the metric version.
+    for row in store.rows:
+        assert row.get("speed_point_status") == "completed"
+        assert row["speed_metric_version"] == vs.SPEED_METRIC_VERSION

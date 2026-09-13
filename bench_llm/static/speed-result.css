@@ -123,6 +123,15 @@
 .srb-point { font-weight: 700; color: #f4f8ff; }
 .srb-none { color: #6b7f99; font-style: italic; }
 .srb-uns td.srb-point { color: #fbbf24; }
+/* Act 20: legacy cached-TTFT prefill warning row (amber, distinct from data rows). */
+.srb-legacy td {
+    background: #1a1509;
+    color: #fbbf24;
+    border-bottom: 1px solid #6b4e12;
+    font-style: italic;
+    font-size: 0.86rem;
+    padding: 0.55rem 0.85rem;
+}
 
 @media (max-width: 640px) {
     .srb-grid { grid-template-columns: 1fr; }

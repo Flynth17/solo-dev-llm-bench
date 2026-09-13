@@ -77,6 +77,12 @@ STANDARD_ITERATIONS: int = 5
 # from the Workflow Suite's 75_percent_context policy -- Speed and Workflow differ.
 STANDARD_OUTPUT_TOKENS: int = 512
 
+# Speed metric measurement version persisted with each corrected aggregate row (additive,
+# backward-safe). Historical rows carry no value (legacy semantics); every run produced by
+# this runner persists SPEED_METRIC_VERSION so the read model can distinguish corrected
+# full-prefill measurements from legacy cached-TTFT ones. 1 = legacy; 2 = corrected.
+SPEED_METRIC_VERSION: int = 2
+
 # Status labels for an attempted point.
 POINT_COMPLETED = "completed"
 POINT_UNSUPPORTED = "unsupported"
@@ -111,6 +117,20 @@ def build_context_pressure_prompt(target_tokens: int) -> str:
         blocks.append(_PADDING_SENTENCE)
         est += block_estimate
     return header + "".join(blocks)
+
+
+def _speed_cache_buster(run_id: str, target_tokens: int) -> str:
+    """Deterministic prefix that defeats LCP / KV-cache reuse for the full-prefill sample.
+
+    Standard Speed reuses a single deterministic prompt per point; LM Studio selects slots
+    by longest-common-prefix, so an uncached first request would otherwise be rejected in
+    favour of a cached slot and yield a fake prefill rate. This prefix is placed at the
+    START of the authoritative full-prefill prompt (before any shared filler) so it is
+    unique per ``(run_id, point)`` -- deterministic for the same run+point, different across
+    run IDs and across 8K/16K/32K -- while being negligible in size relative to the payload.
+    A suffix would be insufficient because prefix reuse only matches from the start.
+    """
+    return f"[speed-run:{run_id}:point:{target_tokens}]\n"
 
 
 # ---------------------------------------------------------------------------
@@ -197,14 +217,27 @@ def _identity_row(
     }
 
 
+def _is_cold_run(run: dict) -> bool:
+    """True when *run* marks itself the cold (full-prefill) sample -- i.e. iteration 1.
+
+    run_benchmark labels iteration 1 ``cold``; Standard Speed pairs that request with a
+    cache-busting prompt so it is a genuine full-prefill measurement rather than a cached
+    reuse of an earlier point's KV slot.
+    """
+    return str(run.get("cold_or_warm") or "").strip().lower() == "cold"
+
+
 def _aggregate_point(bench: dict[str, Any]) -> dict[str, Any]:
     """Collapse a :func:`run_benchmark` result into one representative point snapshot.
 
     Generation throughput uses the warm-iteration average when available (iteration 1 is
     ``cold`` and includes model-load variance), falling back to the all-iteration average.
-    TTFT mirrors that choice. Actual prompt tokens are constant across iterations (same
-    deterministic payload) so the first iteration's value is representative; completion
-    tokens use the final iteration as a representative generation length.
+    Primary TTFT comes from the authoritative FULL-PREFILL sample -- the cold (iteration 1)
+    request, which Standard Speed pairs with a cache-busting prompt so its time-to-first
+    token is genuine full-prefill rather than a cached hit; an average of warm (cache-reused)
+    TTFTs must never feed prefill throughput. Actual prompt tokens are constant across
+    iterations (same deterministic payload) so the first iteration's value is representative;
+    completion tokens use the final iteration as a representative generation length.
     """
     runs = bench.get("runs", []) or []
     warm = bench.get("warm_aggregate", {}) or {}
@@ -214,9 +247,9 @@ def _aggregate_point(bench: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(tps, (int, float)) or tps <= 0:
         tps = overall.get("avg_tokens_per_second")
 
-    ttft = warm.get("avg_ttft")
-    if not isinstance(ttft, (int, float)):
-        ttft = runs[0].get("ttft_seconds") if runs else 0
+    # Full-prefill sample only -- never the warm/cache-reused TTFT average.
+    cold_runs = [r for r in runs if _is_cold_run(r)]
+    ttft = cold_runs[0].get("ttft_seconds") if cold_runs else (runs[0].get("ttft_seconds") if runs else 0)
 
     actual_prompt_tokens = runs[0].get("input_tokens", 0) if runs else 0
     completion_tokens = runs[-1].get("output_tokens", 0) if runs else 0
@@ -352,12 +385,17 @@ async def run_speed_suite(
             points.append(SpeedPointResult(label, point, POINT_UNSUPPORTED))
             continue
 
-        payload = build_context_pressure_prompt(point)
+        # Iteration 1 is the authoritative full-prefill sample; a deterministic, per-run,
+        # per-point prefix at the START of its prompt defeats LM Studio's longest-common-
+        # prefix KV-cache reuse so its TTFT is genuine full-prefill (not a cached hit).
+        plain_payload = build_context_pressure_prompt(point)
+        full_prefill_payload = _speed_cache_buster(rid, point) + plain_payload
         try:
             bench = await run_benchmark(
                 lm_studio_url=base_url,
                 model=clean_model,
-                prompt=payload,
+                prompt=plain_payload,
+                full_prefill_prompt=full_prefill_payload,
                 iterations=STANDARD_ITERATIONS,
                 max_tokens=STANDARD_OUTPUT_TOKENS,
                 temperature=0.0,
@@ -408,6 +446,9 @@ async def run_speed_suite(
             "target_context_tokens": point,
             "context_point": label,
             "speed_point_status": POINT_COMPLETED,
+            # Corrected metric semantics (Act 20): persisted so the read model can flag
+            # legacy cached-TTFT prefill on older runs and show no warning here.
+            "speed_metric_version": SPEED_METRIC_VERSION,
         })
         try:
             store.add_run(row)

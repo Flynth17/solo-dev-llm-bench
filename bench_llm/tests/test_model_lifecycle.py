@@ -149,6 +149,12 @@ class FakeLMStudio:
     def on_post(self, url, json):
         if url.endswith("/load"):
             key = json.get("model")
+            # Production LM Studio native v1 REJECTS 'n_ctx' ("Unrecognized key(s): 'n_ctx'").
+            # The fake mirrors that so tests prove the adapter no longer sends it (Act 20).
+            if "n_ctx" in json:
+                return _FakeResp({"error": {"type": "invalid_request_error",
+                                            "message": "Unrecognized key(s) in object: 'n_ctx'"}},
+                                 status_code=400)
             self.load_calls.append(json)
             if key not in self.specs:
                 return _FakeResp({"error": {"type": "model_not_found",
@@ -258,24 +264,57 @@ def test_load_unloaded_model_returns_loaded_state():
 
     assert result["action"] == "loaded"
     assert result["loaded"] is True
-    # Standard context target applied (262144 ceiling == model max).
-    assert ctrl.last_post["json"]["n_ctx"] == 262144
+    # Standard context target applied via 'context_length' (262144 ceiling == model max);
+    # production LM Studio rejects the legacy 'n_ctx' key.
+    assert ctrl.last_post["json"]["context_length"] == 262144
+    assert "n_ctx" not in ctrl.last_post["json"]
 
 
 def test_load_131072_model_uses_131072():
     ctrl = lm(SPEC)
     run(ml.load_model(URL, "qwen-13b"))
-    assert ctrl.last_post["json"]["n_ctx"] == 131072
+    assert ctrl.last_post["json"]["context_length"] == 131072
+    assert "n_ctx" not in ctrl.last_post["json"]
 
 
 def test_load_1048576_model_clamped_to_262144():
     ctrl = lm(SPEC)
     run(ml.load_model(URL, "big-1m"))
-    assert ctrl.last_post["json"]["n_ctx"] == 262144
+    assert ctrl.last_post["json"]["context_length"] == 262144
+    assert "n_ctx" not in ctrl.last_post["json"]
+
+
+# ---------------------------------------------------------------------------
+# Adapter: Act 20 -- native v1 load schema (context_length, no n_ctx)
+# ===========================================================================
+def test_load_sends_context_length_not_n_ctx():
+    ctrl = lm(SPEC)
+    run(ml.load_model(URL, "ornith-1.5-35b-a3b"))
+    # The supported advisory field is present...
+    assert ctrl.last_post["json"]["context_length"] == 262144
+    # ...and the rejected legacy key is never sent.
+    assert "n_ctx" not in ctrl.last_post["json"]
+
+
+def test_load_requests_echo_load_config():
+    ctrl = lm(SPEC)
+    run(ml.load_model(URL, "ornith-1.5-35b-a3b"))
+    # Act 20: ask LM Studio to echo back the applied load config for confirmation.
+    assert ctrl.last_post["json"].get("echo_load_config") is True
+
+
+def test_fake_rejects_n_ctx_like_production():
+    # The fake mirrors real LM Studio native v1, which rejects 'n_ctx'. Prove the guard so
+    # any future regression (re-sending n_ctx) is caught at the adapter boundary.
+    ctrl = lm(SPEC)
+    resp = ctrl.on_post("http://127.0.0.1:1234/api/v1/models/load",
+                        {"model": "ornith-1.5-35b-a3b", "n_ctx": 4096})
+    assert not resp.ok
+    assert resp.status_code == 400
 
 
 def test_actual_returned_config_is_authoritative():
-    # The instance's real context differs from the requested n_ctx; we must report the
+    # The instance's real context differs from the requested context_length; we must report
     # actual loaded value, never claim the request was applied.
     spec = dict(SPEC)
     spec["ornith-1.5-35b-a3b"] = {**spec["ornith-1.5-35b-a3b"],

@@ -44,6 +44,7 @@ CSV_HEADERS = [
     "target_context_tokens",
     "context_point",
     "speed_point_status",
+    "speed_metric_version",
     # Standard Speed Suite prefill throughput, derived via the authoritative definition
     # (actual_prompt_tokens / ttft_seconds) and persisted when available. Additive,
     # backward-safe; historical rows load as None/blank.
@@ -137,6 +138,7 @@ SQLITE_COLUMNS = [
     ("target_context_tokens", "INTEGER"),
     ("context_point", "TEXT"),
     ("speed_point_status", "TEXT"),
+    ("speed_metric_version", "INTEGER"),
     ("prefill_tokens_per_second", "REAL"),
     # --- Act 7: additive metadata columns (types mirror CSV_HEADERS order) ---
     ("model_max_context", "INTEGER"),
@@ -201,6 +203,7 @@ OPTIONAL_METADATA_COLUMNS = [
     ("target_context_tokens", "INTEGER"),
     ("context_point", "TEXT"),
     ("speed_point_status", "TEXT"),
+    ("speed_metric_version", "INTEGER"),
     ("prefill_tokens_per_second", "REAL"),
     ("model_max_context", "INTEGER"),
     ("loaded_context", "INTEGER"),
