@@ -633,3 +633,345 @@
     font-weight: 600;
     margin-bottom: 0.2rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Standard Speed history cards (Act 22) -- run-grouped, point-based.
+   Distinct from legacy/custom history runs so the two never look like one table.
+   --------------------------------------------------------------------------- */
+
+.ss-run {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #2563eb;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Slightly wider so the point grid breathes */
+.ss-run.history-run {
+    max-width: 100%;
+}
+
+.ss-header {
+    align-items: flex-start;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.ss-title {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+/* Metric version + legacy badges */
+.badge-metric {
+    display: inline-block;
+    padding: 0.12rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.badge-metric.metric-v2 {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.badge-metric.metric-v3 {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.badge-metric.metric-legacy {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+/* Legacy prefill-semantics banner -- visually obvious, never hides old values. */
+.ss-legacy-banner {
+    margin: 0.6rem 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    color: #9a3412;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.ss-points-line {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+}
+
+/* Point summary grid -- canonical order (8K/16K/32K) preserved by the read model. */
+.ss-points-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+}
+
+.ss-point {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    background: #fafbfc;
+}
+
+.ss-point-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #eef1f4;
+}
+
+.ss-point-label {
+    font-weight: 700;
+    color: #1d4ed8;
+    font-size: 0.95rem;
+}
+
+.ss-point-target {
+    font-size: 0.72rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.ss-metric-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
+    font-size: 0.82rem;
+}
+
+.ss-metric-label {
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+    min-width: 78px;
+}
+
+.ss-metric-value {
+    color: #1e293b;
+    font-weight: 600;
+    font-family: monospace;
+    text-align: right;
+    word-break: break-word;
+}
+
+.ss-metric-row.ss-metric-extras .ss-metric-value {
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: #475569;
+}
+
+/* Dedicated result link */
+.ss-footer {
+    margin-top: 0.85rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid #eef1f4;
+}
+
+.ss-view-link {
+    display: inline-block;
+    color: #2563eb;
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-decoration: underline;
+}
+
+.ss-view-link:hover {
+    color: #1d4ed8;
+}
+
+/* Compact the point grid on small screens */
+@media (max-width: 520px) {
+    .ss-points-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Standard Speed history cards (Act 22) -- run-grouped, point-based.
+   Distinct from legacy/custom history runs so the two never look like one table.
+   --------------------------------------------------------------------------- */
+
+.ss-run {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #2563eb;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.ss-header {
+    align-items: flex-start;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.ss-title {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+.badge-metric {
+    display: inline-block;
+    padding: 0.12rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.badge-metric.metric-v2 {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.badge-metric.metric-v3 {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.badge-metric.metric-legacy {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.ss-legacy-banner {
+    margin: 0.6rem 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    color: #9a3412;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.ss-points-line {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+}
+
+.ss-points-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+}
+
+.ss-point {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    background: #fafbfc;
+}
+
+.ss-point-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #eef1f4;
+}
+
+.ss-point-label {
+    font-weight: 700;
+    color: #1d4ed8;
+    font-size: 0.95rem;
+}
+
+.ss-point-target {
+    font-size: 0.72rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.ss-metric-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
+    font-size: 0.82rem;
+}
+
+.ss-metric-label {
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+    min-width: 78px;
+}
+
+.ss-metric-value {
+    color: #1e293b;
+    font-weight: 600;
+    font-family: monospace;
+    text-align: right;
+    word-break: break-word;
+}
+
+.ss-metric-row.ss-metric-extras .ss-metric-value {
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: #475569;
+}
+
+.ss-footer {
+    margin-top: 0.85rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid #eef1f4;
+}
+
+.ss-view-link {
+    display: inline-block;
+    color: #2563eb;
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-decoration: underline;
+}
+
+.ss-view-link:hover {
+    color: #1d4ed8;
+}
+
+@media (max-width: 520px) {
+    .ss-points-grid {
+        grid-template-columns: 1fr;
+    }
+}
