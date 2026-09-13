@@ -935,4 +935,20 @@ async def run_v2_run(
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
-    return combine_suite_results(results)
+    agg = combine_suite_results(results)
+
+    # Durable result artifact (Act 2): persist the completed run so it can be
+    # loaded later by ``run_id`` for the read-only UI. Best-effort and reported on
+    # failure -- a successful benchmark must not be masked, but persistence loss
+    # must never be silent. Never imports or calls the legacy executor.
+    try:
+        from src.v2_quality_artifact import persist_run as _persist_run
+
+        _persist_run(agg, results)
+    except OSError as exc:
+        print(
+            f"warning: failed to persist V2 run {agg.get('run_id')!r}: {exc}",
+            file=sys.stderr,
+        )
+
+    return agg
