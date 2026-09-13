@@ -276,6 +276,205 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* Failure inspector (Act 7)                                            */
+/* ------------------------------------------------------------------ */
+
+.v2-failures-panel h2 {
+    font-size: 1.05rem;
+}
+
+.v2-headline-counts {
+    margin: 0.25rem 0 1rem;
+    font-size: 0.9rem;
+    color: var(--v2-muted);
+}
+
+/* Group legend (per suite) */
+.v2-group-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0 0.4rem;
+    border-bottom: 1px solid var(--v2-border);
+    margin-bottom: 0.5rem;
+}
+
+.v2-group-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--v2-text);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.v2-group-counts {
+    font-size: 0.8rem;
+    color: var(--v2-muted);
+}
+
+/* Individual failure rows */
+.v2-failure-rows {
+    list-style: none;
+}
+
+.v2-failure-row + .v2-failure-row {
+    margin-top: 0.5rem;
+}
+
+.v2-row-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    text-align: left;
+    background: #fcfdfe;
+    border: 1px solid var(--v2-border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--v2-text);
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.v2-row-toggle:hover {
+    background: #f5f7fa;
+    border-color: #cbd5e1;
+}
+
+/* Focus ring for keyboard users on the row toggle */
+.v2-row-toggle:focus-visible {
+    outline: 2px solid var(--v2-brand);
+    outline-offset: 1px;
+}
+
+.v2-row-glyph {
+    width: 1ch;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    transition: color 0.12s ease;
+}
+
+.v2-row-toggle[aria-expanded="true"] .v2-row-glyph {
+    color: var(--v2-brand);
+}
+
+.v2-row-kind {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #334151;
+    white-space: nowrap;
+}
+
+/* Single-line collapsed preview of the reason (separate visual string). */
+.v2-row-preview {
+    margin-left: auto;
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 58%;
+}
+
+/* Expanded body */
+.v2-row-body {
+    margin: 0.4rem 0 0 0.1rem;
+    padding: 0.7rem 0.85rem;
+    background: #fbfcfe;
+    border: 1px solid var(--v2-border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+}
+
+.v2-row-field {
+    display: flex;
+    gap: 0.5rem 0.75rem;
+    align-items: baseline;
+    margin: 0.35rem 0;
+    font-size: 0.86rem;
+    flex-wrap: wrap;
+}
+
+.v2-row-field .v2-k {
+    min-width: 10ch;
+    font-weight: 600;
+    color: var(--v2-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.78rem;
+}
+
+.v2-row-field .v2-v {
+    color: #334155;
+    word-break: break-word;
+}
+
+/* Monospace ids / locators */
+.v2-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.84rem;
+}
+
+/* Body copy buttons sit inline (no auto push) */
+.v2-row-body .v2-mini-btn {
+    margin-left: 0.4rem;
+}
+
+/* Exact-preservation reason block: pre-wrap keeps spaces/newlines verbatim. */
+.v2-reason {
+    display: block;
+    margin: 0.35rem 0 0;
+    padding: 0.65rem 0.75rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    color: #1e293b;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    max-height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Raw diagnostic detail (debugging aid) */
+.v2-raw {
+    display: block;
+    margin: 0.5rem 0 0;
+    padding: 0.65rem 0.75rem;
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    max-height: 220px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Expected / Actual comparison block (only rendered when non-null). */
+.v2-eacompare {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 0.75rem;
+    margin: 0.4rem 0 0;
+    padding: 0.55rem 0.7rem;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 4px;
+    font-size: 0.84rem;
+}
+.v2-eacompare > span { color: var(--v2-muted); font-weight: 600; text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.03em; }
+.v2-eacompare code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #1e293b; word-break: break-word; }
+
+/* ------------------------------------------------------------------ */
 /* Responsive — suite strip wraps, config stacks                          */
 /* ------------------------------------------------------------------ */
 
@@ -291,4 +490,10 @@ body {
     .v2-fingerprint-row dt { margin-bottom: -0.35rem; }
     .v2-model { max-width: 46vw; }
     .v2-suite-cell { min-width: 84px; flex: 1 1 auto; }
+
+.v2-row-preview, .v2-group-counts { max-width: none; }
+@media (max-width: 640px) {
+    .v2-row-kind { order: 3; flex-basis: 100%; }
+    .v2-row-preview { max-width: 70%; }
+}
 }

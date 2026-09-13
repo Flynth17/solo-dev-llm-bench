@@ -55,11 +55,20 @@
             </dl>
         </section>
 
-        <!-- Future preview (failure inspector comes in the next Act). Not built here. -->
-        <footer id="v2-preview" class="panel v2-preview hidden">
-            <p class="v2-preview-counts"><span id="v2-preview-counts-text"></span></p>
-            <p class="v2-muted">Failure inspector coming next.</p>
-        </footer>
+        <!-- Failure-first diagnostic inspector (Act 7). Renders response.failures,
+             grouped by canonical suite. Canonical failed-check counts come from the
+             authoritative aggregate; diagnostics are inspection records only.
+             The overall /166 score is never derived from these rows. -->
+        <section id="v2-failures" class="panel v2-failures-panel hidden">
+            <h2>FAILURE DETAILS — <span id="v2-failure-diag-count">0</span> recorded diagnostic(s)</h2>
+            <p id="v2-failure-summary" class="v2-headline-counts"></p>
+
+            <!-- Empty state: a future perfect run may have zero diagnostics. -->
+            <p id="v2-failures-empty" class="v2-muted v2-hidden">No recorded failure details.</p>
+
+            <!-- Grouped diagnostic rows are injected here by JS, in canonical suite order. -->
+            <div id="v2-failure-groups"></div>
+        </section>
     </main>
 
     <script src="/static/v2-result.js"></script>

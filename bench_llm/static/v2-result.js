@@ -168,6 +168,280 @@
         }
     }
 
+    // ---- Failure inspector (Act 7) -------------------------------------
+    // Canonical failed-check counts come from the authoritative suite aggregate
+    // (presentation math only). Diagnostics are inspection records. The overall
+    // /166 score is never derived from these rows, and any bogus per-row validator
+    // total (e.g. 9999) never becomes a canonical denominator.
+
+    function plural(n, word) {
+        return n + " " + word + (n === 1 ? "" : "s");
+    }
+
+    function suiteDisplayLabel(key) {
+        return SUITE_LABELS[key] || String(key).replace(/_/g, " ");
+    }
+
+    // Compact collapsed label; avoid repetition when failure_type == source_type.
+    function rowKindLabel(f) {
+        var t = String(f.failure_type || "").trim();
+        var s = String(f.source_type || "").trim();
+        if (!t && !s) return "failure";
+        if (t === s) return t || "unknown";
+        return (t || "unknown") + " · " + s;
+    }
+
+    // Single-line visual preview for the collapsed row. Whitespace is collapsed
+    // ONLY here; the expanded value stays byte-exact.
+    function shortPreview(reason) {
+        if (reason === null || reason === undefined) return "";
+        var oneLine = String(reason).replace(/\s+/g, " ").trim();
+        var MAX = 120;
+        return oneLine.length > MAX ? oneLine.slice(0, MAX) + "…" : oneLine;
+    }
+
+    function monoText(value) {
+        var span = document.createElement("span");
+        span.className = "v2-v v2-mono";
+        span.textContent = value == null ? "N/A" : String(value);
+        return span;
+    }
+
+    function renderFailures(suites, failures) {
+        var groupsEl = by("v2-failure-groups");
+        var emptyEl = by("v2-failures-empty");
+        var summaryEl = by("v2-failure-summary");
+        var diagCountEl = by("v2-failure-diag-count");
+        if (!groupsEl) return;
+
+        groupsEl.innerHTML = "";
+
+        // Authoritative per-suite failed-check counts (fallback: total - passed).
+        var byKey = {};
+        (suites || []).forEach(function (s) {
+            var key = s.suite;
+            var failed = (s.failed_checks != null) ? s.failed_checks
+                : Math.max(0, (s.checks_total || 0) - (s.checks_passed || 0));
+            byKey[key] = { label: suiteDisplayLabel(key), failed: failed, items: [] };
+        });
+
+        // Attach diagnostics to their canonical-suite group.
+        (failures || []).forEach(function (f) {
+            var g = byKey[f.suite];
+            if (g) g.items.push(f);
+        });
+
+        // Canonical suite order; include a group when it has rows or failed checks.
+        var orderedSuites = (suites || []).map(function (s) { return s.suite; });
+        var groups = orderedSuites.filter(function (key) {
+            return byKey[key] && (byKey[key].items.length > 0 || byKey[key].failed > 0);
+        }).map(function (key) { return byKey[key]; });
+
+        // Headline: canonical failed checks vs. number of diagnostic records.
+        var totalFailed = orderedSuites.reduce(function (acc, key) {
+            return acc + (byKey[key] ? byKey[key].failed : 0);
+        }, 0);
+        var suitesWithFailures = orderedSuites.filter(function (key) {
+            return byKey[key] && byKey[key].failed > 0;
+        }).length;
+
+        if (diagCountEl) diagCountEl.textContent = String((failures || []).length);
+        summaryEl.textContent = plural(totalFailed, "failed check") + " · " +
+            plural((failures || []).length, "recorded diagnostic");
+        if (suitesWithFailures > 0) {
+            summaryEl.textContent += " across " + plural(suitesWithFailures, "suite");
+        }
+
+        if (!groups.length) {
+            if (emptyEl) show(emptyEl);
+            return;
+        }
+        if (emptyEl) hide(emptyEl);
+
+        groups.forEach(function (group) {
+            groupsEl.appendChild(buildGroup(group));
+        });
+    }
+
+    function buildGroup(group) {
+        var doc = document.createElement("section");
+        doc.className = "v2-failure-group";
+
+        var legend = document.createElement("div");
+        legend.className = "v2-group-legend";
+
+        var label = document.createElement("span");
+        label.className = "v2-group-label";
+        label.textContent = group.label;
+
+        var counts = document.createElement("span");
+        counts.className = "v2-group-counts";
+        counts.textContent = plural(group.failed, "failed check") +
+            " · " + plural((group.items || []).length, "recorded diagnostic");
+
+        legend.append(label, counts);
+
+        var rowsList = document.createElement("ul");
+        rowsList.className = "v2-failure-rows";
+        (group.items || []).forEach(function (f) {
+            rowsList.appendChild(buildRow(f));
+        });
+
+        doc.append(legend, rowsList);
+        return doc;
+    }
+
+    function buildRow(f) {
+        var li = document.createElement("li");
+        li.className = "v2-failure-row";
+
+        // Collapsed row toggle (accessible <button>).
+        var toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "v2-row-toggle";
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "Toggle failure details: " + rowKindLabel(f));
+
+        var glyph = document.createElement("span");
+        glyph.className = "v2-row-glyph";
+        glyph.textContent = "▸";
+        glyph.setAttribute("aria-hidden", "true");
+
+        var kind = document.createElement("span");
+        kind.className = "v2-row-kind";
+        kind.textContent = rowKindLabel(f);
+
+        var preview = document.createElement("span");
+        preview.className = "v2-row-preview";
+        preview.textContent = shortPreview(f.failure_reason);
+
+        toggle.append(glyph, kind, preview);
+
+        // Expanded body.
+        var body = document.createElement("div");
+        body.className = "v2-row-body v2-hidden";
+        buildBodyFields(f, body);
+
+        toggle.addEventListener("click", function () {
+            var nowOpen = toggle.getAttribute("aria-expanded") === "true";
+            toggle.setAttribute("aria-expanded", String(!nowOpen));
+            glyph.textContent = nowOpen ? "▸" : "▾";
+            if (nowOpen) hide(body); else show(body);
+        });
+
+        li.append(toggle, body);
+        return li;
+    }
+
+    // Build a label/value field row with optional trailing copy buttons.
+    function fieldRow(keyLabel, valueEl, extraButtons) {
+        var row = document.createElement("div");
+        row.className = "v2-row-field";
+        var k = document.createElement("span");
+        k.className = "v2-k";
+        k.textContent = keyLabel;
+        row.appendChild(k);
+        if (valueEl) row.appendChild(valueEl);
+        if (extraButtons) extraButtons.forEach(function (b) { row.appendChild(b); });
+        return row;
+    }
+
+    function copyBtn(text, label) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "v2-mini-btn";
+        b.textContent = "Copy";
+        b.title = "Copy " + label;
+        b.setAttribute("aria-label", "Copy " + label);
+        b.addEventListener("click", function () { copyText(text, this); });
+        return b;
+    }
+
+    // Expected / Actual: ONLY render when at least one side is non-null. Never
+    // fabricate a comparison block for null data (current fixture has none).
+    function buildEacompare(f) {
+        var exp = f.expected;
+        var act = f.actual;
+        if ((exp !== null && exp !== undefined) || (act !== null && act !== undefined)) {
+            var box = document.createElement("div");
+            box.className = "v2-eacompare";
+            var eh = document.createElement("span"); eh.textContent = "Expected";
+            var av = document.createElement("span"); av.textContent = String(exp == null ? "" : exp);
+            var ah = document.createElement("span"); ah.textContent = "Actual";
+            var vv = document.createElement("span"); vv.textContent = String(act == null ? "" : act);
+            box.append(eh, av, ah, vv);
+            return box;
+        }
+        return null; // no comparison block
+    }
+
+    function buildBodyFields(f, body) {
+        body.appendChild(fieldRow("Failure type", monoText(f.failure_type)));
+        body.appendChild(fieldRow("Source type", monoText(f.source_type)));
+
+        // Request linkage: only when a real request id exists (never fabricated).
+        if (f.request_id) {
+            body.appendChild(fieldRow("Request", monoText(f.request_id), [copyBtn(f.request_id, "request ID")]));
+        }
+
+        // Locator / case id: stable reference (read-model field names).
+        if (f.locator) {
+            body.appendChild(fieldRow("Locator", monoText(f.locator), [copyBtn(f.locator, "locator")]));
+        } else if (f.case_id) {
+            body.appendChild(fieldRow("Case", monoText(f.case_id), [copyBtn(f.case_id, "case ID")]));
+        }
+
+        // Exact-preservation reason block (white-space: pre-wrap in CSS).
+        if (f.failure_reason !== null && f.failure_reason !== undefined) {
+            var rhead = document.createElement("div");
+            rhead.className = "v2-row-field";
+            var rk = document.createElement("span");
+            rk.className = "v2-k";
+            rk.textContent = "Reason";
+            rhead.appendChild(rk);
+            body.appendChild(rhead);
+
+            var reasonEl = document.createElement("div");
+            reasonEl.className = "v2-reason";
+            reasonEl.textContent = String(f.failure_reason); // byte-exact
+
+            var reasonBtn = copyBtn(String(f.failure_reason), "failure reason");
+            body.appendChild(reasonEl);
+            body.appendChild(reasonBtn);
+        }
+
+        // Conditional Expected / Actual (only non-null).
+        var eacompare = buildEacompare(f);
+        if (eacompare) body.appendChild(eacompare);
+
+        // Optional raw diagnostic detail (debugging aid; compact JSON).
+        var rawToggle = document.createElement("button");
+        rawToggle.type = "button";
+        rawToggle.className = "v2-mini-btn v2-raw-toggle";
+        rawToggle.textContent = "Raw details ▸";
+        rawToggle.setAttribute("aria-expanded", "false");
+
+        var rawEl = document.createElement("pre");
+        rawEl.className = "v2-raw v2-hidden";
+        try {
+            var clone = Object.assign({}, f);
+            clone.failure_reason_preview = String(f.failure_reason || "");
+            rawEl.textContent = JSON.stringify(clone, null, 2);
+        } catch (e) {
+            rawEl.textContent = String(f);
+        }
+
+        rawToggle.addEventListener("click", function () {
+            var open = rawToggle.getAttribute("aria-expanded") === "true";
+            rawToggle.setAttribute("aria-expanded", String(!open));
+            rawToggle.textContent = open ? "Raw details ▸" : "Raw details ▾";
+            if (open) hide(rawEl); else show(rawEl);
+        });
+
+        body.appendChild(rawToggle);
+        body.appendChild(rawEl);
+    }
+
     // ---- Init / fetch --------------------------------------------------
     function extractRunId() {
         var parts = location.pathname.split("/").filter(Boolean); // drop empty segments
@@ -182,7 +456,7 @@
         hide(by("v2-loading"));
         hide(by("v2-sticky"));
         hide(by("v2-config"));
-        hide(by("v2-preview"));
+        hide(by("v2-failures"));
         var el = by("v2-error");
         by("v2-error-detail").textContent = message;
         show(el);
@@ -217,6 +491,7 @@
                 renderHeader(body.run);
                 renderSuites(body.suites || []);
                 renderConfiguration(body.configuration, body.run);
+                renderFailures(body.suites || [], body.failures || []);
 
                 wireInteractions(runId);
             })
