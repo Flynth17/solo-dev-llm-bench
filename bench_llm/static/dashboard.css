@@ -672,6 +672,114 @@ h1 {
 }
 
 /* ---------------------------------------------------------------------------
+   Three-suite launcher (Act 14)
+   --------------------------------------------------------------------------- */
+
+#suite-launcher {
+    margin-top: 1.5rem;
+}
+
+.suite-cards {
+    display: flex;
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.suite-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 1.1rem 1rem 1rem;
+    background: #fbfdff;
+    border: 1px solid #d6e2f5;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    text-align: center;
+}
+
+.suite-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: #1e40af;
+    margin-bottom: 0.4rem;
+}
+
+.suite-primary {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 0.4rem;
+    word-break: break-word;
+}
+
+.suite-desc {
+    font-size: 0.88rem;
+    color: #5b6b82;
+    flex: 1 1 auto;
+}
+
+.suite-btn {
+    margin-top: 0.9rem;
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+/* Runnable / active run button (Speed, Workflow) */
+.suite-btn-run {
+    background: #2563eb;
+    border: 2px solid #2563eb;
+    color: #fff;
+}
+.suite-btn-run:hover:not(:disabled) {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+.suite-btn-run:disabled {
+    background: #c7d2e5;
+    border-color: #c7d2e5;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+/* Planned / unavailable button (Context) */
+.suite-btn-planned {
+    background: #f1f5f9;
+    border: 2px solid #cbd5e1;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.suite-note {
+    margin-top: 0.6rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+
+.advanced-lead {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 0.35rem;
+    margin-bottom: 0.9rem;
+}
+
+/* Stack the suite cards on narrower screens */
+@media (max-width: 820px) {
+    .suite-cards {
+        flex-direction: column;
+    }
+}
+
+/* ---------------------------------------------------------------------------
    Responsive — Dashboard
    --------------------------------------------------------------------------- */
 

@@ -12,42 +12,10 @@
         <h1>Solo Dev LLM Bench</h1>
         <p class="subtitle">Measure performance trade-offs when switching LLMs, hardware, or environments</p>
 
-        <!-- Configuration Panel -->
-        <section class="panel" id="config-panel">
-            <h2>Configuration</h2>
-
-            <!-- Execution Environment -->
+        <!-- Model + execution environment (compact) -->
+        <section class="panel" id="model-panel">
             <div class="form-row">
-                <label for="execution-env">Execution Environment</label>
-                <select id="execution-env">
-                    <option value="Local" selected>Local</option>
-                    <option value="Self-hosted">Self-hosted</option>
-                    <option value="Cloud">Cloud</option>
-                </select>
-            </div>
-
-            <!-- Connection Type (shown when Self-hosted) -->
-            <div class="form-row hidden" id="connection-row">
-                <label for="connection-type">Connection</label>
-                <select id="connection-type">
-                    <option value="Local network" selected>Local network</option>
-                    <option value="Remote connection">Remote connection</option>
-                </select>
-            </div>
-
-            <!-- Hardware Label -->
-            <div class="form-row">
-                <label for="hardware-label">Hardware / Machine <span class="optional">(optional)</span></label>
-                <input type="text" id="hardware-label" placeholder="e.g. RTX 5090 Desktop, Work Laptop, Raspberry Pi 5">
-            </div>
-
-            <div class="form-row">
-                <label for="lm-studio-url">LM Studio URL</label>
-                <input type="text" id="lm-studio-url" placeholder="http://localhost:1234">
-            </div>
-
-            <div class="form-row">
-                <label for="model-select">Model</label>
+                <label for="model-select">Select Model</label>
                 <div class="model-select-wrapper">
                     <select id="model-select">
                         <option value="">— Select a model —</option>
@@ -55,80 +23,57 @@
                     <button id="refresh-models" title="Refresh model list">&#x21bb;</button>
                 </div>
             </div>
-        </section>
 
-        <!-- Evaluation Suite Panel -->
-        <section class="panel" id="evaluation-suite">
-            <h2>Evaluation Suite</h2>
-
-            <!-- Speed Checkboxes -->
-            <div class="eval-section">
-                <h3>Speed Tests</h3>
-                <div class="eval-group">
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-speed-small" checked>
-                        <span>Small Prompt (~250 tokens)</span>
-                    </label>
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-speed-medium" checked>
-                        <span>Medium Prompt (~1,400 tokens)</span>
-                    </label>
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-speed-large">
-                        <span>Large Prompt (~5,300 tokens)</span>
-                    </label>
-                </div>
-
-                <!-- Speed Iterations -->
-                <div class="eval-iterations">
-                    <label for="iterations">Speed Iterations</label>
-                    <input type="number" id="iterations" value="5" min="1" max="100">
-                </div>
-            </div>
-
-            <!-- Correctness Checkboxes -->
-            <div class="eval-section">
-                <h3>Correctness Tests</h3>
-                <div class="eval-group">
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-correctness-markdown">
-                        <span>Markdown Structure</span>
-                    </label>
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-correctness-python">
-                        <span>Python Code Correctness</span>
-                    </label>
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-correctness-java">
-                        <span>Java Code Correctness</span>
-                    </label>
-                    <label class="eval-checkbox">
-                        <input type="checkbox" id="eval-correctness-unsolvable">
-                        <span>Unsolvable Recognition</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Benchmark Parameters -->
-            <div class="form-row-inline eval-params">
+            <div class="form-row-inline runtime-fields">
                 <div class="form-row half">
-                    <label for="max-tokens">Max Output Tokens</label>
-                    <input type="number" id="max-tokens" value="100000" min="1" max="10000000">
+                    <label for="lm-studio-url">LM Studio URL</label>
+                    <input type="text" id="lm-studio-url" placeholder="http://localhost:1234">
                 </div>
                 <div class="form-row half">
-                    <label for="temperature">Temperature</label>
-                    <input type="number" id="temperature" value="0" min="0" max="2" step="0.1">
+                    <label for="hardware-label">Hardware / Machine <span class="optional">(optional)</span></label>
+                    <input type="text" id="hardware-label" placeholder="e.g. RTX 5090 Desktop, Work Laptop">
                 </div>
             </div>
-
-            <!-- Run Evaluation Button -->
-            <button id="run-evaluation" class="btn-primary">Run Evaluation</button>
         </section>
 
-        <!-- Advanced / Custom Benchmark (collapsible) -->
+        <!-- Three-suite launcher -->
+        <section class="panel" id="suite-launcher">
+            <div class="suite-cards">
+                <!-- SPEED -->
+                <article class="suite-card">
+                    <div class="suite-title">SPEED</div>
+                    <div class="suite-primary">8K &middot; 16K &middot; 32K</div>
+                    <div class="suite-desc">TTFT &middot; Prefill &middot; Generation</div>
+                    <button id="run-speed" class="suite-btn suite-btn-run" type="button" disabled title="Dedicated 8K&#183;16K&#183;32K runner is a backend Act">Run Speed</button>
+                    <div class="suite-note">Fixed test points. Dedicated runner launches in a later backend Act.</div>
+                </article>
+
+                <!-- WORKFLOW -->
+                <article class="suite-card">
+                    <div class="suite-title">WORKFLOW</div>
+                    <div class="suite-primary">166 deterministic checks</div>
+                    <div class="suite-desc">Python &middot; Java &middot; Markdown &middot; Evidence &middot; DRIFT</div>
+                    <button id="run-workflow" class="suite-btn suite-btn-run" type="button" disabled title="Locked V2 quality suite (python -m src v2-suite) launches in a backend Act">Run Workflow</button>
+                    <div class="suite-note">Locked contract. Runs via the locked suite runner in a backend Act.</div>
+                </article>
+
+                <!-- CONTEXT -->
+                <article class="suite-card">
+                    <div class="suite-title">CONTEXT</div>
+                    <div class="suite-primary">10% &middot; 25% &middot; 50% &middot; 75%</div>
+                    <div class="suite-desc">Quality + speed degradation</div>
+                    <button id="run-context" class="suite-btn suite-btn-planned" type="button" disabled>Not available yet</button>
+                    <div class="suite-note">Relative context pressures. Implementation pending.</div>
+                </article>
+            </div>
+        </section>
+
+        <!-- Advanced / Custom Benchmark (collapsible, closed by default) -->
         <details class="collapsible" id="advanced-benchmark">
             <summary class="collapsible-header">&#x25B6; Advanced / Custom Benchmark</summary>
             <div class="collapsible-body">
+                <p class="advanced-lead">Custom operation is intentionally different from the three standard comparable suites above.</p>
+
                 <!-- Prompt Preset Selector -->
                 <div class="form-row">
                     <label for="prompt-preset">Prompt preset</label>
@@ -147,22 +92,38 @@
                     <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
                 </div>
 
-                <!-- Existing Run Benchmark button preserved for transitional use -->
-                <button id="run-benchmark" class="btn-secondary">Run Benchmark</button>
+                <!-- Benchmark Parameters -->
+                <div class="form-row-inline eval-params">
+                    <div class="form-row half">
+                        <label for="iterations">Iterations</label>
+                        <input type="number" id="iterations" value="5" min="1" max="100">
+                    </div>
+                    <div class="form-row half">
+                        <label for="max-tokens">Max Output Tokens</label>
+                        <input type="number" id="max-tokens" value="100000" min="1" max="10000000">
+                    </div>
+                    <div class="form-row half">
+                        <label for="temperature">Temperature</label>
+                        <input type="number" id="temperature" value="0" min="0" max="2" step="0.1">
+                    </div>
+                </div>
+
+                <!-- Run Benchmark button preserved for transitional use -->
+                <button id="run-benchmark" class="btn-secondary suite-btn suite-btn-run" type="button">Run Custom Benchmark</button>
             </div>
         </details>
 
         <!-- Status -->
         <section id="status" class="status hidden"></section>
 
-        <!-- Results Panel -->
+        <!-- Results Panel (custom benchmark output) -->
         <section id="results-panel" class="panel hidden">
             <h2>Results</h2>
             <div id="results-container"></div>
             <div id="results-charts"></div>
         </section>
 
-        <!-- Advanced Task Manager (collapsible) -->
+        <!-- Advanced Task Manager (collapsible, visually secondary) -->
         <details class="collapsible" id="advanced-tasks">
             <summary class="collapsible-header">&#x25B6; Advanced Task Manager</summary>
             <div class="collapsible-body">

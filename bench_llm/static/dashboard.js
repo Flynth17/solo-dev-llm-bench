@@ -112,16 +112,9 @@ function formatTtft(value) {
 // Execution Environment toggle
 // ---------------------------------------------------------------------------
 
-executionEnvSelect.addEventListener("change", function () {
-    if (this.value === "Self-hosted") {
-        connectionRow.classList.remove("hidden");
-        connectionTypeSelect.disabled = false;
-    } else {
-        connectionRow.classList.add("hidden");
-        connectionTypeSelect.disabled = true;
-        connectionTypeSelect.value = "";
-    }
-});
+// NOTE: the execution-environment / connection-type controls were removed from the
+// standard launcher (Act 14). Runtime identity now defaults to Local; advanced custom
+// benchmark still passes these values when present.
 
 // ---------------------------------------------------------------------------
 // Load initial config
@@ -131,18 +124,14 @@ async function loadConfig() {
     try {
         var resp = await fetch("/api/config");
         var config = await resp.json();
-        lmStudioUrlInput.value = config.lm_studio_url || "http://localhost:1234";
+        if (lmStudioUrlInput) lmStudioUrlInput.value = config.lm_studio_url || "http://localhost:1234";
         promptInput.value = config.prompt || "";
         iterationsInput.value = config.iterations || 5;
-maxTokensInput.value = config.max_tokens || 100000;
+        maxTokensInput.value = config.max_tokens || 100000;
         temperatureInput.value = config.temperature != null ? config.temperature : 0;
         // New fields
-        if (config.hardware_label) {
+        if (config.hardware_label && hardwareLabelInput) {
             hardwareLabelInput.value = config.hardware_label;
-        }
-        if (config.execution_environment) {
-            executionEnvSelect.value = config.execution_environment;
-            executionEnvSelect.dispatchEvent(new Event("change"));
         }
     } catch (_) {
         // Ignore - use defaults
@@ -377,9 +366,11 @@ async function runBenchmark() {
         max_tokens: parseInt(maxTokensInput.value, 10),
         temperature: parseFloat(temperatureInput.value),
         // New fields
-        hardware_label: hardwareLabelInput.value.trim(),
-        execution_environment: executionEnvSelect.value,
-        connection_type: connectionTypeSelect.value,
+        hardware_label: hardwareLabelInput ? hardwareLabelInput.value.trim() : "",
+        // Execution-environment / connection controls are no longer in the standard
+        // launcher; fall back to stable defaults when absent (Act 14).
+        execution_environment: (executionEnvSelect && executionEnvSelect.value) || "Local",
+        connection_type: (connectionTypeSelect && connectionTypeSelect.value) || "",
     };
 
     disableRun(true);
@@ -420,10 +411,37 @@ async function runBenchmark() {
 
 runBtn.addEventListener("click", runBenchmark);
 
-var runEvaluationBtn = document.getElementById("run-evaluation");
+// ---------------------------------------------------------------------------
+// Three-suite launcher actions (standard contracts)
+// ---------------------------------------------------------------------------
+// Speed / Workflow / Context are predefined, comparable contracts. Their execution
+// plumbing lives in dedicated backend Acts. These handlers never call a legacy or
+// unsafe path -- they only surface the current execution status if a card button is
+// ever enabled before its backend route exists.
 
-if (runEvaluationBtn) {
-    runEvaluationBtn.addEventListener("click", runEvaluation);
+var runSpeedBtn = document.getElementById("run-speed");
+var runWorkflowBtn = document.getElementById("run-workflow");
+var runContextBtn = document.getElementById("run-context");
+
+function suiteStatusLabel(label, message) {
+    return function () {
+        showStatus(message, "info");
+    };
+}
+if (runSpeedBtn) {
+    runSpeedBtn.addEventListener("click", suiteStatusLabel(
+        "Speed",
+        "The dedicated Speed runner (8K · 16K · 32K) launches in a backend Act."));
+}
+if (runWorkflowBtn) {
+    runWorkflowBtn.addEventListener("click", suiteStatusLabel(
+        "Workflow",
+        "The locked Workflow suite runs via python -m src v2-suite, wired in a backend Act."));
+}
+if (runContextBtn) {
+    runContextBtn.addEventListener("click", suiteStatusLabel(
+        "Context",
+        "The Context suite execution is not available yet."));
 }
 
 // ---------------------------------------------------------------------------
