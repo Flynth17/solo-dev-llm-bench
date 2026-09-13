@@ -888,6 +888,106 @@
         return String(Math.round(n)).toLocaleString("en-US");
     }
 
+    // ---- Act 13 dedicated speed tests (read-only; separate from Quality telemetry) ----
+    // Null-safe value formatter for a speed cell. `rate` => integer tok/s rounding,
+    // otherwise fixed 2-dp (used for TTFT seconds). Missing values render as a muted
+    // em dash, never numeric zero.
+    function speedValue(v, suffix, rate) {
+        if (v === null || v === undefined || v === "") return "\u2014";
+        var n = Number(v);
+        if (!isFinite(n)) return "\u2014";
+        var num = rate ? Math.round(n).toLocaleString("en-US") : n.toFixed(2);
+        return num + (suffix || "");
+    }
+
+    // Build one speed table row from a projected row. Context is the raw token count;
+    // TTFT/prefill/generation use speedValue; state shows an em dash when unrecorded.
+    function buildSpeedRow(row) {
+        var tr = document.createElement("tr");
+        var ctxMiss = (row.context_tokens === null || row.context_tokens === undefined);
+        tr.appendChild(mkCell(ctxMiss ? "v2-tel-miss" : null,
+                              row.context_tokens == null ? "\u2014" : String(row.context_tokens)));
+        var ttftMiss = (row.ttft_seconds === null || row.ttft_seconds === undefined);
+        tr.appendChild(mkCell(ttftMiss ? "v2-tel-miss" : null, speedValue(row.ttft_seconds, " s", false)));
+        var prefMiss = (row.prefill_tokens_per_second === null || row.prefill_tokens_per_second === undefined);
+        tr.appendChild(mkCell(prefMiss ? "v2-tel-miss" : null, speedValue(row.prefill_tokens_per_second, " tok/s", true)));
+        var genMiss = (row.generation_tokens_per_second === null || row.generation_tokens_per_second === undefined);
+        tr.appendChild(mkCell(genMiss ? "v2-tel-miss" : null, speedValue(row.generation_tokens_per_second, " tok/s", true)));
+        var stateTxt = row.run_state || "\u2014";
+        tr.appendChild(mkCell((row.run_state ? "" : "v2-tel-miss"), stateTxt));
+        return tr;
+    }
+
+    // Render the compatible speed section: reveal it, fill the table when rows exist and
+    // show a compatibility line; otherwise (none / incompatible) show an honest empty
+    // message. Never touches any quality panel.
+    function renderSpeedSection(data) {
+        var sec = by("v2-speed");
+        if (!sec) return;
+        show(sec);
+        var wrapEl = by("v2-speed-wrap");
+        var bodyEl = by("v2-speed-body");
+        var statusEl = by("v2-speed-status");
+        if (wrapEl) hide(wrapEl);   // table hidden until we have rows
+        if (bodyEl) bodyEl.innerHTML = "";
+
+        var compat = data && data.compatibility ? data.compatibility : {};
+        var status = compat.status || "none";
+        var basis = compat.basis || "";
+
+        if (status === "compatible" && Array.isArray(data.rows) && data.rows.length > 0) {
+            if (bodyEl) data.rows.forEach(function (row) { bodyEl.appendChild(buildSpeedRow(row)); });
+            if (wrapEl) show(wrapEl);
+            if (statusEl) {
+                statusEl.textContent = "Compatible configuration: " + (basis || "base model + loaded context");
+            }
+        } else {
+            // none or incompatible -> explicit, non-silent empty state.
+            var msg;
+            if (status === "incompatible") {
+                msg = "No compatible dedicated speed benchmark found for this configuration.";
+                if (basis) msg += " " + basis;
+            } else {
+                // none: informational about the absence of persisted speed data.
+                msg = "No dedicated speed benchmark data is available to match this configuration.";
+                if (basis) msg += " " + basis;
+            }
+            if (statusEl) statusEl.textContent = msg;
+        }
+    }
+
+    // Speed subsection failed to load. Quality result stays fully valid; only the speed
+    // panel reports the problem (no stack trace, no fake data).
+    function renderSpeedError() {
+        var sec = by("v2-speed");
+        if (!sec) return;
+        show(sec);
+        var wrapEl = by("v2-speed-wrap");
+        var statusEl = by("v2-speed-status");
+        if (wrapEl) hide(wrapEl);
+        if (statusEl) statusEl.textContent = "Unable to load speed-test data";
+    }
+
+    // Fetch dedicated speed data independently. Started early so it can never block or
+    // degrade the quality render; its success/failure paths are isolated from it.
+    function loadSpeedData(runId) {
+        var sec = by("v2-speed");
+        if (!sec) return;
+        hide(sec);   // start hidden to avoid any stale flash before we resolve state
+        fetch("/api/v2/results/" + encodeURIComponent(runId) + "/speed",
+              { headers: { Accept: "application/json" } })
+            .then(function (resp) {
+                if (!resp.ok) throw new Error("HTTP " + resp.status);
+                return resp.json();
+            })
+            // Success path only: renderSpeedSection handles compatible / none /
+            // incompatible internally. The onRejected-less form means any rejection
+            // (HTTP error from the guard above, or an unexpected throw inside
+            // renderSpeedSection) propagates straight to .catch -> renderSpeedError.
+            .then(renderSpeedSection)
+            .catch(renderSpeedError);
+    }
+
     function mkCell(cls, txt) {
         var c = document.createElement("td");
         if (cls) c.className = cls;
@@ -1191,6 +1291,11 @@
             showError("No run ID found in URL (expected /v2/results/{run_id}).");
             return;
         }
+
+        // Kick off the independent dedicated-speed load early: a slow or failed speed
+        // request must never block, replace, or degrade the quality result (its render is
+        // isolated -- see renderSpeedSection / renderSpeedError).
+        loadSpeedData(runId);
 
         fetch("/api/v2/results/" + encodeURIComponent(runId), { headers: { Accept: "application/json" } })
             .then(function (resp) {

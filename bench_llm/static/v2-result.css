@@ -29,8 +29,12 @@ body {
 /* Page container — scoped to the V2 result page only. dashboard.css's .container is not
    linked here, so without this rule the content stretched full-viewport-width with no
    gutters and unbounded line length on wide screens. Bounds width, centres, adds padding. */
+/* Act 13: widened modestly (from 1080px) so the dedicated Speed Tests table and other
+   engineering tables gain horizontal room while the page stays centred with readable
+   line lengths. Prose still bounded well under viewport width; Failure Details benefits
+   from the same extra room. */
 .container {
-    max-width: 1080px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 1.25rem 1rem 3rem;
 }
@@ -654,6 +658,7 @@ body {
     .container { padding-left: 0.6rem; padding-right: 0.6rem; }
     .v2-sticky-top, .v2-sticky-score, .v2-suite-strip { padding-left: 0.6rem; padding-right: 0.6rem; }
     .v2-model { max-width: none; white-space: normal; overflow-wrap: break-word; }
+}
 
 /* ------------------------------------------------------------------ */
 /* Request traceability (Act 9) -- deliberately secondary to failures */
@@ -775,6 +780,16 @@ body {
     border: 1px solid var(--v2-border, #d7dbe0);
     border-radius: 8px;
 }
+/* Act 13 Speed Tests wrapper: identical horizontal-scroll contract as telemetry. The
+   table reuses the generic .v2-tel-table styling (5 columns; nowrap cells) so it scrolls
+   rather than reflows on narrow viewports -- no forced mobile card layout. */
+.v2-speed-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--v2-border, #d7dbe0);
+    border-radius: 8px;
+    margin-top: 0.5rem;
+}
 .v2-tel-table {
     width: 100%;
     border-collapse: collapse;
@@ -864,4 +879,9 @@ body {
 .v2-repro-toolbar .v2-muted,
 .v2-tel-toolbar .v2-muted {
     margin-top: 0;
+}
+/* The Speed Tests compatibility/empty status line sits above its table; keep it flush
+   (no extra top gap like the standalone muted paragraphs). */
+.v2-speed-status {
+    margin-top: 0.25rem;
 }

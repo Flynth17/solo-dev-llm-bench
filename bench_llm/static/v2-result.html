@@ -55,6 +55,35 @@
             </dl>
         </section>
 
+        <!-- Dedicated speed/performance benchmark (UI Act 13). Separate from the Quality
+             telemetry panel shown later on this page: this shows the dedicated context
+             scaling / TTFT / prefill / generation benchmark persisted by the benchmark
+             runner, matched to this run by explicit identity only. Independent of the
+             authoritative /166 quality score rendered above. -->
+        <section id="v2-speed" class="panel v2-speed-panel hidden">
+            <h2>SPEED TESTS</h2>
+            <p id="v2-speed-subtitle" class="v2-headline-counts">Dedicated performance benchmark (context scaling, TTFT, prefill and generation throughput). This is separate from the per-suite Quality telemetry shown later.</p>
+
+            <!-- Compatibility / empty state: populated by JS when speed data loads. -->
+            <p id="v2-speed-status" class="v2-muted v2-hidden"></p>
+
+            <!-- Horizontal-scroll wrapper so a wide table never pushes page width. -->
+            <div id="v2-speed-wrap" class="v2-speed-wrap v2-hidden">
+                <table id="v2-speed-table" class="v2-tel-table" aria-label="Dedicated speed/performance benchmark by context size">
+                    <thead>
+                        <tr>
+                            <th scope="col">Context</th>
+                            <th scope="col" title="Time to first token (TTFT)">TTFT</th>
+                            <th scope="col" title="Prompt-processing throughput (derived from prompt tokens / TTFT)">Prefill</th>
+                            <th scope="col" title="Generation / decode throughput">Generation</th>
+                            <th scope="col" title="Warm or cold run state">State</th>
+                        </tr>
+                    </thead>
+                    <tbody id="v2-speed-body"></tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Failure-first diagnostic inspector (Act 7). Renders response.failures,
              grouped by canonical suite. Canonical failed-check counts come from the
              authoritative aggregate; diagnostics are inspection records only.
