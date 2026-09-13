@@ -910,6 +910,7 @@ h1 {
 /* Status messages */
 .dapp-dark .status.info { background: #0c2339; color: #93c4f5; border: 1px solid #1c3d60; }
 .dapp-dark .status.error { background: #2a1417; color: #fca5a5; border: 1px solid #4a2329; }
+.dapp-dark .status.success { background: #0e2b1c; color: #8ce6a8; border: 1px solid #1f4d34; }
 
 /* Code / blockquote */
 .dapp-dark pre { background: #0a1726; border-color: #243754; color: #dfe8f4; }

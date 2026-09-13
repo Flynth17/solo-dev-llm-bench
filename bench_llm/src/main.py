@@ -21,6 +21,7 @@ from src.routes import benchmark as benchmark_routes
 from src.routes import tasks as tasks_routes
 from src.routes import evaluation as evaluation_routes
 from src.routes import v2_results as v2_results_routes
+from src.routes import v2_workflow as v2_workflow_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -60,6 +61,9 @@ app.include_router(evaluation_routes.router)
 
 # Register read-only V2 results API (consumes the validated read model only)
 app.include_router(v2_results_routes.router)
+
+# Register Workflow suite launcher API (Act 16: async process launch + status polling)
+app.include_router(v2_workflow_routes.router)
 
 # Initialize tasks table
 task_manager.init_tasks_table()

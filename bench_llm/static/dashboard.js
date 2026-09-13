@@ -474,11 +474,139 @@ if (runSpeedBtn) {
         "Speed",
         "The dedicated Speed runner (8K · 16K · 32K) launches in a backend Act."));
 }
-if (runWorkflowBtn) {
-    runWorkflowBtn.addEventListener("click", suiteStatusLabel(
-        "Workflow",
-        "The locked Workflow suite runs via python -m src v2-suite, wired in a backend Act."));
+// ---------------------------------------------------------------------------
+// Workflow suite launcher (Act 16).
+//
+// Launching is execution plumbing only: the backend starts the LOCKED workflow
+// runner as a separate OS process (python -m src v2-run -> run_v2_run) and returns
+// immediately with a run id. This handler never runs a benchmark in-process, never
+// calls the legacy executor, and exposes no per-suite / temperature / output /
+// reasoning overrides -- those are decided by the locked Workflow contract.
+// ---------------------------------------------------------------------------
+var workflowPollTimer = null;
+var workflowRunId = null;
+
+function clearWorkflowPoll() {
+    if (workflowPollTimer) {
+        clearInterval(workflowPollTimer);
+        workflowPollTimer = null;
+    }
+    try { window.sessionStorage.removeItem("wf_run_id"); } catch (e) {}
 }
+
+// Restore the control to a plain "Run Workflow" button (also converts a completed
+// "View Result" link back into a fresh, enabled button).
+function resetWorkflowButton() {
+    clearWorkflowPoll();
+    var ctrl = runWorkflowBtn;
+    if (!ctrl) { return; }
+    if (ctrl.tagName !== "BUTTON") {
+        var b = document.createElement("button");
+        b.id = "run-workflow";
+        b.className = "suite-btn suite-btn-run";
+        b.type = "button";
+        b.textContent = "Run Workflow";
+        b.title = "Locked Workflow suite: 166 deterministic checks. Launched in a backend process.";
+        ctrl.replaceWith(b);
+        runWorkflowBtn = b;
+    } else {
+        ctrl.disabled = false;
+        ctrl.textContent = "Run Workflow";
+    }
+}
+
+function makeResultLink(href, runId) {
+    var ctrl = runWorkflowBtn;
+    if (!ctrl) { return; }
+    var a = document.createElement("a");
+    a.className = "suite-btn suite-btn-run";
+    a.href = href;
+    a.textContent = "View Result";
+    a.title = "Open the Workflow result for " + runId;
+    ctrl.replaceWith(a);
+}
+
+// Poll the status endpoint (~3s). Transient errors are ignored so we keep waiting.
+function pollWorkflowStatus(runId) {
+    fetch("/api/v2/workflow/runs/" + encodeURIComponent(runId) + "/status")
+        .then(function (r) { return r.json(); })
+        .then(function (state) {
+            if (!state || !state.status) { return; }
+            if (state.status === "completed") {
+                clearWorkflowPoll();
+                showStatus("Workflow complete", "success");
+                makeResultLink(state.result_url || ("/v2/results/" + runId), runId);
+            } else if (state.status === "failed") {
+                resetWorkflowButton();
+                showStatus((state.error && state.error.length) ? state.error : "Workflow failed", "error");
+            } else if (state.status === "running") {
+                // keep polling
+            }
+        })
+        .catch(function () { /* transient; keep polling */ });
+}
+
+function startWorkflowPoll(runId) {
+    clearWorkflowPoll();
+    workflowRunId = runId;
+    try { window.sessionStorage.setItem("wf_run_id", runId); } catch (e) {}
+    if (runWorkflowBtn && runWorkflowBtn.tagName === "BUTTON") {
+        runWorkflowBtn.disabled = true;
+        runWorkflowBtn.textContent = "Running…";
+    }
+    showStatus("Workflow running • " + runId, "info");
+    workflowPollTimer = setInterval(function () {
+        pollWorkflowStatus(runId);
+    }, 3000);
+}
+
+if (runWorkflowBtn) {
+    runWorkflowBtn.addEventListener("click", function () {
+        var model = modelSelect ? modelSelect.value : "";
+        if (!model) {
+            showStatus("Please select a model before launching the Workflow suite.", "error");
+            return;
+        }
+        // Disable during the launch request (Starting…).
+        runWorkflowBtn.disabled = true;
+        runWorkflowBtn.textContent = "Starting…";
+        showStatus("Launching workflow…", "info");
+        fetch("/api/v2/workflow/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model: model,
+                lm_studio_url: lmStudioUrlInput ? lmStudioUrlInput.value : ""
+            })
+        })
+        .then(function (r) { return r.json().catch(function () { return null; }); })
+        .then(function (data) {
+            if (data && data.run_id) {
+                startWorkflowPoll(data.run_id);
+            } else if (data && data.detail && /already in progress/i.test(data.detail)) {
+                resetWorkflowButton();
+                showStatus(data.detail, "error");
+            } else if (data && data.detail) {
+                resetWorkflowButton();
+                showStatus(data.detail, "error");
+            } else {
+                resetWorkflowButton();
+                showStatus("Unable to start the Workflow suite. Please try again.", "error");
+            }
+        })
+        .catch(function () {
+            resetWorkflowButton();
+            showStatus("Network error while launching the Workflow suite.", "error");
+        });
+    });
+}
+
+// Resume a workflow run in progress after a page reload (simple, bounded).
+(function resumeWorkflow() {
+    var saved = null;
+    try { saved = window.sessionStorage.getItem("wf_run_id"); } catch (e) {}
+    if (saved && runWorkflowBtn) { startWorkflowPoll(saved); }
+})();
 if (runContextBtn) {
     runContextBtn.addEventListener("click", suiteStatusLabel(
         "Context",
