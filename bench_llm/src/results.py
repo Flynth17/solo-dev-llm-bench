@@ -38,6 +38,16 @@ CSV_HEADERS = [
     "prompt_name",
     "max_output_tokens",
     "temperature",
+    # --- Standard Speed Suite (Act 17): fixed 8K/16K/32K context-pressure contract.
+    #     Additive, backward-safe; historical rows load as None/blank. Distinct from
+    # the legacy small/medium/large evaluation prompts these rows never use. ---
+    "target_context_tokens",
+    "context_point",
+    "speed_point_status",
+    # Standard Speed Suite prefill throughput, derived via the authoritative definition
+    # (actual_prompt_tokens / ttft_seconds) and persisted when available. Additive,
+    # backward-safe; historical rows load as None/blank.
+    "prefill_tokens_per_second",
     # --- Act 7: reproducible/comparable run metadata (additive) ---
     # Context (kept distinct — never conflated with one another).
     "model_max_context",
@@ -123,6 +133,11 @@ SQLITE_COLUMNS = [
     ("prompt_name", "TEXT"),
     ("max_output_tokens", "INTEGER"),
     ("temperature", "REAL"),
+    # --- Standard Speed Suite (Act 17): additive, types mirror CSV_HEADERS order. ---
+    ("target_context_tokens", "INTEGER"),
+    ("context_point", "TEXT"),
+    ("speed_point_status", "TEXT"),
+    ("prefill_tokens_per_second", "REAL"),
     # --- Act 7: additive metadata columns (types mirror CSV_HEADERS order) ---
     ("model_max_context", "INTEGER"),
     ("loaded_context", "INTEGER"),
@@ -180,6 +195,13 @@ SQLITE_COLUMNS = [
 # created before these fields gain them via ALTER TABLE so historical rows load
 # as NULL/None rather than failing. Values default to blank/None (unavailable).
 OPTIONAL_METADATA_COLUMNS = [
+    # --- Standard Speed Suite (Act 17): additive, ALTER-migrated. None/blank for
+    # historical rows; never fabricated. Kept here so _init_db migrates them onto any
+    # pre-existing database schema. ---
+    ("target_context_tokens", "INTEGER"),
+    ("context_point", "TEXT"),
+    ("speed_point_status", "TEXT"),
+    ("prefill_tokens_per_second", "REAL"),
     ("model_max_context", "INTEGER"),
     ("loaded_context", "INTEGER"),
     ("prompt_tokens", "INTEGER"),

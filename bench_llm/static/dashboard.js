@@ -469,11 +469,139 @@ function suiteStatusLabel(label, message) {
         showStatus(message, "info");
     };
 }
-if (runSpeedBtn) {
-    runSpeedBtn.addEventListener("click", suiteStatusLabel(
-        "Speed",
-        "The dedicated Speed runner (8K · 16K · 32K) launches in a backend Act."));
+// ---------------------------------------------------------------------------
+// Standard Speed Suite launcher (Act 17).
+//
+// Launching is execution plumbing only: the backend starts the LOCKED standard
+// speed runner as a separate OS process (python -m src v2-speed -> run_speed_suite)
+// and returns immediately with a run id. This handler never runs a benchmark in
+// process, never calls the legacy executor, and exposes NO per-point / iteration /
+// output overrides -- the fixed 8K · 16K · 32K contract is decided by the backend.
+// ---------------------------------------------------------------------------
+var speedPollTimer = null;
+var speedRunId = null;
+
+function clearSpeedPoll() {
+    if (speedPollTimer) {
+        clearInterval(speedPollTimer);
+        speedPollTimer = null;
+    }
+    try { window.sessionStorage.removeItem("speed_run_id"); } catch (e) {}
 }
+
+// Restore the control to a plain "Run Speed" button (also converts a completed
+// "View Result" link back into a fresh, enabled button).
+function resetSpeedButton() {
+    clearSpeedPoll();
+    var ctrl = runSpeedBtn;
+    if (!ctrl) { return; }
+    if (ctrl.tagName !== "BUTTON") {
+        var b = document.createElement("button");
+        b.id = "run-speed";
+        b.className = "suite-btn suite-btn-run";
+        b.type = "button";
+        b.textContent = "Run Speed";
+        b.title = "Standard Speed suite: 8K · 16K · 32K TTFT, prefill and generation throughput. Launched in a backend process.";
+        ctrl.replaceWith(b);
+        runSpeedBtn = b;
+    } else {
+        ctrl.disabled = false;
+        ctrl.textContent = "Run Speed";
+    }
+}
+
+function makeResultLink(href, runId) {
+    var ctrl = runSpeedBtn;
+    if (!ctrl) { return; }
+    var a = document.createElement("a");
+    a.className = "suite-btn suite-btn-run";
+    a.href = href;
+    a.textContent = "View Result";
+    a.title = "Open the Speed result for " + runId;
+    ctrl.replaceWith(a);
+}
+
+// Poll the status endpoint (~3s). Transient errors are ignored so we keep waiting.
+function pollSpeedStatus(runId) {
+    fetch("/api/v2/speed/runs/" + encodeURIComponent(runId) + "/status")
+        .then(function (r) { return r.json(); })
+        .then(function (state) {
+            if (!state || !state.status) { return; }
+            if (state.status === "completed") {
+                clearSpeedPoll();
+                showStatus("Speed complete", "success");
+                makeResultLink(state.result_url || ("/v2/results/" + runId), runId);
+            } else if (state.status === "failed") {
+                resetSpeedButton();
+                showStatus((state.error && state.error.length) ? state.error : "Speed failed", "error");
+            } else if (state.status === "running") {
+                // keep polling
+            }
+        })
+        .catch(function () { /* transient; keep polling */ });
+}
+
+function startSpeedPoll(runId) {
+    clearSpeedPoll();
+    speedRunId = runId;
+    try { window.sessionStorage.setItem("speed_run_id", runId); } catch (e) {}
+    if (runSpeedBtn && runSpeedBtn.tagName === "BUTTON") {
+        runSpeedBtn.disabled = true;
+        runSpeedBtn.textContent = "Running…";
+    }
+    showStatus("Speed running • " + runId, "info");
+    speedPollTimer = setInterval(function () {
+        pollSpeedStatus(runId);
+    }, 3000);
+}
+
+if (runSpeedBtn) {
+    runSpeedBtn.addEventListener("click", function () {
+        var model = modelSelect ? modelSelect.value : "";
+        if (!model) {
+            showStatus("Please select a model before launching the Speed suite.", "error");
+            return;
+        }
+        // Disable during the launch request (Starting…).
+        runSpeedBtn.disabled = true;
+        runSpeedBtn.textContent = "Starting…";
+        showStatus("Launching speed…", "info");
+        fetch("/api/v2/speed/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model: model,
+                lm_studio_url: lmStudioUrlInput ? lmStudioUrlInput.value : ""
+            })
+        })
+        .then(function (r) { return r.json().catch(function () { return null; }); })
+        .then(function (data) {
+            if (data && data.speed_run_id) {
+                startSpeedPoll(data.speed_run_id);
+            } else if (data && data.detail && /already in progress/i.test(data.detail)) {
+                resetSpeedButton();
+                showStatus(data.detail, "error");
+            } else if (data && data.detail) {
+                resetSpeedButton();
+                showStatus(data.detail, "error");
+            } else {
+                resetSpeedButton();
+                showStatus("Unable to start the Speed suite. Please try again.", "error");
+            }
+        })
+        .catch(function () {
+            resetSpeedButton();
+            showStatus("Network error while launching the Speed suite.", "error");
+        });
+    });
+}
+
+// Resume a speed run in progress after a page reload (simple, bounded).
+(function resumeSpeed() {
+    var saved = null;
+    try { saved = window.sessionStorage.getItem("speed_run_id"); } catch (e) {}
+    if (saved && runSpeedBtn) { startSpeedPoll(saved); }
+})();
 // ---------------------------------------------------------------------------
 // Workflow suite launcher (Act 16).
 //

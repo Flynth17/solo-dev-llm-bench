@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 import src.main
 import src.v2_quality_artifact as art
 import src.v2_workflow_runner as wf
+import src.standard_run_guard as guard
 import src.routes.v2_workflow as wf_route
 from src.v2_quality_artifact import persist_document
 from src.v2_workflow_runner import launch_workflow, workflow_status, WorkflowLaunchError
@@ -84,10 +85,20 @@ def _make_launch(monkeypatch, exit_code=None):
 
 @pytest.fixture(autouse=True)
 def clean_registry():
-    """Ensure each test starts from an empty in-memory process registry."""
+    """Ensure each test starts (and ends) with empty process registries.
+
+    The Workflow suite registers its live handles in the shared cross-suite guard too
+    (so Speed<->Workflow conflict detection is bidirectional); clearing both here keeps
+    tests isolated from one another and lets the Standard Speed Suite tests reuse this
+    same fixture without leaking active-handle state across files.
+    """
     wf.registry._jobs.clear()
+    guard._ACTIVE.clear()
+    guard._EXITED.clear()
     yield
     wf.registry._jobs.clear()
+    guard._ACTIVE.clear()
+    guard._EXITED.clear()
 
 
 @pytest.fixture()

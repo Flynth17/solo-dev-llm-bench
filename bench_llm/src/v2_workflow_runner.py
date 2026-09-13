@@ -55,6 +55,11 @@ from typing import Any, Optional
 # executor (its import graph reaches only the immutable canonical constants).
 from src.v2_quality_artifact import try_load
 
+# Shared cross-suite concurrency guard (Act 17). Registering here lets the Standard
+# Speed Suite reject its launch while a Workflow run is active, and vice versa -- two
+# heavyweight standard suites must never contend for the same local model.
+import src.standard_run_guard as standard_run_guard  # noqa: E402
+
 
 def _current_runs_dir() -> Path:
     """Return the live artifact runs directory.
@@ -167,11 +172,13 @@ def launch_workflow(
     clean_model = model.strip()
     base_url = _resolve_lm_studio_url(lm_studio_url)
 
-    # --- Single standard Workflow run at a time. ---
-    active = registry.active_ids()
+    # --- Single standard run at a time, enforced across BOTH suites via the shared
+    #     guard so Workflow<->Speed conflict bidirectionally (GPU contention would
+    #     corrupt timing measurements). ---
+    active = registry.active_ids() or standard_run_guard.active_ids()
     if active:
         raise WorkflowLaunchError(
-            f"A Workflow run is already in progress ({active[0]}). Wait for it to finish."
+            f"A standard benchmark is already in progress ({active[0]}). Wait for it to finish."
         )
 
     run_id = generate_run_id()
@@ -218,6 +225,8 @@ def launch_workflow(
         raise WorkflowLaunchError(f"Failed to launch the workflow process: {exc}")
 
     registry.add(run_id, proc)
+    # Publish into the shared guard so the Speed suite sees this active handle too.
+    standard_run_guard.register(run_id, proc)
     return {"run_id": run_id, "status": "running"}
 
 

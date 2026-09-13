@@ -22,6 +22,7 @@ from src.routes import tasks as tasks_routes
 from src.routes import evaluation as evaluation_routes
 from src.routes import v2_results as v2_results_routes
 from src.routes import v2_workflow as v2_workflow_routes
+from src.routes import v2_speed as v2_speed_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -64,6 +65,11 @@ app.include_router(v2_results_routes.router)
 
 # Register Workflow suite launcher API (Act 16: async process launch + status polling)
 app.include_router(v2_workflow_routes.router)
+
+# Register Standard Speed Suite launcher API (Act 17: async process launch + status polling).
+# Shares the cross-suite concurrency guard with Workflow so only one standard benchmark
+# uses the local model at a time.
+app.include_router(v2_speed_routes.router)
 
 # Initialize tasks table
 task_manager.init_tasks_table()

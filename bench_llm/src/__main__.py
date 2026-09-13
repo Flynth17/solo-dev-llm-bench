@@ -29,6 +29,7 @@ from src.v2_quality_suite_runner import (  # noqa: E402
     combine_suite_results,
     ConfigurationMismatchError,
 )
+from src.v2_speed_suite_runner import run_speed_suite  # noqa: E402
 
 
 def _dump(obj: Any) -> str:
@@ -72,6 +73,24 @@ def cmd_v2_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_v2_speed(args: argparse.Namespace) -> int:
+    try:
+        summary = asyncio.run(
+            run_speed_suite(
+                lm_studio_url=args.lm_studio_url,
+                model=args.model,
+                hardware_label=args.hardware_label or "",
+                run_id=args.run_id,
+            )
+        )
+    except Exception as exc:
+        # Concise, non-zero exit signal for orchestrators/tests; never a raw traceback.
+        print(_dump({"status": "failed", "error": str(exc)}), file=sys.stderr)
+        return 1
+    print(_dump(summary))
+    return 1 if summary.get("status") == "failed" else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m src", description="BenchLLM V2 suite runner")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -88,6 +107,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--model", default=DEFAULT_MODEL)
     p_run.add_argument("--run-id", default=None)
     p_run.set_defaults(func=cmd_v2_run)
+
+    p_speed = sub.add_parser(
+        "v2-speed",
+        help="Run the fixed standard Speed suite (8K / 16K / 32K) as a fresh process.",
+    )
+    p_speed.add_argument("--lm-studio-url", default=DEFAULT_LM_STUDIO_URL)
+    p_speed.add_argument("--model", default=DEFAULT_MODEL)
+    p_speed.add_argument("--run-id", default=None)
+    p_speed.add_argument("--hardware-label", default="")
+    p_speed.set_defaults(func=cmd_v2_speed)
 
     return parser
 
