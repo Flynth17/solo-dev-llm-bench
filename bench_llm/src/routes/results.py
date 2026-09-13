@@ -26,8 +26,10 @@ async def get_past_results():
     results_store = _get_results_store()
     all_runs = results_store.get_all()
 
-    # Sort by timestamp descending (newest first)
-    all_runs.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    # Sort by timestamp descending (newest first). Normalise None -> "" so rows that
+    # lack a timestamp (e.g. standalone Speed runs) never crash the comparison view with
+    # ``TypeError: '<' not supported between instances of 'NoneType' and 'NoneType'``.
+    all_runs.sort(key=lambda r: (r.get("timestamp") or ""), reverse=True)
 
     return {"results": [enriched_run(run) for run in all_runs]}
 
