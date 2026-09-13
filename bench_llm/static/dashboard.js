@@ -33,6 +33,44 @@ function clearStatus() {
     statusEl.className = "status hidden";
 }
 
+// ---------------------------------------------------------------------------
+// Runtime status bar (display-only; state is driven by real model-fetch results)
+// ---------------------------------------------------------------------------
+function setRuntimeState(state, label) {
+    var dot = document.getElementById("runtime-dot");
+    var txt = document.getElementById("runtime-state");
+    if (dot) {
+        dot.className = "dapp-dot dapp-dot-" + state;
+    }
+    if (txt && label !== undefined) {
+        txt.textContent = label;
+    }
+}
+
+function refreshRuntimeHost() {
+    var hostEl = document.getElementById("runtime-host");
+    if (!hostEl || !lmStudioUrlInput) { return; }
+    var raw = lmStudioUrlInput.value.replace(/\/$/, "").replace(/^https?:\/\//, "");
+    hostEl.textContent = raw || "localhost:1234";
+}
+
+if (modelSelect) {
+    modelSelect.addEventListener("change", function () {
+        var modelLabel = document.getElementById("runtime-model");
+        if (!modelLabel) { return; }
+        if (this.value) {
+            var opt = this[this.selectedIndex];
+            modelLabel.textContent = opt ? opt.textContent : "\u2014 no model selected \u2014";
+        } else {
+            modelLabel.textContent = "\u2014 no model selected \u2014";
+        }
+    });
+}
+
+if (lmStudioUrlInput) {
+    lmStudioUrlInput.addEventListener("input", refreshRuntimeHost);
+}
+
 function hideResults() {
     resultsPanel.classList.add("hidden");
     resultsContainer.innerHTML = "";
@@ -190,11 +228,14 @@ async function loadModels() {
         }
 
         if (models.length === 0) {
-            showStatus("No LLM models found. Load a model in LM Studio first.", "error");
+            setRuntimeState("warn", "No models");
+            showStatus("No LLM models found. Load a model in LM Studio first.", "info");
         } else {
+            setRuntimeState("ok", "Ready");
             clearStatus();
         }
     } catch (e) {
+        setRuntimeState("bad", "Unavailable");
         showStatus("Failed to fetch models: " + e.message, "error");
     }
 }
@@ -866,6 +907,9 @@ async function runEvaluation() {
 // ---------------------------------------------------------------------------
 
 loadConfig().then(function () {
+    // Reflect the configured LM Studio endpoint in the runtime status bar
+    if (lmStudioUrlInput) refreshRuntimeHost();
+    setRuntimeState("idle", "Not checked");
     // Auto-load models after config is loaded
     loadModels();
     // Initialize prompt presets

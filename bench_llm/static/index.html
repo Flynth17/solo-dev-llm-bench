@@ -7,15 +7,21 @@
     <link rel="stylesheet" href="/static/shared.css">
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
-<body>
+<body class="dapp-dark">
     <div class="container">
-        <h1>Solo Dev LLM Bench</h1>
-        <p class="subtitle">Measure performance trade-offs when switching LLMs, hardware, or environments</p>
+        <!-- Header -->
+        <header class="dapp-header">
+            <h1>Solo Dev LLM Bench</h1>
+            <p class="subtitle">Benchmark local LLM speed, workflow reliability and context scaling.</p>
+        </header>
 
-        <!-- Model + execution environment (compact) -->
+        <!-- Model + operational status (compact) -->
         <section class="panel" id="model-panel">
-            <div class="form-row">
-                <label for="model-select">Select Model</label>
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">SELECT MODEL</span>
+            </div>
+            <div class="form-row model-field">
+                <label for="model-select">Model</label>
                 <div class="model-select-wrapper">
                     <select id="model-select">
                         <option value="">— Select a model —</option>
@@ -24,6 +30,7 @@
                 </div>
             </div>
 
+            <!-- Compact runtime controls (carried by dashboard.js; kept for runner identity) -->
             <div class="form-row-inline runtime-fields">
                 <div class="form-row half">
                     <label for="lm-studio-url">LM Studio URL</label>
@@ -34,123 +41,167 @@
                     <input type="text" id="hardware-label" placeholder="e.g. RTX 5090 Desktop, Work Laptop">
                 </div>
             </div>
+
+            <!-- Read-only operational status (display-only; driven by real fetch results) -->
+            <div class="dapp-runtime" id="runtime-status">
+                <span class="dapp-runtime-item">
+                    <span class="dapp-dot dapp-dot-idle" id="runtime-dot"></span>
+                    LM Studio &middot; <span id="runtime-host">localhost:1234</span>
+                </span>
+                <span class="dapp-runtime-item dapp-runtime-state" id="runtime-state">Not checked</span>
+                <span class="dapp-runtime-item dapp-runtime-model" id="runtime-model">&#8212; no model selected &#8212;</span>
+            </div>
         </section>
+
+        <p class="dapp-choose-label">Choose a benchmark suite</p>
 
         <!-- Three-suite launcher -->
         <section class="panel" id="suite-launcher">
             <div class="suite-cards">
                 <!-- SPEED -->
-                <article class="suite-card">
-                    <div class="suite-title">SPEED</div>
-                    <div class="suite-primary">8K &middot; 16K &middot; 32K</div>
-                    <div class="suite-desc">TTFT &middot; Prefill &middot; Generation</div>
-                    <button id="run-speed" class="suite-btn suite-btn-run" type="button" disabled title="Dedicated 8K&#183;16K&#183;32K runner is a backend Act">Run Speed</button>
-                    <div class="suite-note">Fixed test points. Dedicated runner launches in a later backend Act.</div>
+                <article class="suite-card suite-speed">
+                    <div class="suite-top">
+                        <div class="suite-title">SPEED</div>
+                        <div class="suite-purpose">How fast does it run?</div>
+                    </div>
+                    <div class="suite-contract">8K &middot; 16K &middot; 32K</div>
+                    <ul class="suite-metrics">
+                        <li><span class="metric-k">TTFT</span><span class="metric-v">Time to first token</span></li>
+                        <li><span class="metric-k">Prefill</span><span class="metric-v">Token throughput</span></li>
+                        <li><span class="metric-k">Generation</span><span class="metric-v">Token throughput</span></li>
+                    </ul>
+                    <button id="run-speed" class="suite-btn suite-btn-run" type="button" disabled title="Dedicated speed runner not wired yet">Run Speed</button>
                 </article>
 
                 <!-- WORKFLOW -->
-                <article class="suite-card">
-                    <div class="suite-title">WORKFLOW</div>
-                    <div class="suite-primary">166 deterministic checks</div>
-                    <div class="suite-desc">Python &middot; Java &middot; Markdown &middot; Evidence &middot; DRIFT</div>
-                    <button id="run-workflow" class="suite-btn suite-btn-run" type="button" disabled title="Locked V2 quality suite (python -m src v2-suite) launches in a backend Act">Run Workflow</button>
-                    <div class="suite-note">Locked contract. Runs via the locked suite runner in a backend Act.</div>
+                <article class="suite-card suite-workflow">
+                    <div class="suite-top">
+                        <div class="suite-title">WORKFLOW</div>
+                        <div class="suite-purpose">Can it do the work?</div>
+                    </div>
+                    <div class="suite-contract">166 deterministic checks</div>
+                    <div class="suite-chips">
+                        <span class="chip">58 Python</span>
+                        <span class="chip">52 Java</span>
+                        <span class="chip">20 Markdown</span>
+                        <span class="chip">30 Evidence</span>
+                        <span class="chip">6 DRIFT</span>
+                    </div>
+                    <ul class="suite-metrics">
+                        <li><span class="metric-k">Validation</span><span class="metric-v">Deterministic</span></li>
+                        <li><span class="metric-k">Judge</span><span class="metric-v">No LLM judge</span></li>
+                    </ul>
+                    <button id="run-workflow" class="suite-btn suite-btn-run" type="button" disabled title="Locked Workflow suite runs via python -m src v2-suite (backend Act)">Run Workflow</button>
                 </article>
 
                 <!-- CONTEXT -->
-                <article class="suite-card">
-                    <div class="suite-title">CONTEXT</div>
-                    <div class="suite-primary">10% &middot; 25% &middot; 50% &middot; 75%</div>
-                    <div class="suite-desc">Quality + speed degradation</div>
-                    <button id="run-context" class="suite-btn suite-btn-planned" type="button" disabled>Not available yet</button>
-                    <div class="suite-note">Relative context pressures. Implementation pending.</div>
+                <article class="suite-card suite-context">
+                    <div class="suite-top">
+                        <div class="suite-title">CONTEXT</div>
+                        <div class="suite-purpose">How does it degrade?</div>
+                    </div>
+                    <div class="suite-contract">
+                        <span class="contract-row">15K &middot; 30K &middot; 60K</span>
+                        <span class="contract-row">120K &middot; 180K &middot; 240K<span class="footnote">*</span></span>
+                    </div>
+                    <p class="suite-footnote">* where supported</p>
+                    <ul class="suite-metrics">
+                        <li><span class="metric-k">Quality</span><span class="metric-v">Retention</span></li>
+                        <li><span class="metric-k">Speed</span><span class="metric-v">Degradation</span></li>
+                    </ul>
+                    <button id="run-context" class="suite-btn suite-btn-planned" type="button" disabled title="Context suite not implemented yet">Planned</button>
                 </article>
             </div>
         </section>
 
-        <!-- Advanced / Custom Benchmark (collapsible, closed by default) -->
-        <details class="collapsible" id="advanced-benchmark">
-            <summary class="collapsible-header">&#x25B6; Advanced / Custom Benchmark</summary>
-            <div class="collapsible-body">
-                <p class="advanced-lead">Custom operation is intentionally different from the three standard comparable suites above.</p>
+        <!-- Bottom row: Developer Tools | Results -->
+        <div class="dapp-bottom-row">
+            <div class="dapp-devtools">
+                <!-- Advanced / Custom Benchmark (collapsible, closed by default) -->
+                <details class="collapsible" id="advanced-benchmark">
+                    <summary class="collapsible-header">&#x25B6; Advanced / Custom Benchmark</summary>
+                    <div class="collapsible-body">
+                        <p class="advanced-lead">Custom operation is intentionally different from the three standard comparable suites above.</p>
 
-                <!-- Prompt Preset Selector -->
-                <div class="form-row">
-                    <label for="prompt-preset">Prompt preset</label>
-                    <div class="prompt-presets-wrapper">
-                        <select id="prompt-preset">
-                            <option value="">— Custom —</option>
-                        </select>
-                        <button id="save-prompt-btn" title="Save current prompt as preset">&#x1F4BE;</button>
-                        <button id="rename-prompt-btn" title="Rename selected preset">&#x270E;</button>
-                        <button id="delete-prompt-btn" title="Delete selected preset">&#x1F5D1;</button>
-                    </div>
-                </div>
+                        <!-- Prompt Preset Selector -->
+                        <div class="form-row">
+                            <label for="prompt-preset">Prompt preset</label>
+                            <div class="prompt-presets-wrapper">
+                                <select id="prompt-preset">
+                                    <option value="">— Custom —</option>
+                                </select>
+                                <button id="save-prompt-btn" title="Save current prompt as preset">&#x1F4BE;</button>
+                                <button id="rename-prompt-btn" title="Rename selected preset">&#x270E;</button>
+                                <button id="delete-prompt-btn" title="Delete selected preset">&#x1F5D1;</button>
+                            </div>
+                        </div>
 
-                <div class="form-row">
-                    <label for="prompt">Benchmark Prompt</label>
-                    <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
-                </div>
+                        <div class="form-row">
+                            <label for="prompt">Benchmark Prompt</label>
+                            <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
+                        </div>
 
-                <!-- Benchmark Parameters -->
-                <div class="form-row-inline eval-params">
-                    <div class="form-row half">
-                        <label for="iterations">Iterations</label>
-                        <input type="number" id="iterations" value="5" min="1" max="100">
-                    </div>
-                    <div class="form-row half">
-                        <label for="max-tokens">Max Output Tokens</label>
-                        <input type="number" id="max-tokens" value="100000" min="1" max="10000000">
-                    </div>
-                    <div class="form-row half">
-                        <label for="temperature">Temperature</label>
-                        <input type="number" id="temperature" value="0" min="0" max="2" step="0.1">
-                    </div>
-                </div>
+                        <!-- Benchmark Parameters -->
+                        <div class="form-row-inline eval-params">
+                            <div class="form-row half">
+                                <label for="iterations">Iterations</label>
+                                <input type="number" id="iterations" value="5" min="1" max="100">
+                            </div>
+                            <div class="form-row half">
+                                <label for="max-tokens">Max Output Tokens</label>
+                                <input type="number" id="max-tokens" value="100000" min="1" max="10000000">
+                            </div>
+                            <div class="form-row half">
+                                <label for="temperature">Temperature</label>
+                                <input type="number" id="temperature" value="0" min="0" max="2" step="0.1">
+                            </div>
+                        </div>
 
-                <!-- Run Benchmark button preserved for transitional use -->
-                <button id="run-benchmark" class="btn-secondary suite-btn suite-btn-run" type="button">Run Custom Benchmark</button>
+                        <!-- Run Benchmark button preserved for transitional use -->
+                        <button id="run-benchmark" class="btn-secondary suite-btn suite-btn-run" type="button">Run Custom Benchmark</button>
+                    </div>
+                </details>
+
+                <!-- Advanced Task Manager (collapsible, visually secondary) -->
+                <details class="collapsible" id="advanced-tasks">
+                    <summary class="collapsible-header">&#x25B6; Advanced Task Manager</summary>
+                    <div class="collapsible-body">
+                        <div class="task-toolbar">
+                            <select id="task-type-select">
+                                <option value="markdown">Markdown Structure</option>
+                                <option value="python">Python Code Quality</option>
+                                <option value="java">Java Code Quality</option>
+                            </select>
+                            <input type="text" id="task-name-input" placeholder="Task name (optional)">
+                            <button id="create-task-btn" class="btn-secondary">+ Create Task</button>
+                        </div>
+                        <div id="task-list-container">
+                            <div id="task-list"></div>
+                        </div>
+                    </div>
+                </details>
             </div>
-        </details>
 
-        <!-- Status -->
+            <a href="/results" class="dapp-results-nav" title="View all past results">
+                <span class="dapp-results-title">Results</span>
+                <span class="dapp-results-action">View all results &rarr;</span>
+            </a>
+        </div>
+
+        <!-- Status (run / error messages) -->
         <section id="status" class="status hidden"></section>
 
-        <!-- Results Panel (custom benchmark output) -->
+        <!-- Inline custom-benchmark results (hidden until a run happens) -->
         <section id="results-panel" class="panel hidden">
             <h2>Results</h2>
             <div id="results-container"></div>
             <div id="results-charts"></div>
         </section>
-
-        <!-- Advanced Task Manager (collapsible, visually secondary) -->
-        <details class="collapsible" id="advanced-tasks">
-            <summary class="collapsible-header">&#x25B6; Advanced Task Manager</summary>
-            <div class="collapsible-body">
-                <div class="task-toolbar">
-                    <select id="task-type-select">
-                        <option value="markdown">Markdown Structure</option>
-                        <option value="python">Python Code Quality</option>
-                        <option value="java">Java Code Quality</option>
-                    </select>
-                    <input type="text" id="task-name-input" placeholder="Task name (optional)">
-                    <button id="create-task-btn" class="btn-secondary">+ Create Task</button>
-                </div>
-                <div id="task-list-container">
-                    <div id="task-list"></div>
-                </div>
-            </div>
-        </details>
-
-        <!-- View all past results -->
-        <div class="view-all-link">
-            <a href="/results">View all past results →</a>
-        </div>
     </div>
 
     <script src="/static/dashboard-charts.js"></script>
     <script src="/static/dashboard-prompts.js"></script>
     <script src="/static/dashboard-tasks.js"></script>
     <script src="/static/dashboard.js"></script>
-    </body>
-    </html>
+</body>
+</html>

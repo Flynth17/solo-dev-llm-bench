@@ -672,16 +672,16 @@ h1 {
 }
 
 /* ---------------------------------------------------------------------------
-   Three-suite launcher (Act 14)
+   Three-suite launcher (Act 14 / dark retheme Act 15)
    --------------------------------------------------------------------------- */
 
 #suite-launcher {
-    margin-top: 1.5rem;
+    margin-top: 0;
 }
 
 .suite-cards {
     display: flex;
-    gap: 1rem;
+    gap: 1.1rem;
     align-items: stretch;
 }
 
@@ -690,101 +690,305 @@ h1 {
     flex-direction: column;
     flex: 1 1 0;
     min-width: 0;
-    padding: 1.1rem 1rem 1rem;
-    background: #fbfdff;
-    border: 1px solid #d6e2f5;
-    border-radius: 10px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-    text-align: center;
+    padding: 1.25rem 1.2rem 1.3rem;
+    background: linear-gradient(180deg, #10203a 0%, #0e1b30 100%);
+    border: 1px solid #1e3350;
+    border-top: 3px solid #334155;
+    border-radius: 12px;
+    position: relative;
+    transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
+.suite-card:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(180deg, #122543 0%, #0f1d34 100%);
+}
+
+/* Per-suite accents (meaning also carried by suite title / contract text) */
+.suite-speed { border-top-color: #38bdf8; }
+.suite-workflow { border-top-color: #34d399; }
+.suite-context { border-top-color: #a78bfa; }
+
+.suite-top { margin-bottom: 0.5rem; }
 
 .suite-title {
     font-size: 1.05rem;
     font-weight: 800;
-    letter-spacing: 0.12em;
-    color: #1e40af;
-    margin-bottom: 0.4rem;
+    letter-spacing: 0.14em;
+}
+.suite-speed .suite-title { color: #7dd3fc; }
+.suite-workflow .suite-title { color: #6ee7b7; }
+.suite-context .suite-title { color: #c4b5fd; }
+
+.suite-purpose {
+    font-size: 0.86rem;
+    color: #9fb0c7;
+    margin-top: 0.15rem;
 }
 
-.suite-primary {
-    font-size: 1.05rem;
+.suite-contract {
+    font-size: 1.02rem;
     font-weight: 700;
-    color: #0f172a;
+    color: #eef4ff;
     font-variant-numeric: tabular-nums;
-    margin-bottom: 0.4rem;
+    line-height: 1.55;
+    margin: 0.35rem 0 0.6rem;
     word-break: break-word;
 }
-
-.suite-desc {
-    font-size: 0.88rem;
-    color: #5b6b82;
-    flex: 1 1 auto;
+.contract-row { display: block; }
+.contract-row .footnote {
+    vertical-align: super;
+    font-size: 0.6em;
+    color: #7f93af;
+    line-height: 0;
 }
 
+.suite-footnote {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    color: #6b7f99;
+}
+
+.suite-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.6rem;
+}
+.chip {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    background: #0c1d33;
+    border: 1px solid #223a5c;
+    color: #b9c8de;
+    white-space: nowrap;
+}
+
+.suite-metrics {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.suite-metrics li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem;
+    font-size: 0.82rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed #1c304b;
+}
+.metric-k { color: #cdd9ea; font-weight: 700; }
+.metric-v { color: #8a97ab; font-weight: 500; }
+
 .suite-btn {
-    margin-top: 0.9rem;
+    margin-top: auto;
     width: 100%;
-    padding: 0.6rem 0.8rem;
-    border-radius: 6px;
-    font-size: 0.95rem;
+    padding: 0.62rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.94rem;
     font-weight: 700;
     font-family: inherit;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
-/* Runnable / active run button (Speed, Workflow) */
+/* Runnable buttons (disabled in production — no execution route yet) */
 .suite-btn-run {
-    background: #2563eb;
-    border: 2px solid #2563eb;
-    color: #fff;
+    background: #12273f;
+    border: 1px solid #264b73;
+    color: #cfe3ff;
 }
 .suite-btn-run:hover:not(:disabled) {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: #183a5e;
+    border-color: #3a6ea5;
 }
 .suite-btn-run:disabled {
-    background: #c7d2e5;
-    border-color: #c7d2e5;
-    color: #64748b;
+    background: #0d1c2e;
+    border-color: #22344c;
+    color: #5b6f8a;
     cursor: not-allowed;
+    opacity: 0.85;
 }
 
 /* Planned / unavailable button (Context) */
 .suite-btn-planned {
-    background: #f1f5f9;
-    border: 2px solid #cbd5e1;
-    color: #64748b;
+    background: #12131f;
+    border: 1px solid #2a2f45;
+    color: #7f869c;
     cursor: not-allowed;
 }
-
-.suite-note {
-    margin-top: 0.6rem;
-    font-size: 0.78rem;
-    color: #94a3b8;
-    line-height: 1.35;
-}
-
-.advanced-lead {
-    font-size: 0.85rem;
-    color: #6b7280;
-    margin-top: 0.35rem;
-    margin-bottom: 0.9rem;
-}
-
-/* Stack the suite cards on narrower screens */
-@media (max-width: 820px) {
-    .suite-cards {
-        flex-direction: column;
-    }
+.suite-btn-planned:hover {
+    background: #161829;
 }
 
 /* ---------------------------------------------------------------------------
-   Responsive — Dashboard
+   Dark theme overrides (Act 15)
+   Scoped to the launcher page via .dapp-dark so the V2 Results page is unaffected.
    --------------------------------------------------------------------------- */
 
+.dapp-dark { background: #07111f; color: #e8eef6; }
+.dapp-dark .container { max-width: 1400px; }
+
+/* Header */
+.dapp-header { margin-bottom: 1.5rem; }
+.dapp-header h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.01em; color: #f4f8ff; margin-bottom: 0.2rem; }
+.subtitle { color: #9fb0c7; font-size: 0.98rem; margin-bottom: 1.4rem; }
+
+/* Panels */
+.dapp-dark .panel { background: #0f1b2d; border: 1px solid #1e3350; box-shadow: none; padding: 1.25rem; margin-bottom: 1.5rem; color: #e8eef6; }
+.dapp-dark .panel h2 { color: #e8eef6; border-bottom-color: #1e3350; font-size: 1.15rem; }
+
+.dapp-section-head { margin-bottom: 0.9rem; }
+.dapp-section-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; color: #7f93af; text-transform: uppercase; }
+
+.dapp-choose-label {
+    color: #7f93af;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    margin: 1.5rem 0 0.85rem;
+}
+
+/* Model selector + runtime status bar */
+.model-field { margin-bottom: 0.5rem; }
+.dapp-runtime {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 1.2rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #1e3350;
+    font-size: 0.85rem;
+    color: #9fb0c7;
+}
+.dapp-runtime-item { display: inline-flex; align-items: center; gap: 0.5rem; }
+.dapp-runtime-state { font-weight: 700; color: #cdd9ea; }
+.dapp-runtime-model { margin-left: auto; color: #cdd9ea; font-weight: 600; }
+
+.dapp-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dapp-dot-idle { background: #4b5f7a; }
+.dapp-dot-ok  { background: #34d399; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18); }
+.dapp-dot-warn { background: #fbbf24; }
+.dapp-dot-bad { background: #f87171; }
+
+/* Form controls */
+.dapp-dark .form-row label { color: #9fb0c7; }
+.dapp-dark .form-row label .optional { color: #6b7f99; font-weight: 400; }
+.dapp-dark .form-row input,
+.dapp-dark .form-row textarea,
+.dapp-dark .form-row select {
+    background: #0a1726;
+    color: #e8eef6;
+    border: 1px solid #243754;
+}
+.dapp-dark .form-row input::placeholder,
+.dapp-dark .form-row textarea::placeholder { color: #5b6f8a; }
+
+.dapp-dark .model-select-wrapper button {
+    background: #12243a;
+    border-color: #243754;
+    color: #cdd9ea;
+}
+.dapp-dark .model-select-wrapper button:hover { background: #18304d; }
+.dapp-dark .model-select-wrapper button:disabled { background: #0e1c30; opacity: 0.6; }
+
+.dapp-dark .prompt-presets-wrapper button {
+    background: #12243a;
+    border-color: #243754;
+    color: #cdd9ea;
+}
+.dapp-dark .prompt-presets-wrapper button:hover { background: #18304d; }
+.dapp-dark .prompt-presets-wrapper button:disabled { background: #0e1c30; opacity: 0.6; }
+
+/* Status messages */
+.dapp-dark .status.info { background: #0c2339; color: #93c4f5; border: 1px solid #1c3d60; }
+.dapp-dark .status.error { background: #2a1417; color: #fca5a5; border: 1px solid #4a2329; }
+
+/* Code / blockquote */
+.dapp-dark pre { background: #0a1726; border-color: #243754; color: #dfe8f4; }
+.dapp-dark code { background: #12263f; color: #cdd9ea; }
+
+/* Collapsible / Developer Tools */
+.dapp-dark .collapsible { background: #0d1a2c; border: 1px solid #1e3350; }
+.dapp-dark .collapsible summary { color: #cdd9ea; }
+.dapp-dark .collapsible summary:hover { color: #7fb4ff; background: transparent; }
+.dapp-dark .collapsible[open] summary { border-bottom-color: #1e3350; }
+.dapp-dark .collapsible summary::before { color: #7f93af; }
+.dapp-dark .collapsible .collapsible-body { padding-top: 0.85rem; padding-bottom: 0.6rem; }
+.dapp-dark .advanced-lead { color: #8a97ab; }
+.dapp-dark .eval-params { border-top-color: #1e3350; }
+
+/* Task manager */
+.dapp-dark .task-toolbar select,
+.dapp-dark .task-toolbar input { background: #0a1726; color: #e8eef6; border-color: #243754; }
+.dapp-dark #task-list { margin-top: 0.4rem; }
+.dapp-dark .task-item { background: #0d1a2c; border-color: #1e3350; }
+.dapp-dark .task-item:hover { background: #12263f; }
+.dapp-dark .task-item.running { background: #0e2437; border-color: #1f5a86; }
+.dapp-dark .task-item.failed { background: #2a1417; border-color: #4a2329; }
+.dapp-dark .task-item.completed { background: #0c2619; border-color: #1f6b44; }
+.dapp-dark .task-name { color: #e8eef6; }
+.dapp-dark .task-type-badge.markdown { background: #122844; color: #93c4f5; }
+.dapp-dark .task-type-badge.python  { background: #3a2f12; color: #fbbf24; }
+.dapp-dark .task-type-badge.java    { background: #201c40; color: #a5b4fc; }
+.dapp-dark .task-status.pending { color: #8a97ab; }
+.dapp-dark .task-status.running { color: #7fb4ff; }
+.dapp-dark .task-status.completed { color: #34d399; }
+.dapp-dark .task-status.failed { color: #f87171; }
+.dapp-dark .task-timestamp { color: #5b6f8a; }
+.dapp-dark .task-actions button { background: #0a1726; border-color: #243754; color: #cdd9ea; }
+.dapp-dark .task-actions button:hover { background: #18304d; }
+.dapp-dark .task-actions button.run-btn { color: #34d399; border-color: #1f6b44; }
+.dapp-dark .task-actions button.run-btn:hover { background: #0c2619; }
+.dapp-dark .task-actions button.delete-btn-task { color: #f87171; border-color: #4a2329; }
+.dapp-dark .task-actions button.delete-btn-task:hover { background: #2a1417; }
+.dapp-dark .task-result { background: #0d1a2c; border-color: #1e3350; color: #cdd9ea; }
+.dapp-dark .task-result-score { color: #e8eef6; }
+.dapp-dark .task-result-score.pass { color: #34d399; }
+.dapp-dark .task-result-score.fail { color: #f87171; }
+
+/* Bottom row: Developer Tools | Results */
+.dapp-bottom-row {
+    display: flex;
+    gap: 1.25rem;
+    align-items: stretch;
+    margin-top: 1.5rem;
+}
+.dapp-devtools { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+.dapp-results-nav {
+    flex: 0 0 auto;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.85rem 1.2rem;
+    background: #0f1b2d;
+    border: 1px solid #1e3350;
+    border-radius: 10px;
+    text-decoration: none;
+    min-width: 190px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dapp-results-nav:hover { border-color: #3a6ea5; background: #12253f; }
+.dapp-results-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: #7f93af; }
+.dapp-results-action { font-size: 1rem; font-weight: 700; color: #93c4f5; }
+.dapp-results-nav:hover .dapp-results-action { color: #bcd8ff; }
+
+/* Responsive — Dashboard */
+@media (max-width: 820px) {
+    .suite-cards { flex-direction: column; }
+    .dapp-bottom-row { flex-direction: column; }
+    .dapp-results-nav { align-self: auto; width: 100%; }
+}
+
 @media (max-width: 600px) {
-    .container {
-        padding: 0 0.75rem;
-    }
+    .container { padding: 0 0.75rem; }
 }
