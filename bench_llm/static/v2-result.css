@@ -26,6 +26,15 @@ body {
     background: #f5f5f5;
 }
 
+/* Page container — scoped to the V2 result page only. dashboard.css's .container is not
+   linked here, so without this rule the content stretched full-viewport-width with no
+   gutters and unbounded line length on wide screens. Bounds width, centres, adds padding. */
+.container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 3rem;
+}
+
 /* ------------------------------------------------------------------ */
 /* Sticky run summary                                                  */
 /* ------------------------------------------------------------------ */
@@ -179,6 +188,9 @@ body {
 
 .v2-mini-btn:hover { background: #f1f5f9; border-color: #94a3b8; color: var(--v2-text); }
 .v2-mini-btn:active { background: #e2e8f0; }
+/* Visible focus ring so copy/fp/expand controls are navigable by keyboard (row/filter/suite
+   cells already have their own :focus-visible). */
+.v2-mini-btn:focus-visible { outline: 2px solid var(--v2-brand); outline-offset: 1px; }
 
 /* Copy feedback */
 .v2-mini-btn.is-copied {
@@ -240,6 +252,8 @@ body {
 
 .v2-fp-code {
     font-size: 0.85rem;
+    /* A full 64-char fingerprint must not force page-level horizontal overflow when shown. */
+    word-break: break-word;
 }
 
 /* Full fingerprint hidden by default; toggled via .v2-hidden */
@@ -604,6 +618,15 @@ body {
     100% { background: #fcfdfe; }
 }
 
+/* Keep deep-linked / focus-scrolled targets clear of the sticky summary (CSS-only;
+   no JS scroll hacks). The value exceeds the collapsed sticky height and its wrapped
+   strip, so a target never lands underneath it. */
+#v2-failures,
+.v2-failure-row,
+.v2-request-row {
+    scroll-margin-top: 160px;
+}
+
 /* ------------------------------------------------------------------ */
 /* Responsive — suite strip wraps, config stacks                          */
 /* ------------------------------------------------------------------ */
@@ -620,12 +643,17 @@ body {
     .v2-fingerprint-row dt { margin-bottom: -0.35rem; }
     .v2-model { max-width: 46vw; }
     .v2-suite-cell { min-width: 84px; flex: 1 1 auto; }
-
-.v2-row-preview, .v2-group-counts { max-width: none; }
-@media (max-width: 640px) {
+    /* (Previously these two rules lived in a stray nested @media inside this block.) */
+    .v2-row-preview, .v2-group-counts { max-width: none; }
     .v2-row-kind { order: 3; flex-basis: 100%; }
     .v2-row-preview { max-width: 70%; }
 }
+/* Tight-narrow safeguard: shrink gutters and let the model name wrap instead of being
+   ellipsised off-screen. */
+@media (max-width: 480px) {
+    .container { padding-left: 0.6rem; padding-right: 0.6rem; }
+    .v2-sticky-top, .v2-sticky-score, .v2-suite-strip { padding-left: 0.6rem; padding-right: 0.6rem; }
+    .v2-model { max-width: none; white-space: normal; overflow-wrap: break-word; }
 
 /* ------------------------------------------------------------------ */
 /* Request traceability (Act 9) -- deliberately secondary to failures */
@@ -797,6 +825,7 @@ body {
 .v2-tel-more-btn:hover {
     color: var(--text-1, #1f2733);
 }
+.v2-tel-more-btn:focus-visible { outline: 2px solid var(--v2-brand); outline-offset: 1px; }
 .v2-tel-extra {
     display: none;
 }
@@ -828,4 +857,11 @@ body {
     /* On narrow viewports the wrapper still scrolls; drop the trailing expand column. */
     .v2-tel-table th.v2-tel-more-hd,
     .v2-tel-table td.v2-tel-rowmore { display: none; }
+}
+
+/* Toolbar helper text sits in a flex row with a trailing button; reset base .v2-muted
+   top margin so it aligns vertically with the button instead of dropping below it. */
+.v2-repro-toolbar .v2-muted,
+.v2-tel-toolbar .v2-muted {
+    margin-top: 0;
 }

@@ -100,7 +100,11 @@
 
     // ---- Rendering -----------------------------------------------------
     function renderHeader(run) {
-        by("v2-model").textContent = run.model_identifier || "(unknown model)";
+        var modelName = run.model_identifier || "(unknown model)";
+        var modelEl = by("v2-model");
+        modelEl.textContent = modelName;
+        // When CSS ellipses a very long identifier, expose the full text for hover/SR.
+        if (run.model_identifier) modelEl.setAttribute("title", run.model_identifier);
         by("v2-overall").textContent = fmt(run.checks_passed) + " / " + fmt(run.checks_total);
 
         var pct;
@@ -260,19 +264,6 @@
         if (v == null || v === "") { s.textContent = "N/A"; return s; }
         s.textContent = typeof v === "number" ? Number(v).toLocaleString("en-US") : String(v);
         return s;
-    }
-
-    // Canonical failed-check counts come from the authoritative suite aggregate
-    // (presentation math only). Diagnostics are inspection records. The overall
-    // /166 score is never derived from these rows, and any bogus per-row validator
-    // total (e.g. 9999) never becomes a canonical denominator.
-
-    function plural(n, word) {
-        return n + " " + word + (n === 1 ? "" : "s");
-    }
-
-    function suiteDisplayLabel(key) {
-        return SUITE_LABELS[key] || String(key).replace(/_/g, " ");
     }
 
     // Deterministic, URL-safe DOM id derived from the stable read-model locator.
@@ -530,34 +521,6 @@
         var rowsList = document.createElement("ul");
         rowsList.className = "v2-failure-rows";
         listItems.forEach(function (f) {
-            rowsList.appendChild(buildRow(f));
-        });
-
-        doc.append(legend, rowsList);
-        return doc;
-    }
-
-    function buildGroup(group) {
-        var doc = document.createElement("section");
-        doc.className = "v2-failure-group";
-
-        var legend = document.createElement("div");
-        legend.className = "v2-group-legend";
-
-        var label = document.createElement("span");
-        label.className = "v2-group-label";
-        label.textContent = group.label;
-
-        var counts = document.createElement("span");
-        counts.className = "v2-group-counts";
-        counts.textContent = plural(group.failed, "failed check") +
-            " · " + plural((group.items || []).length, "recorded diagnostic");
-
-        legend.append(label, counts);
-
-        var rowsList = document.createElement("ul");
-        rowsList.className = "v2-failure-rows";
-        (group.items || []).forEach(function (f) {
             rowsList.appendChild(buildRow(f));
         });
 
@@ -1275,14 +1238,18 @@
         var fpFull = by("c-fp-full");
         by("v2-toggle-fp").addEventListener("click", function () {
             var showingFull = !fpFull.classList.contains("v2-hidden");
-            if (showingFull) {
+            if (showingFull) {   // currently full -> collapse to short
                 fpFull.classList.add("v2-hidden");
                 fpShort.classList.remove("v2-hidden");
                 this.textContent = "Full";
-            } else {
+                this.setAttribute("aria-expanded", "false");
+                this.setAttribute("aria-label", "Show full fingerprint");
+            } else {            // currently short -> expand to full
                 fpFull.classList.remove("v2-hidden");
                 fpShort.classList.add("v2-hidden");
                 this.textContent = "Short";
+                this.setAttribute("aria-expanded", "true");
+                this.setAttribute("aria-label", "Hide full fingerprint");
             }
         });
 
