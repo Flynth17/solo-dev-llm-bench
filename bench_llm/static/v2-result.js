@@ -13,6 +13,9 @@
         evidence: "Evidence", drift: "DRIFT"
     };
 
+    // Canonical per-suite order for telemetry (fixed, independent of object/dictionary order).
+    var TEL_ORDER = ["python", "java", "markdown", "evidence", "drift"];
+
     // Human-friendly output-budget policy display; raw code kept as title/copy value.
     var OUTPUT_POLICY_LABELS = {
         "75_percent_context": "75% of context",
@@ -901,6 +904,146 @@
         show(by("v2-repro"));
     }
 
+    // ---- Act 11 telemetry formatting (informational ONLY; never benchmark data) ----------
+    function fmtSeconds(v) {
+        if (v == null || v === "") return "Not recorded";
+        var n = Number(v);
+        if (!isFinite(n) || n <= 0) return "Not recorded";   // zero/negative is not a real measurement
+        return n.toFixed(2) + " s";
+    }
+    function fmtThroughput(v) {
+        if (v == null || v === "") return "Not recorded";
+        var n = Number(v);
+        if (!isFinite(n) || n <= 0) return "Not recorded";   // 0 tok/s is degenerate
+        return n.toLocaleString("en-US") + " tok/s";
+    }
+    function fmtTokens(v) {
+        if (v == null || v === "") return "Not recorded";
+        var n = Number(v);
+        if (!isFinite(n)) return "Not recorded";
+        // Preserve numeric-zero defaults from the API rather than rewriting to null.
+        return String(Math.round(n)).toLocaleString("en-US");
+    }
+
+    function mkCell(cls, txt) {
+        var c = document.createElement("td");
+        if (cls) c.className = cls;
+        c.textContent = txt;
+        return c;
+    }
+
+    function appendTelRow(dl, label, value) {
+        var dt = document.createElement("dt"); dt.textContent = label;
+        var dd = document.createElement("dd");
+        if (value === "Not recorded") dd.className = "v2-tel-miss";
+        dd.textContent = value;
+        dl.appendChild(dt); dl.appendChild(dd);
+    }
+
+    function suiteTelemetrySummary(recorded, total) {
+        var missing = Math.max(0, total - recorded);
+        return recorded + " of " + total + " suites have recorded telemetry" +
+            (missing ? "; " + missing + " suite(s) not recorded" : "");
+    }
+
+    // Render the per-suite telemetry table from API read-model values only.
+    function renderTelemetry(tel) {
+        var telSuites = (tel && Array.isArray(tel.suites)) ? tel.suites : [];
+        var byKey = {};
+        telSuites.forEach(function (s) { if (s && s.suite) byKey[s.suite] = s; });
+
+        // A suite is "recorded" only when it carries a real runtime/performance
+        // measurement. Token counters default to numeric 0 and are displayed as-is
+        // (per spec), so they must NOT drive the recorded-count summary.
+        function hasRecorded(row) {
+            return !!(row && (
+                row.ttft_seconds != null ||
+                row.prefill_throughput != null ||
+                row.decode_throughput != null
+            ));
+        }
+
+        var recordedCount = 0;
+        (TEL_ORDER || []).forEach(function (k) { if (hasRecorded(byKey[k])) recordedCount++; });
+        var totalSuites = TEL_ORDER.length;
+
+        var bodyEl = by("v2-tel-body");
+        var summaryEl = by("v2-tel-summary");
+        if (bodyEl) {
+            if (summaryEl) {
+                summaryEl.textContent = recordedCount > 0
+                    ? suiteTelemetrySummary(recordedCount, totalSuites)
+                    : "No per-suite telemetry was recorded for this run.";
+            }
+
+            TEL_ORDER.forEach(function (key) {
+                var row = byKey[key] || {};
+                var tr = document.createElement("tr");
+
+                var tdS = document.createElement("td");
+                tdS.className = "v2-tel-suite";
+                tdS.textContent = suiteDisplayLabel(key);
+                tr.appendChild(tdS);
+
+                tr.appendChild(mkCell(null, fmtSeconds(row.ttft_seconds)));
+                tr.appendChild(mkCell(null, fmtThroughput(row.prefill_throughput)));
+                tr.appendChild(mkCell(null, fmtThroughput(row.decode_throughput)));
+                var rt = fmtTokens(row.reasoning_tokens);
+                tr.appendChild(rt === "Not recorded"
+                    ? mkCell("v2-tel-miss", "Not recorded")
+                    : mkCell(null, rt + " tokens"));
+
+                // Per-row expandable detail (wall time / prompt / completion).
+                var tdMore = document.createElement("td");
+                tdMore.className = "v2-tel-rowmore";
+                var moreBtn = document.createElement("button");
+                moreBtn.type = "button";
+                moreBtn.className = "v2-tel-more-btn";
+                var extraId = "tel-extra-" + key;
+                moreBtn.textContent = "\u25b8 More";
+                moreBtn.setAttribute("aria-expanded", "false");
+                moreBtn.setAttribute("data-target", extraId);
+                moreBtn.addEventListener("click", function () {
+                    var target = by(extraId);
+                    var open = moreBtn.getAttribute("aria-expanded") === "true";
+                    moreBtn.setAttribute("aria-expanded", String(!open));
+                    moreBtn.textContent = open ? "\u25b8 More" : "\u25be Less";
+                    if (target) target.classList.toggle("is-open", !open);
+                });
+                tdMore.appendChild(moreBtn);
+                tr.appendChild(tdMore);
+
+                bodyEl.appendChild(tr);
+
+                var ex = document.createElement("tr");
+                ex.className = "v2-tel-extra";
+                ex.id = extraId;
+                var full = document.createElement("td");
+                full.colSpan = 6;
+                var dl = document.createElement("dl");
+                appendTelRow(dl, "Wall time", fmtSeconds(row.wall_time_seconds));
+                appendTelRow(dl, "Prompt tokens", fmtTokens(row.prompt_tokens));
+                appendTelRow(dl, "Completion tokens", fmtTokens(row.completion_tokens));
+                full.appendChild(dl);
+                ex.appendChild(full);
+
+                bodyEl.appendChild(ex);
+            });
+        }
+
+        // Collapse/expand the whole table with an accessible button.
+        var toggleEl = by("v2-telemetry-toggle");
+        if (toggleEl) {
+            toggleEl.addEventListener("click", function () {
+                var open = toggleEl.getAttribute("aria-expanded") === "true";  // current state
+                toggleEl.setAttribute("aria-expanded", String(!open));
+                toggleEl.textContent = open ? "Show telemetry" : "Hide telemetry";
+                var wrap = by("v2-telemetry-wrap") || document.querySelector(".v2-telemetry-wrap");
+                if (wrap) { if (!open) show(wrap); else hide(wrap); }  // reveal when newly expanded
+            });
+        }
+    }
+
     function buildReqGroup(suiteKey, items) {
         var doc = document.createElement("section");
         doc.className = "v2-failure-group v2-request-group";
@@ -1111,6 +1254,7 @@
                 renderFailures(body.suites || [], body.failures || []);
                 renderRequests(body.suites || [], body.successes || []);
                 renderRepro(body.run, body.configuration);
+                renderTelemetry(body.telemetry);
 
                 wireInteractions(runId);
 

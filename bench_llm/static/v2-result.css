@@ -721,3 +721,111 @@ body {
     margin: 0;
 }
 
+
+/* ---- Telemetry panel (Act 11) — informational only, visually subordinate ---- */
+.v2-tel-panel h2 {
+    font-size: 0.95rem;
+}
+.v2-tel-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+.v2-tel-panel .v2-mini-btn {
+    margin-left: auto;
+}
+#v2-tel-summary {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.82rem;
+}
+.v2-telemetry-wrap {
+    overflow-x: auto;      /* allow the table itself to scroll; never push page width */
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--v2-border, #d7dbe0);
+    border-radius: 8px;
+}
+.v2-tel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    min-width: 620px;      /* keep columns readable; scrolls rather than reflows */
+}
+.v2-tel-table th,
+.v2-tel-table td {
+    text-align: left;
+    padding: 0.45rem 0.7rem;
+    border-bottom: 1px solid var(--v2-border, #d7dbe0);
+    white-space: nowrap;
+}
+.v2-tel-table thead th {
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    color: var(--text-2, #5f6b78);
+    background: rgba(0, 0, 0, 0.015);
+}
+.v2-tel-table thead th.v2-tel-more-hd {
+    width: 2rem;
+    border-left: 1px solid var(--v2-border, #d7dbe0);
+}
+.v2-tel-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.v2-tel-table .v2-tel-suite {
+    font-weight: 600;
+    color: var(--text-1, #1f2733);
+}
+/* Not-recorded cells are muted and clearly distinct from a real zero. */
+.v2-tel-miss {
+    color: var(--muted, #9aa4af);
+    font-style: italic;
+}
+.v2-tel-rowmore {
+    text-align: right;
+}
+.v2-tel-more-btn {
+    background: none;
+    border: 1px solid var(--v2-border, #d7dbe0);
+    color: var(--text-2, #5f6b78);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0.1rem 0.5rem;
+    border-radius: 6px;
+}
+.v2-tel-more-btn:hover {
+    color: var(--text-1, #1f2733);
+}
+.v2-tel-extra {
+    display: none;
+}
+.v2-tel-extra.is-open {
+    display: table-row;
+}
+.v2-tel-extra > td {
+    padding: 0.5rem 0.7rem 0.7rem 1.9rem;
+    font-size: 0.8rem;
+    color: var(--text-2, #5f6b78);
+    border-bottom: 1px solid var(--v2-border, #d7dbe0);
+}
+.v2-tel-extra dl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.v2-tel-extra dt {
+    font-weight: 600;
+    color: var(--text-2, #5f6b78);
+}
+.v2-tel-extra dd {
+    margin: 0;
+}
+@media (max-width: 640px) {
+    /* On narrow viewports the wrapper still scrolls; drop the trailing expand column. */
+    .v2-tel-table th.v2-tel-more-hd,
+    .v2-tel-table td.v2-tel-rowmore { display: none; }
+}

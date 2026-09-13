@@ -118,6 +118,37 @@
             </div>
             <pre id="v2-repro-body" class="v2-repro-body" spellcheck="false"></pre>
         </section>
+
+        <!-- Telemetry panel (Act 11). Compact per-suite runtime metrics. Informational ONLY:
+             never affects score, classification, pass/fail, fingerprint or failed-check counts.
+             Collapsed by default so failure evidence stays dominant. Values come from the API
+             read model only -- no averages/composites are computed here. -->
+        <section id="v2-telemetry" class="panel v2-tel-panel">
+            <h2>TELEMETRY</h2>
+            <div class="v2-tel-toolbar">
+                <span class="v2-muted">Per-suite runtime metrics (inspectional only). Collapsed by default.</span>
+                <button type="button" id="v2-telemetry-toggle" class="v2-mini-btn v2-tel-reveal"
+                        aria-expanded="false" aria-controls="v2-tel-table">
+                    Show telemetry
+                </button>
+            </div>
+            <p id="v2-tel-summary" class="v2-headline-counts"></p>
+            <div class="v2-telemetry-wrap v2-hidden">
+                <table id="v2-tel-table" class="v2-tel-table" aria-label="Per-suite telemetry">
+                    <thead>
+                        <tr>
+                            <th scope="col">Suite</th>
+                            <th scope="col" title="Time to first token (TTFT)">TTFT</th>
+                            <th scope="col" title="Prefill throughput: prompt-processing rate">Prefill</th>
+                            <th scope="col" title="Decode throughput: generated-token rate">Decode</th>
+                            <th scope="col" title="Reasoning tokens produced">Reasoning</th>
+                            <th scope="col" class="v2-tel-more-hd"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="v2-tel-body"></tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <script src="/static/v2-result.js"></script>
