@@ -448,7 +448,7 @@ function pollSpeedStatus(runId) {
             if (state.status === "completed") {
                 clearSpeedPoll();
                 showStatus("Speed complete", "success");
-                makeSpeedResultLink(state.result_url || ("/v2/results/" + runId), runId);
+                makeSpeedResultLink(state.result_url || ("/speed/results/" + runId), runId);
             } else if (state.status === "failed") {
                 resetSpeedButton();
                 showStatus((state.error && state.error.length) ? state.error : "Speed failed", "error");

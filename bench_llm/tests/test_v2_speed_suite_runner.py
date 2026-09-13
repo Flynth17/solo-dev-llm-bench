@@ -288,7 +288,9 @@ def test_rows_report_completed_with_result_url(monkeypatch):
     code, body = vs.speed_status(run_id)
     assert code == 200
     assert body["status"] == "completed"
-    assert body["result_url"] == "/results"
+    # Act 19.1: a completed Standard Speed run links to its dedicated page, never the
+    # legacy combined /results aggregator.
+    assert body["result_url"] == f"/speed/results/{run_id}"
 
 
 def test_completed_via_http_route(monkeypatch):

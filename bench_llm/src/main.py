@@ -105,3 +105,18 @@ async def v2_result_page(run_id: str):
     return html_file.read_text(encoding="utf-8")
 
 
+@app.get("/speed/results/{run_id}", response_class=HTMLResponse)
+async def speed_result_page(run_id: str):
+    """Serve the dedicated Standard Speed result page for a single ``speed-<id>`` run.
+
+    Peer to the Workflow result page, not a re-use of it. The static page derives
+    ``run_id`` from the URL and fetches the normalized single-run read model via the
+    read-only API at ``/api/speed/runs/{run_id}`` (see src/routes/v2_speed.py). No HTML
+    file is generated per run; all data comes from that validated read model. This keeps
+    Standard Speed results out of the legacy combined /results page and free of the
+    Workflow quality artifact.
+    """
+    html_file = STATIC_DIR / "speed-result.html"
+    return html_file.read_text(encoding="utf-8")
+
+

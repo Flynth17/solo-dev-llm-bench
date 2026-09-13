@@ -165,3 +165,182 @@ def load_speed_result(quality_identity: dict, runs: Iterable[Any]) -> dict[str, 
         "speed_run_ids": speed_run_ids,
         "rows": rows,
     }
+
+
+# ---------------------------------------------------------------------------
+# Single Standard Speed run read model (Act 19.1)
+#
+# A dedicated, self-contained view over ONE persisted Standard Speed run
+# (speed-<id>, fixed 8K / 16K / 32K contract). It is intentionally decoupled from
+# the Workflow quality result: it never calls load_v2_result(), never matches on
+# model/context compatibility and never touches legacy small/medium/large rows.
+# The ONLY join key is an EXACT speed_run_id match, so a Speed-only run is
+# reconstructable without any companion artifact.
+# ---------------------------------------------------------------------------
+
+# Canonical Standard Speed contract: target context tokens -> user-facing label.
+# Ordering here is authoritative for rendering; DB row order must never decide it.
+STANDARD_SPEED_CANONICAL_POINTS: dict[int, str] = {
+    8192: "8K",
+    16384: "16K",
+    32768: "32K",
+}
+
+
+class SpeedRunNotFoundError(ValueError):
+    """Raised when no persisted Standard Speed row exists for the run id."""
+
+
+class SpeedReadModelIntegrityError(RuntimeError):
+    """Raised when a run's rows violate the Standard Speed contract.
+
+    Covers non-standard/foreign rows tagged to this run, duplicate canonical points,
+    divergent model identity across rows and target points outside the 8K/16K/32K
+    contract. These are server-owned data problems mapped to HTTP 500 by the route.
+    """
+
+
+def _as_number(value: Any) -> Optional[float]:
+    """Return a finite float for *value*, or None when absent / non-numeric / falsey."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    # Guard against NaN / inf leaking into the UI.
+    if num != num or num in (float("inf"), float("-inf")):
+        return None
+    return num
+
+
+def _project_speed_point(row: dict) -> dict[str, Any]:
+    """Project one persisted Standard Speed row into the normalized point view.
+
+    Values are preserved verbatim -- prefill is NOT recomputed or "corrected" here
+    (semantics under review in a later Act). Missing telemetry becomes None so the UI
+    can render "Not recorded"; it is never coerced to zero.
+    """
+    status_raw = str((row.get("speed_point_status") or "").strip().lower()) if row.get("speed_point_status") else ""
+    state_raw = str((row.get("cold_or_warm") or "").strip().lower()) if row.get("cold_or_warm") else ""
+
+    return {
+        "label": STANDARD_SPEED_CANONICAL_POINTS.get(
+            _norm_int(row.get("target_context_tokens")), "?"
+        ),
+        "target_context_tokens": _norm_int(row.get("target_context_tokens")),
+        "actual_prompt_tokens": _norm_int(row.get("input_tokens")),
+        "ttft_seconds": _as_number(row.get("ttft_seconds")),
+        "prefill_tokens_per_second": _as_number(row.get("prefill_tokens_per_second")),
+        "generation_tokens_per_second": _as_number(row.get("tokens_per_second")),
+        "completion_tokens": _norm_int(row.get("output_tokens")),
+        "wall_time_seconds": _as_number(row.get("wall_time_seconds")),
+        # state/status kept verbatim so the UI renders them honestly.
+        "state": state_raw or None,
+        "status": status_raw or "completed",
+    }
+
+
+def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
+    """Return the normalized Standard Speed result for exactly one speed run id.
+
+    ``run_id`` -- the durable ``speed-<id>`` (matched EXACTLY).
+    ``runs``  -- iterable of persisted rows (e.g. ResultsStore.get_all()).
+
+    Raises:
+        SpeedRunNotFoundError: no row persists under this run id.
+        SpeedReadModelIntegrityError: the run mixes non-standard / duplicate / foreign
+            rows, divergent model identity or a target outside the contract.
+    """
+    rid = _norm_str(run_id) if isinstance(run_id, str) else None
+    if not rid:
+        raise SpeedRunNotFoundError("run id must be a non-empty string")
+
+    run_rows = [r for r in (runs or []) if isinstance(r, dict)]
+    mine = [r for r in run_rows if (r.get("run_id") or "") == rid]
+
+    if not mine:
+        raise SpeedRunNotFoundError(f"no Standard Speed run persisted for {rid!r}")
+
+    # --- Contract validation over the run's own rows. -----------------------
+    model_ids: set[str] = set()
+    seen_targets: dict[Optional[int], list[dict]] = {}
+
+    for r in mine:
+        target = _norm_int(r.get("target_context_tokens"))
+
+        # Every row tagged to a Standard Speed run must itself be a standard point.
+        if target is None or target not in STANDARD_SPEED_CANONICAL_POINTS:
+            raise SpeedReadModelIntegrityError(
+                f"run {rid!r} contains a row outside the 8K/16K/32K Standard Speed contract"
+            )
+
+        seen_targets.setdefault(target, []).append(r)
+
+        model_id = _norm_str(r.get("model_key")) or _norm_str(r.get("model_display_name"))
+        if model_id:
+            model_ids.add(model_id)
+
+    # Duplicate canonical points are not representable (one aggregate row per point).
+    for target, rows in seen_targets.items():
+        if len(rows) > 1:
+            raise SpeedReadModelIntegrityError(
+                f"run {rid!r} has duplicate rows for the {STANDARD_SPEED_CANONICAL_POINTS[target]} point"
+            )
+
+    # Model identity must be consistent across every row in the run.
+    if len(model_ids) > 1:
+        raise SpeedReadModelIntegrityError(
+            f"run {rid!r} mixes divergent model identities: {sorted(model_ids)}"
+        )
+
+    # --- Build the canonical, ordered point list. --------------------------
+    points: list[dict[str, Any]] = []
+    statuses: set[str] = set()
+    for target in (8192, 16384, 32768):
+        rows = seen_targets.get(target)
+        if not rows:
+            # A missing canonical point is left out rather than fabricated; the
+            # remaining points still render. Unsupported-but-stored points are kept.
+            continue
+        statuses.add(str((rows[0].get("speed_point_status") or "").strip().lower()) or "completed")
+        points.append(_project_speed_point(rows[0]))
+
+    if not points:
+        raise SpeedRunNotFoundError(f"no renderable Standard Speed point for {rid!r}")
+
+    # --- Overall status (representable, never crashes the read). ------------
+    if statuses <= {"completed"}:
+        overall = "completed"
+    elif statuses <= {"completed", "unsupported"}:
+        overall = "partial"
+    else:
+        overall = "unknown"
+
+    # --- Configuration identity from first-class fields (never fabricated). --
+    first = mine[0]
+    configuration: dict[str, Any] = {}
+    for key, src in (
+        ("loaded_context", "loaded_context"),
+        ("model_max_context", "model_max_context"),
+        ("hardware_label", "hardware_label"),
+        ("execution_environment", "execution_environment"),
+        ("connection_type", "connection_type"),
+        ("max_output_tokens", "max_output_tokens"),
+        ("reasoning_mode", "reasoning_mode"),
+    ):
+        value = _norm_int(first.get(src)) if key in ("loaded_context", "model_max_context") \
+            else _norm_str(first.get(src))
+        # Always surface the two context keys (honest even when None); optional blanks omitted.
+        if key in ("loaded_context", "model_max_context") or value is not None:
+            configuration[key] = value
+
+    model_identifier = next((m for m in model_ids), _norm_str(first.get("model_key")))
+
+    return {
+        "run_id": rid,
+        "model_identifier": model_identifier,
+        "status": overall,
+        "configuration": configuration,
+        "points": points,
+    }

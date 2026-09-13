@@ -581,11 +581,12 @@ def speed_status(speed_run_id: str) -> tuple[int, dict[str, Any]]:
 
     rows = _store_rows_for(speed_run_id)
     if rows:
-        # Durable result present: the standard Speed destination is the shared /results page.
+        # Durable result present: the correct deep-link for ONE Standard Speed run is
+        # its dedicated page -- never the legacy shared /results aggregator.
         return 200, {
             "speed_run_id": speed_run_id,
             "status": "completed",
-            "result_url": "/results",
+            "result_url": "/speed/results/" + speed_run_id,
         }
 
     active_ids = standard_run_guard.active_ids()  # also prunes exited handles

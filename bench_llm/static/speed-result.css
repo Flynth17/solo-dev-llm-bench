@@ -1,0 +1,129 @@
+/* Solo Dev LLM Bench -- dedicated Standard Speed result page (Act 19.1).
+ * Dark-scoped styling for this single-purpose page. Base resets + .container /
+ * .panel tokens come from shared.css; the Act 17.1 dark palette (applied via the
+ * .dapp-dark body class) comes from dashboard.css. This file adds only the
+ * identity grid, status badges, navigation and telemetry table specific to a
+ * single Speed run. It intentionally does NOT copy the legacy /results layout. */
+
+/* --- Navigation ---------------------------------------------------------- */
+.srb-nav {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin: 0 0 1.25rem;
+    align-items: center;
+}
+.btn-ghost {
+    display: inline-block;
+    font-size: 0.85rem;
+    padding: 0.55rem 0.95rem;
+    border-radius: 6px;
+    background: #0f1b2d;
+    color: #cdd9ea;
+    border: 1px solid #1e3350;
+    text-decoration: none;
+    transition: background 0.1s ease, color 0.1s ease;
+}
+.btn-ghost:hover { background: #16253d; color: #e8eef6; }
+
+/* --- Header -------------------------------------------------------------- */
+.srb-header { margin-bottom: 1.25rem; }
+.srb-header h1 {
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #f4f8ff;
+    margin: 0.35rem 0 0;
+}
+
+/* --- Identity grid ------------------------------------------------------- */
+.srb-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.5rem;
+}
+.srb-grid dt {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7f93af;
+    margin-bottom: 0.3rem;
+}
+.srb-grid dd { margin: 0; color: #e8eef6; font-size: 0.98rem; word-break: break-word; }
+.srb-span { grid-column: 1 / -1; }
+.srb-ctx-sub { color: #7f93af; font-weight: 400; margin-left: 0.4rem; }
+
+/* Runtime/config metadata chips. */
+.srb-config { line-height: 1.7; }
+.srb-config code {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    margin: 0.15rem 0.35rem 0.15rem 0;
+    font-size: 0.82rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0b1729;
+    border: 1px solid #16243c;
+    border-radius: 999px;
+    color: #cbd6e6;
+}
+
+/* --- Status badge -------------------------------------------------------- */
+.srb-badge {
+    display: inline-block;
+    padding: 0.2rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: capitalize;
+}
+.srb-badge.is-completed { background: #10331f; color: #34d399; border: 1px solid #1f5c3a; }
+.srb-badge.is-partial   { background: #3a2c0f; color: #fbbf24; border: 1px solid #6b4e12; }
+.srb-badge.is-unknown   { background: #172233; color: #9fb0c7; border: 1px solid #25344d; }
+
+/* --- Note / states ------------------------------------------------------- */
+.srb-note { font-size: 0.8rem; color: #7f93af; margin: 0 0 1rem; }
+
+.srb-status.info { background: #132238; color: #9ec5ff; border: 1px solid #1e3350; }
+.srb-status.error { background: #2a1616; color: #fca5a5; border: 1px solid #5c2424; }
+.srb-error-msg { color: #9fb0c7; font-size: 0.9rem; margin: 0.5rem 0 0; }
+
+/* --- Telemetry table ----------------------------------------------------- */
+.srb-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #1e3350;
+    border-radius: 8px;
+}
+.srb-tel-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 760px; }
+.srb-tel-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7f93af;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid #1e3350;
+    white-space: nowrap;
+}
+.srb-tel-table th.sub { text-align: right; }
+.srb-tel-table td {
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid #14233a;
+    color: #e8eef6;
+    vertical-align: top;
+}
+.srb-tel-table tbody tr:last-child td { border-bottom: none; }
+.srb-tel-table td.sub,
+.srb-tel-table td.srb-num { text-align: right;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; }
+.srb-point { font-weight: 700; color: #f4f8ff; }
+.srb-none { color: #6b7f99; font-style: italic; }
+.srb-uns td.srb-point { color: #fbbf24; }
+
+@media (max-width: 640px) {
+    .srb-grid { grid-template-columns: 1fr; }
+}

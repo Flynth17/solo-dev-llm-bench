@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Result — Solo Dev LLM Bench</title>
+    <!-- shared.css: base resets + .container/.panel/.status tokens -->
+    <!-- dashboard.css: the Act 17.1 dark visual language (scoped via .dapp-dark) -->
+    <!-- speed-result.css: page-specific table / identity styling, dark-scoped -->
+    <link rel="stylesheet" href="/static/shared.css?v=1701">
+    <link rel="stylesheet" href="/static/dashboard.css?v=1800">
+    <link rel="stylesheet" href="/static/speed-result.css?v=1910">
+</head>
+<body class="dapp-dark">
+    <div class="container">
+        <!-- Back navigation: primary is to the launcher; historical /results optional. -->
+        <nav class="srb-nav" aria-label="Speed result navigation">
+            <a href="/" class="btn-primary srb-back">&#8592; Benchmarks</a>
+            <a href="/results" class="btn-ghost srb-history">View all historical results</a>
+        </nav>
+
+        <!-- Title -->
+        <header class="srb-header">
+            <span class="dapp-section-label">SPEED RESULT</span>
+            <h1>Solo Dev LLM Bench — Speed Result</h1>
+        </header>
+
+        <!-- Loading state: no fake data shown before the API responds. -->
+        <p id="srb-loading" class="status srb-status info">Loading speed result&hellip;</p>
+
+        <!-- Error state (readable, no stack traces). Hidden until needed. -->
+        <div id="srb-error" class="hidden" role="alert">
+            <p class="status srb-status error"><strong>Unable to load Speed result</strong></p>
+            <p id="srb-error-detail" class="srb-error-msg"></p>
+        </div>
+
+        <!-- Identity / configuration block. Hidden until data loads. -->
+        <section id="srb-identity" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Run identity</span>
+            </div>
+            <dl class="srb-grid">
+                <div><dt>Model</dt><dd id="sr-model">&mdash;</dd></div>
+                <div><dt>Run ID</dt><dd><code id="sr-run-id">&mdash;</code></dd></div>
+                <div><dt>Status</dt><dd><span id="sr-status" class="badge srb-badge"></span></dd></div>
+                <div class="srb-span">
+                    <dt>Loaded context</dt>
+                    <dd><span id="sr-context">&mdash;</span><span id="sr-maxcontext" class="srb-ctx-sub"></span></dd>
+                </div>
+                <div class="srb-span srb-config-row">
+                    <dt>Runtime / config metadata</dt>
+                    <dd id="sr-config" class="srb-config"><code>&mdash;</code></dd>
+                </div>
+            </dl>
+        </section>
+
+        <!-- Primary result table: one row per canonical Speed point. -->
+        <section id="srb-points" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Context scaling &middot; TTFT &middot; prefill &middot; generation</span>
+            </div>
+            <p class="srb-note">Prefill metric reflects the currently persisted benchmark measurement (under review in a later Act).</p>
+            <div class="srb-table-wrap">
+                <table id="sr-table" class="srb-tel-table" aria-label="Standard Speed result by context size">
+                    <thead>
+                        <tr>
+                            <th scope="col">Point</th>
+                            <th scope="col" title="Actual prompt tokens issued to the model">Actual input</th>
+                            <th scope="col" title="Time to first token (TTFT)">TTFT</th>
+                            <th scope="col" title="Prompt-processing throughput (prefill)">Prefill</th>
+                            <th scope="col" title="Generation / decode throughput">Generation</th>
+                            <th scope="col" title="Completed generation tokens">Output</th>
+                            <th scope="col" title="Wall-clock time for the point">Wall</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sr-body"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/speed-result.js"></script>
+</body>
+</html>

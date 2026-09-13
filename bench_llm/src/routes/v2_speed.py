@@ -24,7 +24,19 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from src.v2_speed_suite_runner import launch_speed, speed_status, SpeedLaunchError
+from src.v2_speed_suite_runner import (
+    _validate_speed_run_id,
+    launch_speed,
+    speed_status,
+    SpeedLaunchError,
+)
+
+# Act 19.1: dedicated single-run Standard Speed read model.
+from src.v2_speed_read_model import (
+    load_speed_run_by_id,
+    SpeedReadModelIntegrityError,
+    SpeedRunNotFoundError,
+)
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -72,3 +84,45 @@ def speed_status_endpoint(speed_run_id: str):
         raise HTTPException(status_code=404, detail=body.get("error", "Not found"))
 
     return body
+
+
+def _resolve_speed_runs() -> list[dict[str, Any]]:
+    """Return all persisted Speed rows from the shared store (read-only)."""
+    import src.app_state  # imported locally to avoid any import-order coupling
+    return src.app_state.results_store.get_all()
+
+
+@router.get("/api/speed/runs/{speed_run_id}")
+def speed_run_endpoint(speed_run_id: str):
+    """Return the normalized single-run Standard Speed result (read only).
+
+    Mirrors the durability contract of :func:`speed_status` but reads a *single*
+    run by its exact ``speed_run_id`` instead of matching identity across the store.
+    Performs NO benchmark logic and never recomputes metrics: prefill, TTFT and
+    generation values are surfaced verbatim from what is already persisted.
+
+    Error mapping:
+        400 unsafe / malformed run id (path-traversal guard)
+        404 unknown run id
+        500 integrity-broken persisted run OR store read failure
+    """
+    try:
+        _validate_speed_run_id(speed_run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        runs = _resolve_speed_runs()
+    except Exception:  # pragma: no cover - defensive; missing store never leaks internals
+        raise HTTPException(status_code=500, detail="Unable to read persisted speed data")
+
+    try:
+        return load_speed_run_by_id(speed_run_id, runs)
+    except SpeedRunNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Speed run '{speed_run_id}' not found"
+        )
+    except SpeedReadModelIntegrityError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Invalid persisted Speed run data: {exc}"
+        )
