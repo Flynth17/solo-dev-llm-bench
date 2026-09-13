@@ -83,3 +83,15 @@ async def past_results():
     return results_file.read_text(encoding="utf-8")
 
 
+@app.get("/v2/results/{run_id}", response_class=HTMLResponse)
+async def v2_result_page(run_id: str):
+    """Serve the V2 result summary page for any run ID.
+
+    The static page derives ``run_id`` from the URL and fetches it via the read-only
+    API at ``/api/v2/results/{run_id}`` (see src/routes/v2_results.py). No HTML file
+    is generated per run; all data comes from the validated read model.
+    """
+    html_file = STATIC_DIR / "v2-result.html"
+    return html_file.read_text(encoding="utf-8")
+
+

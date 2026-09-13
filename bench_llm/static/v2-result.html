@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2 Result — Solo Dev LLM Bench</title>
+    <link rel="stylesheet" href="/static/shared.css">
+    <link rel="stylesheet" href="/static/v2-result.css">
+</head>
+<body>
+    <!-- Sticky run summary. Hidden until data loads so we never show placeholder scores. -->
+    <header id="v2-sticky" class="v2-sticky hidden" aria-label="V2 result summary">
+        <div class="v2-sticky-top">
+            <span class="v2-brand">V2 QUALITY</span>
+            <span class="v2-sep" aria-hidden="true">·</span>
+            <h1 id="v2-model" class="v2-model"></h1>
+            <button type="button" id="v2-copy-run" class="v2-mini-btn" title="Copy run ID" aria-label="Copy run ID">⧉ Copy run</button>
+        </div>
+        <div class="v2-sticky-score">
+            <span id="v2-overall" class="v2-overall"></span>
+            <span class="v2-pct" id="v2-pct"></span>
+            <span id="v2-classification" class="badge v2-badge"></span>
+        </div>
+        <ul id="v2-suites" class="v2-suite-strip" aria-label="Per-suite scores"></ul>
+    </header>
+
+    <main class="container">
+        <!-- Loading state (no fake scores) -->
+        <p id="v2-loading" class="status v2-status info">Loading V2 result…</p>
+
+        <!-- Error state: readable, no stack traces -->
+        <div id="v2-error" class="hidden" role="alert">
+            <p class="status v2-status error"><strong>Unable to load V2 result</strong></p>
+            <p id="v2-error-detail" class="v2-error-msg"></p>
+        </div>
+
+        <!-- Configuration block -->
+        <section id="v2-config" class="panel hidden">
+            <h2>Configuration</h2>
+            <dl class="v2-config-grid">
+                <div><dt>Context</dt><dd id="c-context"></dd></div>
+                <div><dt>Output policy</dt><dd id="c-output" title=""></dd></div>
+                <div><dt>Requested max output</dt><dd id="c-maxout"></dd></div>
+                <div><dt>Reasoning</dt><dd id="c-reasoning"></dd></div>
+                <div class="v2-grid-span"><dt>Classification</dt>
+                    <dd><span id="c-classification" class="badge v2-badge"></span></dd></div>
+                <div class="v2-fingerprint-row"><dt>Fingerprint</dt>
+                    <dd>
+                        <code id="c-fp-short" class="v2-fp-code"></code>
+                        <code id="c-fp-full" class="v2-fp-code v2-hidden">N/A</code>
+                        <button type="button" id="v2-toggle-fp" class="v2-mini-btn">Full</button>
+                        <button type="button" id="v2-copy-fp" class="v2-mini-btn" title="Copy full fingerprint" aria-label="Copy full fingerprint">Copy</button>
+                    </dd>
+                </div>
+            </dl>
+        </section>
+
+        <!-- Future preview (failure inspector comes in the next Act). Not built here. -->
+        <footer id="v2-preview" class="panel v2-preview hidden">
+            <p class="v2-preview-counts"><span id="v2-preview-counts-text"></span></p>
+            <p class="v2-muted">Failure inspector coming next.</p>
+        </footer>
+    </main>
+
+    <script src="/static/v2-result.js"></script>
+</body>
+</html>

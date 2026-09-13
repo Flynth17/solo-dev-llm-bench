@@ -1,0 +1,294 @@
+/* Solo Dev LLM Bench — V2 result summary page (Act 6). */
+/* Layered on top of shared.css; scoped to .v2-* so the legacy /results page is untouched. */
+
+:root {
+    /* Design tokens (keep it an engineering tool: compact, restrained colour) */
+    --v2-brand: #2563eb;            /* reuse app primary blue */
+    --v2-brand-soft: #eff6ff;
+    --v2-surface: #ffffff;
+    --v2-border: #e2e8f0;
+    --v2-text: #1e293b;
+    --v2-muted: #64748b;
+    --v2-line: #eef0f2;
+
+    --v2-success: #15803d;          /* green  (canonical) */
+    --v2-success-bg: #dcfce7;
+    --v2-warning: #92400e;          /* amber  (incomplete) */
+    --v2-warning-bg: #fef3c7;
+    --v2-danger: #b91c1c;           /* red    (failed / fallback) */
+    --v2-danger-bg: #fee2e2;
+
+    --v2-radius: 8px;
+    --v2-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    background: #f5f5f5;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sticky run summary                                                  */
+/* ------------------------------------------------------------------ */
+
+.v2-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--v2-surface);
+    border-bottom: 1px solid var(--v2-border);
+    box-shadow: var(--v2-shadow);
+}
+
+.v2-sticky-top {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    flex-wrap: wrap;
+}
+
+.v2-brand {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--v2-muted);
+}
+
+.v2-sep {
+    color: #cbd5e1;
+}
+
+.v2-model {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--v2-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    margin: 0;
+    max-width: 60vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Score row (kept compact — never half the viewport) */
+.v2-sticky-score {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0 1rem 0.6rem;
+    flex-wrap: wrap;
+}
+
+.v2-overall {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--v2-text);
+    letter-spacing: -0.01em;
+}
+
+.v2-pct {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--v2-muted);
+}
+
+/* Classification badge (colour + text, never colour alone) */
+.v2-badge {
+    padding: 0.18rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.v2-badge.is-canonical { background: var(--v2-success-bg); color: var(--v2-success); }
+.v2-badge.is-incomplete { background: var(--v2-warning-bg); color: var(--v2-warning); }
+.v2-badge.is-default    { background: #eef1f5; color: #475569; }
+
+/* ------------------------------------------------------------------ */
+/* Suite strip                                                         */
+/* ------------------------------------------------------------------ */
+
+.v2-suite-strip {
+    list-style: none;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 1rem 0.85rem;
+    flex-wrap: wrap;
+}
+
+.v2-suite-cell {
+    --fill: #cbd5e1; /* per-cell progress bar colour set inline */
+    background: #f8fafc;
+    border: 1px solid var(--v2-border);
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem 0.5rem;
+    min-width: 96px;
+    flex: 0 0 auto;
+}
+
+.v2-suite-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--v2-muted);
+}
+
+.v2-suite-score {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--v2-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.v2-suite-bar {
+    margin-top: 0.3rem;
+    height: 4px;
+    border-radius: 3px;
+    background: #e5e7eb;
+    overflow: hidden;
+}
+
+.v2-suite-bar > span {
+    display: block;
+    height: 100%;
+    width: var(--pct, 0%);
+    background: var(--fill);
+}
+
+/* ------------------------------------------------------------------ */
+/* Mini action buttons (copy / full)                                   */
+/* ------------------------------------------------------------------ */
+
+.v2-mini-btn {
+    margin-left: auto;
+    background: #fff;
+    color: var(--v2-muted);
+    border: 1px solid #cbd5e1;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.v2-mini-btn:hover { background: #f1f5f9; border-color: #94a3b8; color: var(--v2-text); }
+.v2-mini-btn:active { background: #e2e8f0; }
+
+/* Copy feedback */
+.v2-mini-btn.is-copied {
+    color: var(--v2-success);
+    border-color: var(--v2-success);
+}
+
+/* ------------------------------------------------------------------ */
+/* Status / loading / error                                            */
+/* ------------------------------------------------------------------ */
+
+.v2-status {
+    padding: 0.85rem 1rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    margin-bottom: 1.25rem;
+}
+
+.v2-status.info { background: #dbeafe; color: #1e40af; }
+.v2-status.error { background: #fee2e2; color: #b91c1c; }
+
+.v2-error-msg {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    background: #f1f5f9;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.85rem;
+    color: #334155;
+    word-break: break-word;
+}
+
+/* ------------------------------------------------------------------ */
+/* Configuration block                                                 */
+/* ------------------------------------------------------------------ */
+
+.v2-config-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.7rem 1.25rem;
+    align-items: start;
+}
+
+.v2-config-grid dt {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--v2-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin: 0;
+}
+
+.v2-config-grid dd {
+    margin: 0;
+    font-size: 0.98rem;
+    color: var(--v2-text);
+    word-break: break-word;
+}
+
+.v2-fp-code {
+    font-size: 0.85rem;
+}
+
+/* Full fingerprint hidden by default; toggled via .v2-hidden */
+.v2-hidden { display: none; }
+
+.v2-grid-span,
+.v2-fingerprint-row { grid-column: 1 / -1; }
+
+.v2-fingerprint-row dd {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Future preview footer                                             */
+/* ------------------------------------------------------------------ */
+
+.v2-preview {
+    background: #fafbfc;
+    border-style: dashed;
+}
+
+.v2-preview-counts {
+    font-size: 0.9rem;
+    color: var(--v2-text);
+}
+
+.v2-muted {
+    font-size: 0.82rem;
+    color: var(--v2-muted);
+    margin-top: 0.25rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive — suite strip wraps, config stacks                          */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 640px) {
+    .v2-config-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+    .v2-grid-span,
+    .v2-fingerprint-row {
+        grid-column: auto;
+    }
+    .v2-fingerprint-row dt { margin-bottom: -0.35rem; }
+    .v2-model { max-width: 46vw; }
+    .v2-suite-cell { min-width: 84px; flex: 1 1 auto; }
+}
