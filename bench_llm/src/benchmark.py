@@ -20,6 +20,8 @@ async def fetch_models(lm_studio_url: str) -> list[dict]:
     Parses the top-level 'models' array from LM Studio's response.
     Includes only entries where type == 'llm'.
     Uses 'key' as the model identifier and 'display_name' as the human-readable name.
+    Derives 'loaded' from a non-empty loaded_instances list (LM Studio exposes no
+    per-model top-level boolean), and preserves max_context_length + loaded_instances.
     """
     url = f"{lm_studio_url}{MODELS_ENDPOINT}"
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -33,12 +35,27 @@ async def fetch_models(lm_studio_url: str) -> list[dict]:
     models = []
     for m in model_list:
         if m.get("type") == "llm":
+            # LM Studio marks a model as loaded via a non-empty ``loaded_instances``
+            # list -- there is NO per-model top-level boolean. Derive it from that so
+            # models that are actually loaded are not falsely reported unloaded.
+            instances = m.get("loaded_instances") or []
+            loaded_instances = []
+            for inst in instances:
+                if isinstance(inst, dict):
+                    # Preserve only the instance fields LM Studio supplies (id, config).
+                    loaded_instances.append({k: inst[k] for k in ("id", "config") if k in inst})
+                else:
+                    loaded_instances.append(inst)
             models.append({
                 "key": m["key"],
                 "name": m.get("display_name", m.get("name", m["key"])),
                 "type": m.get("type", "llm"),
                 "quantization": m.get("quantization", ""),
-                "loaded": m.get("loaded", False),
+                # Backward-compatible identity fields preserved verbatim.
+                "loaded": len(instances) > 0,
+                # Additional LM Studio metadata (None when absent -- never fabricated).
+                "max_context_length": m.get("max_context_length"),
+                "loaded_instances": loaded_instances,
             })
     return models
 

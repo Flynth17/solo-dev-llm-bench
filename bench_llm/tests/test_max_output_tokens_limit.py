@@ -5,28 +5,6 @@ import os
 import inspect
 
 
-class TestMaxOutputTokensDefault:
-    """Verify the new design limit defaults to 100,000."""
-
-    def test_default_value_is_100000(self):
-        """The HTML input value should default to 100000."""
-        html_path = os.path.join(os.path.dirname(__file__), "..", "static", "index.html")
-        content = open(html_path).read()
-        assert 'value="100000"' in content, "Default value should be 100000"
-
-    def test_frontend_max_is_10000000(self):
-        """The HTML input max attribute should be 10000000."""
-        html_path = os.path.join(os.path.dirname(__file__), "..", "static", "index.html")
-        content = open(html_path).read()
-        assert 'max="10000000"' in content, "Max attribute should be 10000000"
-
-    def test_frontend_min_is_1(self):
-        """The HTML input min attribute should be 1."""
-        html_path = os.path.join(os.path.dirname(__file__), "..", "static", "index.html")
-        content = open(html_path).read()
-        assert 'min="1"' in content, "Min attribute should be 1"
-
-
 class TestBackendValidation:
     """Verify backend accepts new range and rejects invalid values."""
 

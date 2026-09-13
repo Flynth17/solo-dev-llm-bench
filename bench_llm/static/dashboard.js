@@ -3,20 +3,11 @@
 // ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
-var executionEnvSelect = document.getElementById("execution-env");
-var connectionRow = document.getElementById("connection-row");
-var connectionTypeSelect = document.getElementById("connection-type");
 var hardwareLabelInput = document.getElementById("hardware-label");
 var lmStudioUrlInput = document.getElementById("lm-studio-url");
 var modelSelect = document.getElementById("model-select");
 var refreshModelsBtn = document.getElementById("refresh-models");
-var iterationsInput = document.getElementById("iterations");
-var maxTokensInput = document.getElementById("max-tokens");
-var temperatureInput = document.getElementById("temperature");
-var runBtn = document.getElementById("run-benchmark");
 var statusEl = document.getElementById("status");
-var resultsPanel = document.getElementById("results-panel");
-var resultsContainer = document.getElementById("results-container");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,24 +60,6 @@ if (modelSelect) {
 
 if (lmStudioUrlInput) {
     lmStudioUrlInput.addEventListener("input", refreshRuntimeHost);
-}
-
-function hideResults() {
-    resultsPanel.classList.add("hidden");
-    resultsContainer.innerHTML = "";
-}
-
-// NOTE: hideHistory() was removed. The old embedded history panel was intentionally replaced
-// by the external Past Results navigation (results.html + task-history-container).
-
-function disableRun(disabled) {
-    runBtn.disabled = disabled;
-    refreshModelsBtn.disabled = disabled;
-    if (disabled) {
-        runBtn.textContent = "Running\u2026";
-    } else {
-        runBtn.textContent = "Run Benchmark";
-    }
 }
 
 /** Format a number to 2 decimal places for display. */
@@ -163,10 +136,6 @@ async function loadConfig() {
         var resp = await fetch("/api/config");
         var config = await resp.json();
         if (lmStudioUrlInput) lmStudioUrlInput.value = config.lm_studio_url || "http://localhost:1234";
-        promptInput.value = config.prompt || "";
-        iterationsInput.value = config.iterations || 5;
-        maxTokensInput.value = config.max_tokens || 100000;
-        temperatureInput.value = config.temperature != null ? config.temperature : 0;
         // New fields
         if (config.hardware_label && hardwareLabelInput) {
             hardwareLabelInput.value = config.hardware_label;
@@ -246,212 +215,6 @@ refreshModelsBtn.addEventListener("click", loadModels);
 // Load & display results
 // ---------------------------------------------------------------------------
 
-async function loadResults() {
-    try {
-        var resp = await fetch("/api/benchmark/results");
-        var data = await resp.json();
-        var allRuns = data.results || [];
-        renderHistory(allRuns);
-    } catch (_) {
-        // Old: hideHistory(); — now obsolete (see NOTE above)
-    }
-}
-
-/** HTML-escape a string safely using char codes to avoid encoding issues. */
-function escapeHtml(str) {
-    if (!str) return "";
-    var result = "";
-    for (var i = 0; i < str.length; i++) {
-        var ch = str.charAt(i);
-        switch (ch) {
-            case "&": result += String.fromCharCode(38) + "amp;" + String.fromCharCode(59); break;
-            case "<": result += String.fromCharCode(60) + "lt;" + String.fromCharCode(59); break;
-            case ">": result += String.fromCharCode(62) + "gt;" + String.fromCharCode(59); break;
-            case '"': result += String.fromCharCode(34) + "quot;" + String.fromCharCode(59); break;
-            case "'": result += String.fromCharCode(39) + "39;" + String.fromCharCode(59); break;
-            default: result += ch;
-        }
-    }
-    return result;
-}
-
-/** Render a single benchmark run result. */
-function renderRunResult(result, isLatest) {
-    var group = document.createElement("div");
-    group.className = "results-group";
-
-    var label = isLatest ? "Latest Run" : "Run";
-
-    // Build metadata badges
-    var badgesHtml = '<div class="metadata">';
-    badgesHtml += '<span class="badge badge-model">' + escapeHtml(result.model || "") + '</span>';
-    if (result.hardware_label) {
-        badgesHtml += '<span class="badge badge-hardware">' + escapeHtml(result.hardware_label) + '</span>';
-    }
-    if (result.execution_environment) {
-        badgesHtml += '<span class="badge badge-env">' + escapeHtml(result.execution_environment) + '</span>';
-    }
-    if (result.connection_type && result.connection_type !== "None") {
-        badgesHtml += '<span class="badge badge-conn">' + escapeHtml(result.connection_type) + '</span>';
-    }
-    badgesHtml += '</div>';
-
-    // Fix v1.0.1: Use formatTimestamp for Latest Run timestamp (was showing raw ISO)
-    var header = document.createElement("h3");
-    header.innerHTML = label + ' \u2014 <code>' + escapeHtml(result.model || "") + '</code> <span class="timestamp">(' + formatTimestamp(result.timestamp) + ')</span>';
-
-    // Overall aggregate
-    var agg = result.aggregate || {};
-    var summaryHtml = '<h4>Overall (all iterations)</h4>' +
-        '<div class="aggregate">' +
-            '<div class="aggregate-item"><div class="label">Avg</div><div class="value">' + fmt2(agg.avg_tokens_per_second) + ' tok/s</div></div>' +
-            '<div class="aggregate-item"><div class="label">Min</div><div class="value">' + fmt2(agg.min_tokens_per_second) + ' tok/s</div></div>' +
-            '<div class="aggregate-item"><div class="label">Max</div><div class="value">' + fmt2(agg.max_tokens_per_second) + ' tok/s</div></div>' +
-        '</div>';
-
-    // Warm aggregate
-    var warmAgg = result.warm_aggregate || {};
-    var warmHtml = "";
-    if (warmAgg.available) {
-        // Fix v1.0.1 screenshot: Warm TTFT uses formatTtft (shows ms for <1s)
-        warmHtml = '<h4>Warm (iterations 2+)</h4>' +
-            '<div class="warm-aggregate">' +
-                '<div class="aggregate-item"><div class="label">Avg</div><div class="value">' + fmt2(warmAgg.avg_tokens_per_second) + ' tok/s</div></div>' +
-                '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(warmAgg.avg_ttft) + '</div></div>' +
-            '</div>';
-    } else {
-        warmHtml = '<h4>Warm (iterations 2+)</h4>' +
-            '<div class="warm-aggregate"><span class="unavailable">Unavailable (only 1 iteration)</span></div>';
-    }
-
-    // Per-iteration table
-    var table = document.createElement("table");
-    table.innerHTML =
-        '<thead><tr>' +
-            '<th>Itr</th>' +
-            '<th>Type</th>' +
-            '<th>tok/s</th>' +
-            '<th>TTFT</th>' +
-            '<th>Input tokens</th>' +
-            '<th>Output tokens</th>' +
-            '<th>Wall (s)</th>' +
-        '</tr></thead>' +
-        '<tbody></tbody>';
-    var tbody = table.querySelector("tbody");
-
-    var runs = result.runs || [];
-    for (var i = 0; i < runs.length; i++) {
-        var r = runs[i];
-        var tr = document.createElement("tr");
-        var iterType = r.cold_or_warm || (r.iteration === 1 ? "cold" : "warm");
-        tr.className = iterType === "cold" ? "cold-row" : "warm-row";
-        tr.innerHTML =
-            '<td>' + r.iteration + '</td>' +
-            '<td>' + (iterType === "cold" ? '\u2744 Cold' : '\u2600 Warm') + '</td>' +
-            '<td>' + fmt2(r.tokens_per_second) + '</td>' +
-            '<td>' + formatTtft(r.ttft_seconds) + '</td>' +
-            '<td>' + fmtInt(r.input_tokens) + '</td>' +
-            '<td>' + fmtInt(r.output_tokens) + '</td>' +
-            '<td>' + fmt2(r.wall_time_seconds) + '</td>';
-        tbody.appendChild(tr);
-    }
-
-    group.appendChild(header);
-    group.appendChild(document.createRange().createContextualFragment(badgesHtml));
-    group.insertAdjacentHTML("beforeend", summaryHtml);
-    group.insertAdjacentHTML("beforeend", warmHtml);
-    group.appendChild(table);
-
-    return group;
-}
-
-
-// ---------------------------------------------------------------------------
-// Run benchmark
-// ---------------------------------------------------------------------------
-
-async function runBenchmark() {
-    var model = modelSelect.value.trim();
-    if (!model) {
-        showStatus("Please select a model first.", "error");
-        return;
-    }
-
-    // Determine prompt_name for CSV recording
-    var presetName = promptPresetSelect.value;
-    var promptName = "Custom";
-    if (presetName) {
-        // Check if the current prompt text matches the loaded preset exactly
-        var matchedPreset = null;
-        for (var i = 0; i < _cachedPrompts.length; i++) {
-            if (_cachedPrompts[i].name === presetName) {
-                matchedPreset = _cachedPrompts[i];
-                break;
-            }
-        }
-        if (matchedPreset && matchedPreset.prompt === promptInput.value) {
-            promptName = presetName;
-        } else if (matchedPreset) {
-            promptName = presetName + " (modified)";
-        } else {
-            promptName = presetName;
-        }
-    }
-
-    var config = {
-        lm_studio_url: lmStudioUrlInput.value.replace(/\/$/, ""),
-        model: model,
-        prompt: promptInput.value,
-        prompt_name: promptName,
-        iterations: parseInt(iterationsInput.value, 10),
-        max_tokens: parseInt(maxTokensInput.value, 10),
-        temperature: parseFloat(temperatureInput.value),
-        // New fields
-        hardware_label: hardwareLabelInput ? hardwareLabelInput.value.trim() : "",
-        // Execution-environment / connection controls are no longer in the standard
-        // launcher; fall back to stable defaults when absent (Act 14).
-        execution_environment: (executionEnvSelect && executionEnvSelect.value) || "Local",
-        connection_type: (connectionTypeSelect && connectionTypeSelect.value) || "",
-    };
-
-    disableRun(true);
-    showStatus("Running benchmark\u2026", "info");
-    hideResults();
-
-    try {
-        var resp = await fetch("/api/benchmark/run", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(config),
-        });
-
-        if (!resp.ok) {
-            var err = await resp.json().catch(function () { return {}; });
-            throw new Error(err.detail || "HTTP " + resp.status);
-        }
-
-        var data = await resp.json();
-        clearStatus();
-
-        // Display the new result
-        resultsPanel.classList.remove("hidden");
-        resultsContainer.innerHTML = "";
-
-        var group = renderRunResult(data.result, true);
-        resultsContainer.appendChild(group);
-
-        // Render charts for this run
-        renderResultsCharts(data.result.runs);
-
-    } catch (e) {
-        showStatus("Benchmark failed: " + e.message, "error");
-    } finally {
-        disableRun(false);
-    }
-}
-
-runBtn.addEventListener("click", runBenchmark);
-
 // ---------------------------------------------------------------------------
 // Three-suite launcher actions (standard contracts)
 // ---------------------------------------------------------------------------
@@ -510,7 +273,7 @@ function resetSpeedButton() {
     }
 }
 
-function makeResultLink(href, runId) {
+function makeSpeedResultLink(href, runId) {
     var ctrl = runSpeedBtn;
     if (!ctrl) { return; }
     var a = document.createElement("a");
@@ -530,7 +293,7 @@ function pollSpeedStatus(runId) {
             if (state.status === "completed") {
                 clearSpeedPoll();
                 showStatus("Speed complete", "success");
-                makeResultLink(state.result_url || ("/v2/results/" + runId), runId);
+                makeSpeedResultLink(state.result_url || ("/v2/results/" + runId), runId);
             } else if (state.status === "failed") {
                 resetSpeedButton();
                 showStatus((state.error && state.error.length) ? state.error : "Speed failed", "error");
@@ -643,7 +406,7 @@ function resetWorkflowButton() {
     }
 }
 
-function makeResultLink(href, runId) {
+function makeWorkflowResultLink(href, runId) {
     var ctrl = runWorkflowBtn;
     if (!ctrl) { return; }
     var a = document.createElement("a");
@@ -663,7 +426,7 @@ function pollWorkflowStatus(runId) {
             if (state.status === "completed") {
                 clearWorkflowPoll();
                 showStatus("Workflow complete", "success");
-                makeResultLink(state.result_url || ("/v2/results/" + runId), runId);
+                makeWorkflowResultLink(state.result_url || ("/v2/results/" + runId), runId);
             } else if (state.status === "failed") {
                 resetWorkflowButton();
                 showStatus((state.error && state.error.length) ? state.error : "Workflow failed", "error");
@@ -742,423 +505,6 @@ if (runContextBtn) {
 }
 
 // ---------------------------------------------------------------------------
-// Run Evaluation (speed tests only)
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Evaluation progress bar helpers
-// ---------------------------------------------------------------------------
-
-/** Build the ordered execution plan: selected speed tests first, then correctness tests. */
-function buildExecutionPlan(speedTests, correctnessTests) {
-    var labels = {
-        small: "Small Prompt",
-        medium: "Medium Prompt",
-        large: "Large Prompt",
-        markdown: "Markdownlint Default",
-        python: "Python Correctness",
-        java: "Java Correctness",
-        unsolvable: "Unsolvable Recognition"
-    };
-    var plan = [];
-    for (var i = 0; i < speedTests.length; i++) {
-        plan.push({ name: speedTests[i], category: "speed", label: labels[speedTests[i]] || speedTests[i] });
-    }
-    for (var j = 0; j < correctnessTests.length; j++) {
-        plan.push({ name: correctnessTests[j], category: "correctness", label: labels[correctnessTests[j]] || correctnessTests[j] });
-    }
-    return plan;
-}
-
-function showEvalProgress(totalTests, selectedTestNames) {
-    // Build list of test labels with icons for the progress panel
-    var labels = [];
-    var speedLabels = {"small":"Small Prompt","medium":"Medium Prompt","large":"Large Prompt"};
-    var corrLabels = {"markdown":"Markdownlint Default","python":"Python Correctness","java":"Java Correctness","unsolvable":"Unsolvable Recognition"};
-
-    for (var i = 0; i < selectedTestNames.length; i++) {
-        if (speedLabels[selectedTestNames[i]]) {
-            labels.push({name: speedLabels[selectedTestNames[i]], type: "speed"});
-        } else if (corrLabels[selectedTestNames[i]]) {
-            labels.push({name: corrLabels[selectedTestNames[i]], type: "correctness"});
-        } else {
-            labels.push({name: selectedTestNames[i], type: "other"});
-        }
-    }
-
-    var progressHtml = '<div id="eval-progress-bar" class="eval-progress">' +
-        '<h4>Running Evaluation</h4>' +
-        '<div class="eval-progress-status">0 / ' + totalTests + ' completed</div>' +
-        '<div class="progress-bar-container"><div id="eval-progress-fill" class="progress-bar-fill"></div></div>';
-
-    for (var i = 0; i < labels.length; i++) {
-        var statusIcon = '\u23F3'; // hourglass
-        progressHtml += '<div id="eval-step-' + i + '" class="eval-progress-item">' +
-            '<span class="eval-progress-icon">' + statusIcon + '</span> ' +
-            escapeHtml(labels[i].name) + '</div>';
-    }
-
-    progressHtml += '</div>';
-    resultsContainer.innerHTML = progressHtml;
-}
-
-function updateEvalProgress(completedIndex, completedName, isWaiting) {
-    var totalTests = document.querySelectorAll(".eval-progress-item").length;
-    var fill = document.getElementById("eval-progress-fill");
-    if (!fill) return;
-
-    // Update icon for the just-completed step
-    var completedItem = document.getElementById("eval-step-" + completedIndex);
-    if (completedItem) {
-        completedItem.querySelector(".eval-progress-icon").textContent = '\u2713';
-        completedItem.className = "eval-progress-item eval-progress-done";
-    }
-
-    // Update status text
-    var statusText = document.querySelector(".eval-progress-status");
-    if (statusText) {
-        statusText.textContent = (completedIndex + 1) + ' / ' + totalTests + ' completed';
-    }
-
-    // Show "Preparing next test..." message after last step
-    if (isWaiting && completedIndex < totalTests - 1) {
-        var waitMsg = document.getElementById("eval-progress-wait-msg");
-        if (!waitMsg) {
-            var bar = document.getElementById("eval-progress-bar");
-            if (bar) {
-                waitMsg = document.createElement("div");
-                waitMsg.id = "eval-progress-wait-msg";
-                waitMsg.className = "eval-progress-wait";
-                waitMsg.textContent = "\u23F1 Preparing next test\u2026";
-                bar.appendChild(waitMsg);
-            }
-        } else {
-            waitMsg.style.display = "";
-        }
-    } else {
-        var waitMsg = document.getElementById("eval-progress-wait-msg");
-        if (waitMsg) {
-            waitMsg.style.display = "none";
-        }
-    }
-
-    // Update progress bar fill width
-    var pct = ((completedIndex + 1) / totalTests) * 100;
-    fill.style.width = pct + "%";
-}
-
-/** Render a single speed test result into resultsContainer. */
-function renderSpeedResult(sr) {
-    var testDiv = document.createElement("div");
-    testDiv.className = "results-group";
-    testDiv.innerHTML =
-        '<h4>Speed Test: <code>' + escapeHtml(sr.prompt_label || sr.test_name) + '</code></h4>' +
-        '<div class="aggregate">' +
-            '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + fmt2(sr.aggregate.avg_tokens_per_second) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Min tok/s</div><div class="value">' + fmt2(sr.aggregate.min_tokens_per_second) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Max tok/s</div><div class="value">' + fmt2(sr.aggregate.max_tokens_per_second) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(sr.aggregate.avg_ttft_seconds) + '</div></div>' +
-        '</div>';
-    resultsContainer.appendChild(testDiv);
-}
-
-/** Render a single correctness test result into resultsContainer. */
-function renderCorrectnessResult(cr) {
-    var pct = Math.round((cr.score || 0) * 100);
-    var statusColor = cr.passed ? '#22c55e' : '#ef4444';
-
-    var corrDiv = document.createElement("div");
-    corrDiv.className = "results-group";
-
-    var detailHtml = "";
-    if (cr.test_type === "markdown") {
-        function fmtNullable(val) {
-            return (val !== null && val !== undefined) ? String(val) : '\u2014';
-        }
-        detailHtml =
-            '<div class="aggregate-item"><div class="label">Initial Errors</div><div class="value">' + fmtNullable(cr.initial_errors) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Final Errors</div><div class="value">' + fmtNullable(cr.final_errors) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Errors Fixed</div><div class="value">' + fmtNullable(cr.errors_fixed) + '</div></div>';
-
-        if (cr.failure_reason) {
-            var statusLabel = cr.failure_reason.replace(/_/g, ' ').toUpperCase();
-            detailHtml +=
-                '<div class="aggregate-item">' +
-                    '<div class="label">Status</div>' +
-                    '<div class="value" style="color:#f59e0b;font-weight:bold;">' + statusLabel + '</div>' +
-                '</div>';
-        }
-    } else if (cr.test_type === "python") {
-        detailHtml =
-            '<div class="aggregate-item"><div class="label">Passed</div><div class="value">' + (cr.passed_tests || 0) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Total</div><div class="value">' + (cr.total_tests || 0) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Failed</div><div class="value">' + (cr.failed_tests || 0) + '</div></div>';
-    } else if (cr.test_type === "java") {
-        detailHtml =
-            '<div class="aggregate-item"><div class="label">Tests Passed</div><div class="value">' + (cr.passed_tests || 0) + ' / ' + (cr.total_tests || 0) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Compile</div><div class="value">' + (cr.compile_success ? 'PASS' : 'FAIL') + '</div></div>';
-    }
-
-    corrDiv.innerHTML =
-        '<h4>Correctness: <code>' + escapeHtml(cr.test_label || cr.test_type) + '</code></h4>' +
-        '<div class="aggregate">' +
-            '<div class="aggregate-item">' +
-                '<div class="label">Score</div>' +
-                '<div class="value" style="color:' + statusColor + '; font-weight:bold;">' + pct + '% PASS</div>' +
-            '</div>' +
-            '<div class="aggregate-item"><div class="label">tok/s</div><div class="value">' + fmt2(cr.tokens_per_second) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">TTFT</div><div class="value">' + formatTtft(cr.ttft_seconds) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Wall (s)</div><div class="value">' + fmt2(cr.wall_time_seconds) + '</div></div>' +
-            detailHtml +
-        '</div>';
-    resultsContainer.appendChild(corrDiv);
-}
-
-/** Build and append the final evaluation summary from accumulated speed/correctness data. */
-function renderEvalSummary(allSpeedResults, allCorrectnessResults) {
-    // Calculate correctness score: average(score * 100) from selected tests
-    var correctnessScore = null;
-    if (allCorrectnessResults.length > 0) {
-        var totalPct = 0;
-        for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
-            totalPct += (allCorrectnessResults[ci].score || 0) * 100;
-        }
-        correctnessScore = Math.round(totalPct / allCorrectnessResults.length);
-    }
-
-    // Count perfect vs partial: score >= 1.0 is perfect, < 1.0 is partial
-    var perfectCount = 0;
-    var partialCount = 0;
-    for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
-        if ((allCorrectnessResults[ci].score || 0) >= 1.0) {
-            perfectCount++;
-        } else {
-            partialCount++;
-        }
-    }
-
-    // Build per-test summary rows (data-driven, not hardcoded)
-    var perTestSummaryHtml = "";
-    for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
-        var cr = allCorrectnessResults[ci];
-        var testPct = Math.round((cr.score || 0) * 100);
-        var testColor = cr.passed ? '#22c55e' : '#ef4444';
-        perTestSummaryHtml +=
-            '<div class="aggregate-item">' +
-                '<div class="label">' + escapeHtml(cr.test_label || cr.test_type).toUpperCase() + '</div>' +
-                '<div class="value" style="color:' + testColor + '; font-weight:bold;">' + testPct + '% PASS</div>' +
-            '</div>';
-    }
-
-    // Build summary div with backend-exact fields
-    var summaryDiv = document.createElement("div");
-    summaryDiv.className = "results-group";
-
-    var correctnessSummaryHtml = "";
-    if (allCorrectnessResults.length > 0) {
-        var perfectLabel = perfectCount === 1 ? '1 perfect' : perfectCount + ' perfect';
-        var partialLabel = partialCount === 1 ? '1 partial' : partialCount + ' partial';
-        correctnessSummaryHtml =
-            '<h4>CORRECTNESS</h4>' +
-            '<div class="correctness-main-score">' +
-                '<span class="correctness-value">' + correctnessScore + ' / 100</span>' +
-                '<span class="correctness-detail">(' + perfectLabel + ' \u00B7 ' + partialLabel + ')</span>' +
-            '</div>';
-    }
-
-    // Compute summary fields exactly as the backend does:
-    // avg_tokens_per_second = average of per-test speed aggregate avg values
-    var overallTpsValues = [];
-    for (var si = 0; si < allSpeedResults.length; si++) {
-        if (allSpeedResults[si].aggregate && allSpeedResults[si].aggregate.avg_tokens_per_second > 0) {
-            overallTpsValues.push(allSpeedResults[si].aggregate.avg_tokens_per_second);
-        }
-    }
-    var avgTps = overallTpsValues.length > 0 ? Math.round((overallTpsValues.reduce(function(a,b){return a+b;}, 0) / overallTpsValues.length), 2) : 0;
-
-    // avg_ttft_seconds = average of per-test speed aggregate avg_ttft values
-    var overallTtftValues = [];
-    for (var si2 = 0; si2 < allSpeedResults.length; si2++) {
-        if (allSpeedResults[si2].aggregate && allSpeedResults[si2].aggregate.avg_ttft_seconds !== null) {
-            overallTtftValues.push(allSpeedResults[si2].aggregate.avg_ttft_seconds);
-        }
-    }
-    var avgTtft = overallTtftValues.length > 0 ? Math.round((overallTtftValues.reduce(function(a,b){return a+b;}, 0) / overallTtftValues.length), 4) : 0;
-
-    summaryDiv.innerHTML =
-        '<h3>Evaluation Summary</h3>' +
-        '<div class="aggregate">' +
-            '<div class="aggregate-item"><div class="label">Speed Tests</div><div class="value">' + allSpeedResults.length + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Correctness Tests</div><div class="value">' + allCorrectnessResults.length + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Avg tok/s</div><div class="value">' + fmt2(avgTps) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Avg TTFT</div><div class="value">' + formatTtft(avgTtft) + '</div></div>' +
-            '<div class="aggregate-item"><div class="label">Total Wall (s)</div><div class="value">\u2014</div></div>' +
-            perTestSummaryHtml +
-        '</div>';
-
-    resultsContainer.appendChild(summaryDiv);
-
-    // Append correctness summary section if applicable
-    if (correctnessSummaryHtml) {
-        var corrSection = document.createElement("div");
-        corrSection.className = "results-group correctness-summary-section";
-        corrSection.innerHTML = correctnessSummaryHtml;
-        resultsContainer.appendChild(corrSection);
-    }
-
-    // Append per-test summary after the main aggregate
-    if (perTestSummaryHtml) {
-        var perTestDiv = document.createElement("div");
-        perTestDiv.className = "results-group";
-        perTestDiv.innerHTML = '<h4>Per-Test Scores</h4><div class="aggregate">' + perTestSummaryHtml + '</div>';
-        resultsContainer.appendChild(perTestDiv);
-    }
-}
-
-async function runEvaluation() {
-    var model = modelSelect.value.trim();
-    if (!model) {
-        showStatus("Please select a model first.", "error");
-        return;
-    }
-
-    // Collect selected speed tests (in UI order)
-    var speedTests = [];
-    if (document.getElementById("eval-speed-small").checked) {
-        speedTests.push("small");
-    }
-    if (document.getElementById("eval-speed-medium").checked) {
-        speedTests.push("medium");
-    }
-    if (document.getElementById("eval-speed-large").checked) {
-        speedTests.push("large");
-    }
-
-    // Collect selected correctness tests (in UI order)
-    var correctnessTests = [];
-    if (document.getElementById("eval-correctness-markdown").checked) {
-        correctnessTests.push("markdown");
-    }
-    if (document.getElementById("eval-correctness-python").checked) {
-        correctnessTests.push("python");
-    }
-    if (document.getElementById("eval-correctness-java").checked) {
-        correctnessTests.push("java");
-    }
-    if (document.getElementById("eval-correctness-unsolvable").checked) {
-        correctnessTests.push("unsolvable");
-    }
-
-    if (speedTests.length === 0 && correctnessTests.length === 0) {
-        showStatus("Select at least one speed test or correctness test.", "error");
-        return;
-    }
-
-    // Build ordered execution plan: speed tests first, then correctness tests
-    var plan = buildExecutionPlan(speedTests, correctnessTests);
-    var totalTests = plan.length;
-
-    // Shared base config (unchanged across all requests)
-    var baseConfig = {
-        lm_studio_url: lmStudioUrlInput.value.replace(/\/$/, ""),
-        model: model,
-        execution_environment: executionEnvSelect.value,
-        connection_type: connectionTypeSelect.value,
-        hardware_label: hardwareLabelInput.value.trim(),
-        iterations: parseInt(iterationsInput.value, 10),
-        max_output_tokens: parseInt(maxTokensInput.value, 10),
-        temperature: parseFloat(temperatureInput.value),
-    };
-
-    disableRun(true);
-    showStatus("Running evaluation\u2026", "info");
-
-    // Show initial progress bar
-    resultsPanel.classList.remove("hidden");
-    showEvalProgress(totalTests, plan.map(function(item) { return item.name; }));
-
-    var allSpeedResults = [];
-    var allCorrectnessResults = [];
-
-    try {
-        for (var i = 0; i < totalTests; i++) {
-            var item = plan[i];
-            var isLast = (i === totalTests - 1);
-            var nextIsCorrectness = (i + 1 < totalTests && plan[i + 1].category === "correctness");
-
-            if (item.category === "speed") {
-                // POST one speed test: set speed_tests=[testName], correctness_tests=[]
-                var resp = await fetch("/api/evaluation/run", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(Object.assign({}, baseConfig, {
-                        speed_tests: [item.name],
-                        correctness_tests: []
-                    })),
-                });
-
-                if (!resp.ok) {
-                    var err = await resp.json().catch(function () { return {}; });
-                    throw new Error("Speed test \"" + item.label + "\" failed: " + (err.detail || "HTTP " + resp.status));
-                }
-
-                var data = await resp.json();
-                if (data.speed_results && data.speed_results.length > 0) {
-                    allSpeedResults.push(data.speed_results[0]);
-                }
-                updateEvalProgress(i, item.name, false);
-
-            } else {
-                // POST one correctness test: set speed_tests=[], correctness_tests=[testName]
-                var resp2 = await fetch("/api/evaluation/run", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(Object.assign({}, baseConfig, {
-                        speed_tests: [],
-                        correctness_tests: [item.name]
-                    })),
-                });
-
-                if (!resp2.ok) {
-                    var err2 = await resp2.json().catch(function () { return {}; });
-                    throw new Error("Correctness test \"" + item.label + "\" failed: " + (err2.detail || "HTTP " + resp2.status));
-                }
-
-                var data2 = await resp2.json();
-                if (data2.correctness_results && data2.correctness_results.length > 0) {
-                    allCorrectnessResults.push(data2.correctness_results[0]);
-                }
-                // Show "Preparing next test..." delay when followed by another correctness test
-                updateEvalProgress(i, item.name, nextIsCorrectness);
-                if (nextIsCorrectness) {
-                    await new Promise(function(resolve) { setTimeout(resolve, 3000); });
-                }
-            }
-        }
-
-        // All tests completed successfully — clear progress and render final results
-        clearStatus();
-        resultsContainer.innerHTML = "";
-
-        // Render individual test results as they were accumulated
-        for (var si = 0; si < allSpeedResults.length; si++) {
-            renderSpeedResult(allSpeedResults[si]);
-        }
-        for (var ci = 0; ci < allCorrectnessResults.length; ci++) {
-            renderCorrectnessResult(allCorrectnessResults[ci]);
-        }
-
-        // Render final summary using accumulated data (backend-exact formula)
-        renderEvalSummary(allSpeedResults, allCorrectnessResults);
-
-    } catch (e) {
-        showStatus("Evaluation failed: " + e.message, "error");
-    } finally {
-        disableRun(false);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
@@ -1168,8 +514,4 @@ loadConfig().then(function () {
     setRuntimeState("idle", "Not checked");
     // Auto-load models after config is loaded
     loadModels();
-    // Initialize prompt presets
-    initPromptPresets();
-    // Load tasks
-    loadTasks();
 });

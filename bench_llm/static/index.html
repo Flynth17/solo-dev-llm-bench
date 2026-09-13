@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solo Dev LLM Bench</title>
-    <link rel="stylesheet" href="/static/shared.css">
-    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="stylesheet" href="/static/shared.css?v=1701">
+    <link rel="stylesheet" href="/static/dashboard.css?v=1701">
 </head>
 <body class="dapp-dark">
     <div class="container">
@@ -117,69 +117,6 @@
         <!-- Bottom row: Developer Tools | Results -->
         <div class="dapp-bottom-row">
             <div class="dapp-devtools">
-                <!-- Advanced / Custom Benchmark (collapsible, closed by default) -->
-                <details class="collapsible" id="advanced-benchmark">
-                    <summary class="collapsible-header">&#x25B6; Advanced / Custom Benchmark</summary>
-                    <div class="collapsible-body">
-                        <p class="advanced-lead">Custom operation is intentionally different from the three standard comparable suites above.</p>
-
-                        <!-- Prompt Preset Selector -->
-                        <div class="form-row">
-                            <label for="prompt-preset">Prompt preset</label>
-                            <div class="prompt-presets-wrapper">
-                                <select id="prompt-preset">
-                                    <option value="">— Custom —</option>
-                                </select>
-                                <button id="save-prompt-btn" title="Save current prompt as preset">&#x1F4BE;</button>
-                                <button id="rename-prompt-btn" title="Rename selected preset">&#x270E;</button>
-                                <button id="delete-prompt-btn" title="Delete selected preset">&#x1F5D1;</button>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <label for="prompt">Benchmark Prompt</label>
-                            <textarea id="prompt" rows="3">Write a short story about a robot learning to feel emotions.</textarea>
-                        </div>
-
-                        <!-- Benchmark Parameters -->
-                        <div class="form-row-inline eval-params">
-                            <div class="form-row half">
-                                <label for="iterations">Iterations</label>
-                                <input type="number" id="iterations" value="5" min="1" max="100">
-                            </div>
-                            <div class="form-row half">
-                                <label for="max-tokens">Max Output Tokens</label>
-                                <input type="number" id="max-tokens" value="100000" min="1" max="10000000">
-                            </div>
-                            <div class="form-row half">
-                                <label for="temperature">Temperature</label>
-                                <input type="number" id="temperature" value="0" min="0" max="2" step="0.1">
-                            </div>
-                        </div>
-
-                        <!-- Run Benchmark button preserved for transitional use -->
-                        <button id="run-benchmark" class="btn-secondary suite-btn suite-btn-run" type="button">Run Custom Benchmark</button>
-                    </div>
-                </details>
-
-                <!-- Advanced Task Manager (collapsible, visually secondary) -->
-                <details class="collapsible" id="advanced-tasks">
-                    <summary class="collapsible-header">&#x25B6; Advanced Task Manager</summary>
-                    <div class="collapsible-body">
-                        <div class="task-toolbar">
-                            <select id="task-type-select">
-                                <option value="markdown">Markdown Structure</option>
-                                <option value="python">Python Code Quality</option>
-                                <option value="java">Java Code Quality</option>
-                            </select>
-                            <input type="text" id="task-name-input" placeholder="Task name (optional)">
-                            <button id="create-task-btn" class="btn-secondary">+ Create Task</button>
-                        </div>
-                        <div id="task-list-container">
-                            <div id="task-list"></div>
-                        </div>
-                    </div>
-                </details>
             </div>
 
             <a href="/results" class="dapp-results-nav" title="View all past results">
@@ -199,9 +136,7 @@
         </section>
     </div>
 
-    <script src="/static/dashboard-charts.js"></script>
-    <script src="/static/dashboard-prompts.js"></script>
-    <script src="/static/dashboard-tasks.js"></script>
-    <script src="/static/dashboard.js"></script>
+    <script src="/static/dashboard-charts.js?v=1701"></script>
+            <script src="/static/dashboard.js?v=1701"></script>
 </body>
 </html>
