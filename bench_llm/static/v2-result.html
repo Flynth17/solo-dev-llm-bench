@@ -66,6 +66,30 @@
             <!-- Empty state: a future perfect run may have zero diagnostics. -->
             <p id="v2-failures-empty" class="v2-muted v2-hidden">No recorded failure details.</p>
 
+            <!-- Filter / navigation toolbar (Act 8). Built/dynamic where practical.
+                 Filtering controls only which diagnostic records are visible; it never
+                 changes the headline counts or canonical failed-check numbers. -->
+            <div id="v2-failure-toolbar" class="v2-toolbar hidden">
+                <div id="v2-suite-filters" class="v2-toolbar-row v2-suite-filters"
+                     role="group" aria-label="Filter recorded diagnostics by suite"></div>
+                <div class="v2-toolbar-row v2-mid-filters">
+                    <label class="v2-filter-field">
+                        <span class="v2-filter-label">Type</span>
+                        <select id="v2-type-filter" class="v2-select" aria-label="Filter by failure type"></select>
+                    </label>
+                    <label class="v2-filter-field v2-search-field">
+                        <span class="v2-filter-label">Search</span>
+                        <input type="search" id="v2-search" class="v2-input"
+                               placeholder="Reason, request ID, locator…" autocomplete="off" aria-label="Search diagnostics">
+                    </label>
+                </div>
+                <div class="v2-toolbar-row v2-actions">
+                    <button type="button" id="v2-expand-all" class="v2-mini-btn">Expand all</button>
+                    <button type="button" id="v2-collapse-all" class="v2-mini-btn">Collapse all</button>
+                    <span id="v2-showing-count" class="v2-showing" aria-live="polite"></span>
+                </div>
+            </div>
+
             <!-- Grouped diagnostic rows are injected here by JS, in canonical suite order. -->
             <div id="v2-failure-groups"></div>
         </section>

@@ -475,6 +475,136 @@ body {
 .v2-eacompare code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #1e293b; word-break: break-word; }
 
 /* ------------------------------------------------------------------ */
+/* Toolbar / filters (Act 8)                                            */
+/* ------------------------------------------------------------------ */
+
+.v2-toolbar {
+    margin: 0.4rem 0 0.6rem;
+    padding: 0.7rem 0.9rem;
+    background: #f8fafc;
+    border: 1px solid var(--v2-border);
+    border-radius: 8px;
+}
+
+.v2-toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0 0 0.5rem;
+}
+.v2-toolbar-row:last-child { margin-bottom: 0; }
+
+.v2-suite-filters { gap: 0.4rem; }
+
+.v2-mid-filters { justify-content: flex-start; gap: 1rem; }
+
+.v2-filter-field {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.v2-filter-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--v2-muted);
+}
+
+.v2-search-field { min-width: 200px; }
+
+/* Suite filter buttons (real <button> elements) */
+.v2-filter-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--v2-muted);
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.13s ease;
+}
+.v2-filter-btn:hover { background: #f1f5f9; border-color: #94a3b8; color: var(--v2-text); }
+.v2-filter-btn.is-active {
+    background: var(--v2-brand);
+    border-color: var(--v2-brand);
+    color: #fff;
+}
+.v2-filter-btn:focus-visible {
+    outline: 2px solid var(--v2-brand);
+    outline-offset: 1px;
+}
+
+/* Type select + search input */
+.v2-select,
+.v2-input {
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--v2-text);
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 0.35rem 0.6rem;
+}
+.v2-select { min-width: 150px; }
+.v2-input { width: 100%; }
+.v2-select:focus,
+.v2-input:focus {
+    outline: none;
+    border-color: var(--v2-brand);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.v2-actions { justify-content: flex-end; }
+.v2-actions .v2-mini-btn { margin-left: 0; }
+
+.v2-showing {
+    font-size: 0.82rem;
+    color: var(--v2-muted);
+    margin-left: auto;
+}
+
+/* Suite-strip cell is now a real <button> */
+.v2-suite-cell {
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    font-size: inherit;
+    margin: 0;
+    cursor: pointer;
+    text-align: left;
+}
+.v2-suite-cell:focus-visible {
+    outline: 2px solid var(--v2-brand);
+    outline-offset: 1px;
+}
+.v2-suite-cell--active {
+    background: var(--v2-brand-soft);
+    border-color: var(--v2-brand);
+}
+
+/* Deep-link copy button sits in the collapsed toggle header */
+.v2-row-toggle .v2-mini-btn { margin-left: 0.4rem; }
+
+/* Highlight for deep-link target on load */
+.v2-row-flash {
+    animation: v2-flash 1.8s ease-out;
+}
+@keyframes v2-flash {
+    0%   { background: #fff7cf; }
+    100% { background: #fcfdfe; }
+}
+
+/* ------------------------------------------------------------------ */
 /* Responsive — suite strip wraps, config stacks                          */
 /* ------------------------------------------------------------------ */
 

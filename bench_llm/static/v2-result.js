@@ -20,6 +20,17 @@
         "80_percent_context": "80% of context"
     };
 
+    // ---- Act 8 filter/navigation state --------------------------------
+    // DATA caches the authoritative API payload once so filtering never touches it.
+    // FILTER holds active criteria (AND-combined). EXPANDED is a Set of locators that
+    // are expanded; it persists across rebuilds so hidden rows retain their state.
+    var DATA = { suites: null, failures: null, orderedSuites: [], byKey: {}, byKeyItems: {} };
+    var FILTER = { suite: "", type: "", query: "" };
+    var EXPANDED = new Set();
+    var SUITE_FILTER_BTNS = [];   // toolbar suite filter <button> refs
+    var STRIP_CELLS = [];         // suite-strip cell <button> refs
+    var SEARCH_TIMER = null;
+
     // ---- DOM helpers ---------------------------------------------------
     function by(id) { return document.getElementById(id); }
 
@@ -105,13 +116,24 @@
     function renderSuites(suites) {
         var list = by("v2-suites");
         list.innerHTML = "";
+        STRIP_CELLS = [];
         (suites || []).forEach(function (s) {
             var passed = s.checks_passed;
             var total = s.checks_total;
             var pct = total ? Math.round((passed / total) * 100) : 0;
 
             var li = document.createElement("li");
-            li.className = "v2-suite-cell";
+            li.className = "v2-suite-li";
+
+            // Accessible button: clicking a suite activates its failure filter and scrolls to the inspector.
+            // This only changes which diagnostics are visible; it never alters score presentation.
+            var cell = document.createElement("button");
+            cell.type = "button";
+            cell.className = "v2-suite-cell";
+            cell.dataset.suite = s.suite;
+            cell.setAttribute("aria-pressed", "false");
+            cell.setAttribute("aria-label",
+                SUITE_LABELS[s.suite] + " score " + fmt(passed) + " of " + fmt(total) + ". Click to filter failures.");
 
             var label = document.createElement("div");
             label.className = "v2-suite-label";
@@ -128,8 +150,17 @@
             fill.style.setProperty("--fill", suiteFill(passed, total));
             bar.appendChild(fill);
 
-            li.append(label, score, bar);
+            cell.append(label, score, bar);
+            li.append(cell);
             list.appendChild(li);
+            STRIP_CELLS.push(cell);
+
+            cell.addEventListener("click", function () {
+                FILTER.suite = s.suite;
+                applyFilterUI();
+                refreshGroups();
+                scrollToInspector();
+            });
         });
     }
 
@@ -207,60 +238,279 @@
         return span;
     }
 
+    // Canonical failed-check counts come from the authoritative suite aggregate
+    // (presentation math only). Diagnostics are inspection records. The overall
+    // /166 score is never derived from these rows, and any bogus per-row validator
+    // total (e.g. 9999) never becomes a canonical denominator.
+
+    function plural(n, word) {
+        return n + " " + word + (n === 1 ? "" : "s");
+    }
+
+    function suiteDisplayLabel(key) {
+        return SUITE_LABELS[key] || String(key).replace(/_/g, " ");
+    }
+
+    // Deterministic, URL-safe DOM id derived from the stable read-model locator.
+    function makeRowId(loc) {
+        var slug = String(loc || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 120);
+        if (!slug) return "diag";
+        return "fail-" + slug;
+    }
+
+    function countsOfRecords() {
+        return DATA.failures ? DATA.failures.length : 0;
+    }
+
+    function countsOfSuite(key) {
+        var list = DATA.byKeyItems[key];
+        return list ? list.length : 0;
+    }
+
+    function countOfType(t) {
+        var n = 0;
+        (DATA.failures || []).forEach(function (f) { if (f.failure_type === t) n++; });
+        return n;
+    }
+
+    // Cache authoritative data once, build the toolbar, set headline counts,
+    // then refresh the filtered view. Headline + legend counts are NOT affected by filters.
     function renderFailures(suites, failures) {
-        var groupsEl = by("v2-failure-groups");
-        var emptyEl = by("v2-failures-empty");
-        var summaryEl = by("v2-failure-summary");
-        var diagCountEl = by("v2-failure-diag-count");
-        if (!groupsEl) return;
-
-        groupsEl.innerHTML = "";
-
-        // Authoritative per-suite failed-check counts (fallback: total - passed).
-        var byKey = {};
-        (suites || []).forEach(function (s) {
+        DATA.suites = suites || [];
+        DATA.failures = failures || [];
+        DATA.byKey = {};
+        DATA.byKeyItems = {};
+        (DATA.suites || []).forEach(function (s) {
             var key = s.suite;
             var failed = (s.failed_checks != null) ? s.failed_checks
                 : Math.max(0, (s.checks_total || 0) - (s.checks_passed || 0));
-            byKey[key] = { label: suiteDisplayLabel(key), failed: failed, items: [] };
+            DATA.byKey[key] = { label: suiteDisplayLabel(key), failed: failed, items: [] };
+            DATA.byKeyItems[key] = [];
+        });
+        DATA.orderedSuites = (DATA.suites || []).map(function (s) { return s.suite; });
+
+        // Attach diagnostics to canonical-suite buckets (preserves source order).
+        (DATA.failures || []).forEach(function (f) {
+            if (DATA.byKeyItems[f.suite]) DATA.byKeyItems[f.suite].push(f);
+            if (DATA.byKey[f.suite]) DATA.byKey[f.suite].items.push(f);
         });
 
-        // Attach diagnostics to their canonical-suite group.
-        (failures || []).forEach(function (f) {
-            var g = byKey[f.suite];
-            if (g) g.items.push(f);
-        });
-
-        // Canonical suite order; include a group when it has rows or failed checks.
-        var orderedSuites = (suites || []).map(function (s) { return s.suite; });
-        var groups = orderedSuites.filter(function (key) {
-            return byKey[key] && (byKey[key].items.length > 0 || byKey[key].failed > 0);
-        }).map(function (key) { return byKey[key]; });
-
-        // Headline: canonical failed checks vs. number of diagnostic records.
-        var totalFailed = orderedSuites.reduce(function (acc, key) {
-            return acc + (byKey[key] ? byKey[key].failed : 0);
+        // Headline counts are authoritative and invariant to filtering.
+        var diagCountEl = by("v2-failure-diag-count");
+        var summaryEl = by("v2-failure-summary");
+        if (diagCountEl) diagCountEl.textContent = String(DATA.failures.length);
+        var totalFailed = DATA.orderedSuites.reduce(function (acc, key) {
+            return acc + (DATA.byKey[key] ? DATA.byKey[key].failed : 0);
         }, 0);
-        var suitesWithFailures = orderedSuites.filter(function (key) {
-            return byKey[key] && byKey[key].failed > 0;
+        var suitesWithFailures = DATA.orderedSuites.filter(function (key) {
+            return DATA.byKey[key] && DATA.byKey[key].failed > 0;
         }).length;
-
-        if (diagCountEl) diagCountEl.textContent = String((failures || []).length);
-        summaryEl.textContent = plural(totalFailed, "failed check") + " · " +
-            plural((failures || []).length, "recorded diagnostic");
-        if (suitesWithFailures > 0) {
-            summaryEl.textContent += " across " + plural(suitesWithFailures, "suite");
+        if (summaryEl) {
+            summaryEl.textContent = plural(totalFailed, "failed check") + " · " +
+                plural(DATA.failures.length, "recorded diagnostic");
+            if (suitesWithFailures > 0) {
+                summaryEl.textContent += " across " + plural(suitesWithFailures, "suite");
+            }
         }
 
-        if (!groups.length) {
+        buildToolbar();
+
+        // Reveal the inspector section and its filter toolbar. Both start classed
+        // `hidden` (shared.css `.hidden { display:none }`); nothing ever removed it,
+        // so the panel stayed display:none in a real browser, hiding every row and
+        // every Act 8 control inside it. Idempotent with show()/hide().
+        show(by("v2-failures"));
+        if (DATA.failures.length > 0) {
+            show(by("v2-failure-toolbar"));
+        }
+
+        var emptyEl = by("v2-failures-empty");
+        if (DATA.failures.length === 0) {
             if (emptyEl) show(emptyEl);
-            return;
+        } else if (emptyEl) {
+            hide(emptyEl);
         }
-        if (emptyEl) hide(emptyEl);
 
-        groups.forEach(function (group) {
-            groupsEl.appendChild(buildGroup(group));
+        refreshGroups();
+    }
+
+    // Build the suite filter buttons + failure-type select once. Counts are recorded
+    // diagnostic records per suite/type — never canonical failed-check counts.
+    function buildToolbar() {
+        var suiteBox = by("v2-suite-filters");
+        if (!suiteBox) return;
+        suiteBox.innerHTML = "";
+        SUITE_FILTER_BTNS = [];
+
+        var allBtn = document.createElement("button");
+        allBtn.type = "button";
+        allBtn.className = "v2-filter-btn is-active";
+        allBtn.dataset.suite = "";
+        allBtn.textContent = "All " + countsOfRecords();
+        allBtn.setAttribute("aria-pressed", "true");
+        allBtn.addEventListener("click", function () {
+            FILTER.suite = "";   // empty string == All
+            applyFilterUI();
+            refreshGroups();
+            scrollToInspector();
         });
+        suiteBox.appendChild(allBtn);
+        SUITE_FILTER_BTNS.push(allBtn);
+
+        (DATA.orderedSuites || []).forEach(function (key) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "v2-filter-btn";
+            b.dataset.suite = key;
+            b.textContent = suiteDisplayLabel(key) + " " + countsOfSuite(key);
+            b.setAttribute("aria-pressed", "false");
+            b.addEventListener("click", function () {
+                FILTER.suite = b.dataset.suite;   // e.g. "evidence"
+                applyFilterUI();
+                refreshGroups();
+                scrollToInspector();
+            });
+            suiteBox.appendChild(b);
+            SUITE_FILTER_BTNS.push(b);
+        });
+
+        // Type select: populated dynamically from real failure records (sorted).
+        var sel = by("v2-type-filter");
+        if (sel) {
+            sel.innerHTML = "";
+            var allOpt = document.createElement("option");
+            allOpt.value = "";
+            allOpt.textContent = "All types";
+            sel.appendChild(allOpt);
+            var typeSet = {};
+            (DATA.failures || []).forEach(function (f) {
+                if (f.failure_type != null && String(f.failure_type).trim() !== "") typeSet[String(f.failure_type)] = true;
+            });
+            Object.keys(typeSet).sort().forEach(function (t) {
+                var o = document.createElement("option");
+                o.value = t;
+                o.textContent = t + " (" + countOfType(t) + ")";
+                sel.appendChild(o);
+            });
+            sel.value = FILTER.type;
+            sel.addEventListener("change", function () {
+                FILTER.type = sel.value;
+                applyFilterUI();
+                refreshGroups();
+            });
+        }
+
+        applyFilterUI();
+    }
+
+    // AND-combined filter predicate. Pure: returns a filtered list without touching DOM.
+    // Search uses a derived normalized string for matching only; it never mutates the
+    // original (byte-exact) strings used for display.
+    function getVisibleFailures() {
+        var q = (FILTER.query || "").trim().toLowerCase();
+        return (DATA.failures || []).filter(function (f) {
+            if (FILTER.suite && f.suite !== FILTER.suite) return false;
+            if (FILTER.type && f.failure_type !== FILTER.type) return false;
+            if (q) {
+                var hay = [
+                    String(f.failure_type || ""),
+                    String(f.source_type || ""),
+                    String(f.failure_reason || ""),
+                    String(f.case_id || ""),
+                    String(f.request_id || ""),
+                    String(f.locator || "")
+                ].join("\n").toLowerCase();
+                if (hay.indexOf(q) === -1) return false;
+            }
+            return true;
+        });
+    }
+
+    // Re-render filtered groups into the DOM. Group legends keep AUTHORITATIVE counts;
+    // only which rows/groups are visible is controlled by the filter.
+    function refreshGroups() {
+        var groupsEl = by("v2-failure-groups");
+        var showingEl = by("v2-showing-count");
+        if (!groupsEl) return;
+        groupsEl.innerHTML = "";
+
+        var visible = getVisibleFailures();
+        var buckets = {};
+        DATA.orderedSuites.forEach(function (k) { buckets[k] = []; });
+        visible.forEach(function (f) { if (buckets[f.suite]) buckets[f.suite].push(f); });
+
+        DATA.orderedSuites.forEach(function (key) {
+            var items = buckets[key] || [];
+            if (!items.length) return;              // hide groups with no matching records
+            groupsEl.appendChild(buildGroup(DATA.byKey[key], items));
+        });
+
+        // Showing count / no-match state. Distinct from the global zero-failure empty state.
+        if (showingEl) {
+            var total = DATA.failures.length;
+            if (total === 0) {
+                showingEl.textContent = "";
+            } else if (visible.length === 0) {
+                showingEl.textContent = "No recorded diagnostics match the current filters.";
+            } else {
+                showingEl.textContent = "Showing " + visible.length + " of " + total +
+                    " recorded diagnostic" + (total === 1 ? "" : "s");
+            }
+        }
+    }
+
+    // Keep toolbar suite buttons and suite-strip pressed state in sync with FILTER.suite.
+    function applyFilterUI() {
+        SUITE_FILTER_BTNS.forEach(function (b) {
+            var on = (!FILTER.suite && b.dataset.suite === "") || (b.dataset.suite === FILTER.suite);
+            b.classList.toggle("is-active", on);
+            b.setAttribute("aria-pressed", String(on));
+        });
+        STRIP_CELLS.forEach(function (c) {
+            var on = (!FILTER.suite && c.dataset.suite === "") || (c.dataset.suite === FILTER.suite);
+            c.classList.toggle("v2-suite-cell--active", on);
+            c.setAttribute("aria-pressed", String(on));
+        });
+    }
+
+    function scrollToInspector() {
+        var panel = by("v2-failures");
+        if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // ---- Group / row builders -----------------------------------------
+    function buildGroup(group, items) {
+        var listItems = items != null ? items : (group.items || []);
+        var doc = document.createElement("section");
+        doc.className = "v2-failure-group";
+
+        var legend = document.createElement("div");
+        legend.className = "v2-group-legend";
+
+        var label = document.createElement("span");
+        label.className = "v2-group-label";
+        label.textContent = group.label;
+
+        // Legend shows AUTHORITATIVE counts (canonical failed checks + total records).
+        var counts = document.createElement("span");
+        counts.className = "v2-group-counts";
+        counts.textContent = plural(group.failed, "failed check") +
+            " · " + plural(listItems.length, "recorded diagnostic");
+
+        legend.append(label, counts);
+
+        var rowsList = document.createElement("ul");
+        rowsList.className = "v2-failure-rows";
+        listItems.forEach(function (f) {
+            rowsList.appendChild(buildRow(f));
+        });
+
+        doc.append(legend, rowsList);
+        return doc;
     }
 
     function buildGroup(group) {
@@ -291,15 +541,21 @@
         return doc;
     }
 
+    // Copyable stable link for a diagnostic row (origin + path + #fragment).
+    function deepLinkUrlFor(f) {
+        return location.origin + location.pathname + "#" + makeRowId(f.locator);
+    }
+
     function buildRow(f) {
         var li = document.createElement("li");
         li.className = "v2-failure-row";
+        // Stable, unique, URL-safe id derived from the read-model locator (deep link target).
+        li.id = makeRowId(f.locator);
 
         // Collapsed row toggle (accessible <button>).
         var toggle = document.createElement("button");
         toggle.type = "button";
         toggle.className = "v2-row-toggle";
-        toggle.setAttribute("aria-expanded", "false");
         toggle.setAttribute("aria-label", "Toggle failure details: " + rowKindLabel(f));
 
         var glyph = document.createElement("span");
@@ -311,22 +567,36 @@
         kind.className = "v2-row-kind";
         kind.textContent = rowKindLabel(f);
 
+        // Subtle copy-link control (deep link) — always available on the collapsed row.
+        var linkBtn = copyBtn(deepLinkUrlFor(f), "Copy link to this diagnostic");
+        linkBtn.setAttribute("aria-label", "Copy link to this diagnostic: " + f.locator);
+
         var preview = document.createElement("span");
         preview.className = "v2-row-preview";
         preview.textContent = shortPreview(f.failure_reason);
 
-        toggle.append(glyph, kind, preview);
+        toggle.append(glyph, kind, linkBtn, preview);
 
-        // Expanded body.
+        // Expanded body. Visibility is driven by the .v2-hidden CSS rule (there is no
+        // bare .hidden rule), so it must be toggled directly — not via show()/hide(),
+        // which toggle the non-existent class and are a no-op.
         var body = document.createElement("div");
-        body.className = "v2-row-body v2-hidden";
+        body.className = "v2-row-body";
         buildBodyFields(f, body);
 
+        // Expand state persists across rebuilds via the EXPANDED set (Act 8).
+        var isExp = EXPANDED.has(f.locator);
+        toggle.setAttribute("aria-expanded", String(isExp));
+        glyph.textContent = isExp ? "▾" : "▸";
+        if (isExp) body.classList.remove("v2-hidden"); else body.classList.add("v2-hidden");
+
         toggle.addEventListener("click", function () {
-            var nowOpen = toggle.getAttribute("aria-expanded") === "true";
+            var nowOpen = EXPANDED.has(f.locator);
+            if (nowOpen) EXPANDED.delete(f.locator); else EXPANDED.add(f.locator);
             toggle.setAttribute("aria-expanded", String(!nowOpen));
             glyph.textContent = nowOpen ? "▸" : "▾";
-            if (nowOpen) hide(body); else show(body);
+            // Collapse -> add hidden, Expand -> remove hidden.
+            body.classList.toggle("v2-hidden", nowOpen);
         });
 
         li.append(toggle, body);
@@ -494,6 +764,8 @@
                 renderFailures(body.suites || [], body.failures || []);
 
                 wireInteractions(runId);
+
+                handleInitialHash();
             })
             .catch(function (err) {
                 showError(err && err.message ? err.message : "Unable to load V2 result.");
@@ -519,6 +791,112 @@
                 fpShort.classList.add("v2-hidden");
                 this.textContent = "Short";
             }
+        });
+
+        // ---- Act 8 toolbar actions --------------------------------------
+        var expandAll = by("v2-expand-all");
+        var collapseAll = by("v2-collapse-all");
+        if (expandAll) {
+            expandAll.addEventListener("click", function () {
+                getVisibleFailures().forEach(function (f) { EXPANDED.add(f.locator); });
+                refreshGroups();
+            });
+        }
+        if (collapseAll) {
+            collapseAll.addEventListener("click", function () {
+                EXPANDED.clear();
+                refreshGroups();
+            });
+        }
+        var search = by("v2-search");
+        if (search) {
+            search.addEventListener("input", function () {
+                clearTimeout(SEARCH_TIMER);
+                var self = this;
+                SEARCH_TIMER = setTimeout(function () {
+                    FILTER.query = self.value;
+                    refreshGroups();
+                }, 80);
+            });
+        }
+        wireKeyboard();
+    }
+
+    // Sync toolbar controls (type select + search box) to the current FILTER state.
+    function syncToolbarToState() {
+        var sel = by("v2-type-filter");
+        if (sel) sel.value = FILTER.type;
+        var search = by("v2-search");
+        if (search) search.value = FILTER.query;
+        applyFilterUI();
+    }
+
+    // Initial hash navigation: when the page loads with a valid diagnostic fragment,
+    // reset filters so the target is visible, expand it, scroll into view + highlight.
+    function handleInitialHash() {
+        var hash = location.hash;
+        if (!hash || hash.length <= 1) return;
+        var id = hash.slice(1);
+        var locator = "";
+        (DATA.failures || []).forEach(function (f) {
+            if (makeRowId(f.locator) === id) locator = f.locator;
+        });
+        if (!locator) return; // invalid fragment — ignore cleanly
+
+        FILTER.suite = "";
+        FILTER.type = "";
+        FILTER.query = "";
+        syncToolbarToState();
+        EXPANDED.add(locator);
+        refreshGroups();
+
+        var el = by(id);
+        if (el) {
+            el.classList.add("v2-row-flash");
+            setTimeout(function () { el.classList.remove("v2-row-flash"); }, 1800);
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    // ---- Keyboard navigation (Act 8) ----------------------------------
+    function isInsideFormControl() {
+        var ae = document.activeElement;
+        if (!ae) return false;
+        var tag = ae.tagName ? ae.tagName.toUpperCase() : "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return false;
+        return !!ae.isContentEditable;
+    }
+
+    function visibleToggles() {
+        var ul = by("v2-failure-groups");
+        if (!ul) return [];
+        return Array.prototype.slice.call(ul.querySelectorAll(".v2-row-toggle"));
+    }
+
+    // j/k move focus among currently-visible row toggles, wrapping around.
+    function focusInToggles(delta) {
+        var rows = visibleToggles();
+        if (!rows.length) return;
+        var idx = rows.indexOf(document.activeElement);
+        if (idx === -1) idx = delta > 0 ? -1 : rows.length;
+        var n = rows.length;
+        var ni = ((idx + delta) % n + n) % n;
+        rows[ni].focus();
+    }
+
+    function toggleFocusedRow() {
+        var focused = visibleToggles().filter(function (r) { return r === document.activeElement; })[0];
+        if (focused) focused.click();
+    }
+
+    function wireKeyboard() {
+        document.addEventListener("keydown", function (e) {
+            if (isInsideFormControl()) return;             // don't hijack typing
+            if (e.ctrlKey || e.altKey || e.metaKey) return; // never hijack browser shortcuts
+            var key = e.key.length === 1 ? e.key.toLowerCase() : "";
+            if (key === "j") { e.preventDefault(); focusInToggles(1); }
+            else if (key === "k") { e.preventDefault(); focusInToggles(-1); }
+            else if (key === "e" || e.key === "Enter") { e.preventDefault(); toggleFocusedRow(); }
         });
     }
 
