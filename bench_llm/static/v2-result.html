@@ -105,6 +105,19 @@
             <p id="v2-request-empty" class="v2-muted v2-hidden">No extraction-successful request records were stored.</p>
             <div id="v2-request-list"></div>
         </section>
+
+        <!-- Reproduction summary (Act 10). Compact, copyable run identity + configuration used to
+             file bug reports / issues / notes. Uses ONLY authoritative run/config values from the
+             read model -- NEVER diagnostic-only totals (e.g. validator 9999) and never any score
+             derived from failures or request records. Collapsed by default; revealed on load. -->
+        <section id="v2-repro" class="panel v2-repro-panel hidden">
+            <h2>REPRODUCTION SUMMARY</h2>
+            <div class="v2-repro-toolbar">
+                <span class="v2-muted">Copyable run identity for bug reports, issues, and notes.</span>
+                <button type="button" id="v2-copy-repro" class="v2-mini-btn" aria-label="Copy reproduction summary">Copy</button>
+            </div>
+            <pre id="v2-repro-body" class="v2-repro-body" spellcheck="false"></pre>
+        </section>
     </main>
 
     <script src="/static/v2-result.js"></script>

@@ -691,3 +691,33 @@ body {
     color: #1e293b;
 }
 
+/* ------------------------------------------------------------------ */
+/* Reproduction summary (Act 10). Subordinate to failures/request, but
+   easy to find. Reuses base .panel + .v2-mini-btn/.v2-muted so it stays
+   visually quiet; the body is a selectable monospace pre. */
+.v2-repro-panel {
+    margin-top: 1rem;
+}
+.v2-repro-panel h2 {
+    font-size: 0.95rem;
+}
+.v2-repro-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+}
+/* Copy button sits at the trailing edge of the toolbar, not pushed to the far row layout. */
+.v2-repro-panel .v2-mini-btn {
+    margin-left: auto;
+}
+.v2-repro-body {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+

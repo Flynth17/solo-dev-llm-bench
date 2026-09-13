@@ -55,6 +55,10 @@
         return fp.slice(0, 8) + "…" + fp.slice(-8);
     }
 
+    // Guard for authoritative numeric identity fields (counts/context/tokens). Uses the
+    // native Number check rather than fmt(), which would coerce to a string.
+    function _isFiniteNum(v) { return typeof v === "number" && isFinite(v); }
+
     function classificationState(c) {
         var v = String(c || "").trim().toLowerCase();
         if (v === "canonical") return "is-canonical";
@@ -794,6 +798,109 @@
         });
     }
 
+    // ---- Reproduction summary (Act 10) ---------------------------------
+    // Build the canonical, machine-readable reproduction payload used by the Copy button.
+    // Only authoritative run/config identity is included. Optional numeric config fields
+    // are OMITTED when absent/null so an unknown value never renders as context=0 /
+    // requested_max_output_tokens=0. The fingerprint is the FULL (untruncated) value --
+    // never the shortened visible form. No diagnostic-only totals (e.g. validator 9999)
+    // and no score derived from failures or request records ever enter this payload.
+    function buildReproCopy(v) {
+        var lines = [];
+        if (v.model) lines.push("model=" + v.model);
+        if (v.run_id) lines.push("run_id=" + v.run_id);
+        if (_isFiniteNum(v.checks_passed) && _isFiniteNum(v.checks_total)) {
+            lines.push("checks=" + v.checks_passed + "/" + v.checks_total);
+        }
+        if (v.pct != null) lines.push("score=" + v.pct + "%");
+        if (v.classification) lines.push("classification=" + v.classification);
+        if (_isFiniteNum(v.context)) lines.push("context=" + Math.round(v.context));
+        if (v.output_policy) lines.push("output_policy=" + v.output_policy);
+        if (_isFiniteNum(v.max_out)) lines.push("requested_max_output_tokens=" + Math.round(v.max_out));
+        if (v.reasoning) lines.push("reasoning_policy=" + v.reasoning);
+        if (v.fp) lines.push("configuration_fingerprint=" + v.fp);   // full, untruncated
+        return lines.join("\n");
+    }
+
+    // Render a compact, copyable reproduction summary beneath Request Details. Uses ONLY
+    // authoritative run/config values from the read model. The visible block is human-
+    // friendly (grouped numbers, shortened fingerprint); the copied payload is machine-
+    // readable with the full fingerprint and optional null fields omitted.
+    function renderRepro(run, cfg) {
+        run = run || {};
+        cfg = cfg || {};
+
+        var bodyEl = by("v2-repro-body");
+
+        // Authoritative values (read-model fields only).
+        var model = run.model_identifier || null;
+        var runId = run.run_id || null;
+        var passed = run.checks_passed;
+        var total = run.checks_total;
+        // Prefer the read-model percentage; fall back to a single computed rounding ONLY if
+        // absent (mirrors renderHeader's existing behaviour -- no second rounding path here).
+        var pct = (typeof run.percentage === "number") ? String(run.percentage)
+            : (_isFiniteNum(passed) && _isFiniteNum(total) && total
+                ? ((passed / total) * 100).toFixed(1) : null);
+        var classification = run.classification || null;
+        var reasoning = run.reasoning_policy || cfg.reasoning_policy || null;
+
+        var context = cfg.effective_context_capacity;
+        var policyRaw = cfg.output_budget_policy || null;   // raw code preserved on display + copy
+        var maxOut = cfg.requested_max_output_tokens;
+        var fpFull = run.configuration_fingerprint || "";   // full fingerprint source
+
+        // ---- Human-friendly VISUAL summary (selectable) --------------------
+        var vis = [];
+        var head = "";
+        if (model) head += model;
+        if (runId) head += (head ? " \u00b7 " : "") + runId;
+        if (head) vis.push(head);
+
+        var line2 = "";
+        if (_isFiniteNum(context)) line2 += "ctx=" + fmt(context);
+        if (policyRaw) line2 += (line2 ? " \u00b7 " : "") + "output=" + policyRaw;
+        if (_isFiniteNum(maxOut)) line2 += (line2 ? " \u00b7 " : "") + "max=" + fmt(maxOut);
+        if (line2) vis.push(line2);
+
+        var line3 = "";
+        if (reasoning) line3 += "reasoning=" + reasoning;
+        if (fpFull) line3 += (line3 ? " \u00b7 " : "") + "fp=" + shortFp(fpFull);  // shortened for display
+        if (line3) vis.push(line3);
+
+        var line4 = "";
+        if (_isFiniteNum(passed) && _isFiniteNum(total)) line4 += "score=" + passed + "/" + total;
+        if (pct) line4 += (line4 ? " \u00b7 " : "") + "(" + pct + "%)";
+        if (classification) line4 += (line4 ? " \u00b7 classification=" : "classification=") + classification;
+        if (!line4) line4 = "score=not recorded";   // defensive; read model validates run identity
+        vis.push(line4);
+
+        if (bodyEl) bodyEl.textContent = vis.join("\n");
+
+        // ---- Copy handler: canonical machine-readable payload (full fp) ----
+        var copyBtn = by("v2-copy-repro");
+        if (copyBtn) {
+            copyBtn.addEventListener("click", function () {
+                copyText(buildReproCopy({
+                    model: model,
+                    run_id: runId,
+                    checks_passed: passed,
+                    checks_total: total,
+                    pct: pct,
+                    classification: classification,
+                    reasoning: reasoning,
+                    context: context,
+                    output_policy: policyRaw,
+                    max_out: maxOut,
+                    fp: fpFull
+                }), this);
+            });
+        }
+
+        // Reveal the panel (it starts classed `hidden` like other sections).
+        show(by("v2-repro"));
+    }
+
     function buildReqGroup(suiteKey, items) {
         var doc = document.createElement("section");
         doc.className = "v2-failure-group v2-request-group";
@@ -1003,6 +1110,7 @@
                 renderConfiguration(body.configuration, body.run);
                 renderFailures(body.suites || [], body.failures || []);
                 renderRequests(body.suites || [], body.successes || []);
+                renderRepro(body.run, body.configuration);
 
                 wireInteractions(runId);
 
