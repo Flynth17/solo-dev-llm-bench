@@ -878,6 +878,30 @@ h1 {
 .dapp-dot-warn { background: #fbbf24; }
 .dapp-dot-bad { background: #f87171; }
 
+/* Model lifecycle state + controls (Act 18) */
+.dapp-model-state {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #1e3350;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.dapp-model-state-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #cdd9ea;
+    font-weight: 600;
+    flex: 1 1 auto;
+}
+.dapp-model-state-line .dapp-dot { width: 8px; height: 8px; }
+.dapp-dark .dapp-model-state-line[data-status="loaded"] { color: #34d399; }
+.dapp-dark .dapp-model-state-line[data-status="unloaded"] { color: #cdd9ea; }
+.dapp-dark .dapp-model-state-line[data-status="unknown"] { color: #fbbf24; }
+
 /* Form controls */
 .dapp-dark .form-row label { color: #9fb0c7; }
 .dapp-dark .form-row label .optional { color: #6b7f99; font-weight: 400; }

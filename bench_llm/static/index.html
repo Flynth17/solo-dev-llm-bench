@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solo Dev LLM Bench</title>
     <link rel="stylesheet" href="/static/shared.css?v=1701">
-    <link rel="stylesheet" href="/static/dashboard.css?v=1701">
+    <link rel="stylesheet" href="/static/dashboard.css?v=1800">
 </head>
 <body class="dapp-dark">
     <div class="container">
@@ -34,11 +34,11 @@
             <div class="form-row-inline runtime-fields">
                 <div class="form-row half">
                     <label for="lm-studio-url">LM Studio URL</label>
-                    <input type="text" id="lm-studio-url" placeholder="http://localhost:1234">
+                    <input type="text" id="lm-studio-url" placeholder="http://localhost:1234" autocomplete="off">
                 </div>
                 <div class="form-row half">
                     <label for="hardware-label">Hardware / Machine <span class="optional">(optional)</span></label>
-                    <input type="text" id="hardware-label" placeholder="e.g. RTX 5090 Desktop, Work Laptop">
+                    <input type="text" id="hardware-label" placeholder="e.g. RTX 5090 Desktop, Work Laptop" autocomplete="off">
                 </div>
             </div>
 
@@ -50,6 +50,12 @@
                 </span>
                 <span class="dapp-runtime-item dapp-runtime-state" id="runtime-state">Not checked</span>
                 <span class="dapp-runtime-item dapp-runtime-model" id="runtime-model">&#8212; no model selected &#8212;</span>
+            </div>
+
+            <!-- Model lifecycle state + controls (Act 18; driven by real fetch results) -->
+            <div class="dapp-model-state" id="model-state">
+                <div class="dapp-model-state-line" id="model-state-line">Select a model to inspect its runtime state.</div>
+                <button id="load-unload-btn" class="suite-btn suite-btn-run" type="button" disabled>Load Model</button>
             </div>
         </section>
 
@@ -137,6 +143,6 @@
     </div>
 
     <script src="/static/dashboard-charts.js?v=1701"></script>
-            <script src="/static/dashboard.js?v=1701"></script>
+            <script src="/static/dashboard.js?v=1800"></script>
 </body>
 </html>

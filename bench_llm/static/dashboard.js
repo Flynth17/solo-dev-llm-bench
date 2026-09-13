@@ -9,6 +9,16 @@ var modelSelect = document.getElementById("model-select");
 var refreshModelsBtn = document.getElementById("refresh-models");
 var statusEl = document.getElementById("status");
 
+// --- Model lifecycle (Act 18) -------------------------------------------------
+var modelStateLine = document.getElementById("model-state-line");
+var loadUnloadBtn = document.getElementById("load-unload-btn");
+
+// In-memory snapshot of the last /api/models fetch keyed by model key. Only fields the
+// launcher needs for a concise, honest line are stored; nothing is fabricated.
+var _modelsByKey = {};
+// Remember selection across refreshes so reloads don't drop the user's choice.
+var _prevSelection = "";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -47,19 +57,140 @@ function refreshRuntimeHost() {
 
 if (modelSelect) {
     modelSelect.addEventListener("change", function () {
+        _prevSelection = this.value;
         var modelLabel = document.getElementById("runtime-model");
         if (!modelLabel) { return; }
         if (this.value) {
             var opt = this[this.selectedIndex];
-            modelLabel.textContent = opt ? opt.textContent : "\u2014 no model selected \u2014";
+            modelLabel.textContent = opt ? opt.textContent.split(" (")[0] : "\u2014 no model selected \u2014";
         } else {
             modelLabel.textContent = "\u2014 no model selected \u2014";
         }
+        syncModelControls();
     });
 }
 
 if (lmStudioUrlInput) {
     lmStudioUrlInput.addEventListener("input", refreshRuntimeHost);
+}
+
+/** Format an integer context size with thousands separators; — when absent/invalid. */
+function fmtNum(value) {
+    if (value === null || value === undefined || value === "") return "\u2014";
+    var n = Number(value);
+    if (!isFinite(n)) return "\u2014";
+    var s = Math.round(n).toString();
+    var neg = s.charAt(0) === "-";
+    if (neg) s = s.slice(1);
+    return (neg ? "-" : "") + s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/** Render a quantization value to a short label (mirrors the model-option parsing). */
+function _quantName(raw) {
+    if (!raw) return "";
+    if (typeof raw === "string") return raw;
+    if (typeof raw === "object" && raw !== null) {
+        for (var k of ["name", "display_name", "quant"]) {
+            if (typeof raw[k] === "string" && raw[k]) return raw[k];
+        }
+    }
+    return "";
+}
+
+// Gate Speed + Workflow on a selected AND loaded model. Context stays Planned/off.
+function setSuiteGating(enabled) {
+    if (runSpeedBtn) runSpeedBtn.disabled = !enabled;
+    if (runWorkflowBtn) runWorkflowBtn.disabled = !enabled;
+}
+
+// Re-render the compact state line + Load/Unload button and gate the suites in one pass.
+function syncModelControls() {
+    var sel = modelSelect ? modelSelect.value : "";
+    if (!sel) {
+        if (modelStateLine) {
+            modelStateLine.textContent = "Select a model to inspect its runtime state.";
+            try { modelStateLine.removeAttribute("data-status"); } catch (e) {}
+        }
+        if (loadUnloadBtn) { loadUnloadBtn.disabled = true; loadUnloadBtn.textContent = "Load Model"; }
+        setSuiteGating(false);
+        return;
+    }
+    var m = _modelsByKey[sel];
+    var name = "";
+    if (m && m.name) {
+        name = m.name;
+    } else if (modelSelect) {
+        var opt = modelSelect[modelSelect.selectedIndex];
+        name = opt ? opt.textContent.split(" (")[0] : "";
+    }
+
+    var dotCls = "dapp-dot-bad";   // unknown / unavailable
+    var lineText = "";
+    if (!m) {
+        dotCls = "dapp-dot-warn";
+        lineText = "\u2014 " + name + " \u2014 (state unavailable)";
+    } else if (m.loaded) {
+        dotCls = "dapp-dot-ok";
+        var ctx = m.context_length != null ? m.context_length : m.max_context_length;
+        lineText = "\u25CF Loaded \u00B7 " + (_quantName(m.quantization) || "\u2014") + " \u00B7 Context " + fmtNum(ctx);
+    } else {
+        dotCls = "dapp-dot-idle";
+        lineText = "\u25CB Not loaded \u00B7 " + (_quantName(m.quantization) || "\u2014") + " \u00B7 Max context " + fmtNum(m.max_context_length);
+    }
+    if (modelStateLine) {
+        modelStateLine.innerHTML = '<span class="' + dotCls + '"></span><span>' + lineText + "</span>";
+        var statusAttr = m ? (m.loaded ? "loaded" : "unloaded") : "unknown";
+        try { modelStateLine.setAttribute("data-status", statusAttr); } catch (e) {}
+    }
+    if (loadUnloadBtn) {
+        loadUnloadBtn.disabled = false;
+        loadUnloadBtn.textContent = m && m.loaded ? "Unload Model" : "Load Model";
+    }
+    setSuiteGating(!!(m && m.loaded));
+}
+
+var _lifecycleMutating = false;
+function _setLifecycleButton(disabled, text) {
+    if (loadUnloadBtn) { loadUnloadBtn.disabled = disabled; loadUnloadBtn.textContent = text; }
+}
+
+// Backend is authoritative for every safety rule (benchmark guard, other-loaded model,
+// ambiguity). This only performs the request and then refreshes authoritative state.
+async function doLifecycleAction(kind) {
+    if (_lifecycleMutating) return;
+    var sel = modelSelect ? modelSelect.value : "";
+    if (!sel) { showStatus("Please select a model first.", "error"); return; }
+    _lifecycleMutating = true;
+    var verb = kind === "load" ? "Loading" : "Unloading";
+    _setLifecycleButton(true, verb + "\u2026");
+    clearStatus();
+    try {
+        var resp = await fetch("/api/models/" + kind, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: sel, lm_studio_url: lmStudioUrlInput ? lmStudioUrlInput.value : "" })
+        });
+        var data = await resp.json().catch(function () { return null; });
+        if (!resp.ok) {
+            showStatus((data && data.detail) || ("Model " + kind + " failed."), "error");
+        } else {
+            // Refresh authoritative state from /api/models (also re-gates the suites).
+            await loadModels();
+        }
+    } catch (e) {
+        showStatus("Network error while " + verb.toLowerCase() + "ing the model.", "error");
+    } finally {
+        _lifecycleMutating = false;
+        syncModelControls();
+    }
+}
+
+if (loadUnloadBtn) {
+    loadUnloadBtn.addEventListener("click", function () {
+        var sel = modelSelect ? modelSelect.value : "";
+        if (!sel) { showStatus("Please select a model first.", "error"); return; }
+        doLifecycleAction(loadUnloadBtn.textContent.indexOf("Unload") === 0 ? "unload" : "load");
+    });
 }
 
 /** Format a number to 2 decimal places for display. */
@@ -160,9 +291,21 @@ async function loadModels() {
         var data = await resp.json();
         var models = data.models || [];
 
+        // Preserve the user's selection across refreshes when still valid.
+        var keepSel = _prevSelection || (modelSelect ? modelSelect.value : "");
+
         modelSelect.innerHTML = '<option value="">\u2014 Select a model \u2014</option>';
         for (var i = 0; i < models.length; i++) {
             var m = models[i];
+            // Snapshot the fields the lifecycle panel needs (key, display name, loaded,
+            // configured max context, raw quantization). No fabricated values.
+            _modelsByKey[m.key] = {
+                key: m.key,
+                name: (m.name || "").split(" (")[0],
+                loaded: !!m.loaded,
+                max_context_length: (typeof m.max_context_length === "number") ? m.max_context_length : null,
+                quantization: m.quantization || "",
+            };
             var opt = document.createElement("option");
             opt.value = m.key;
             opt.textContent = m.name || m.key;
@@ -195,6 +338,18 @@ async function loadModels() {
             }
             modelSelect.appendChild(opt);
         }
+
+        // Restore the user's selection if it survived the refresh; otherwise clear it.
+        if (keepSel) {
+            for (var j = 0; j < modelSelect.options.length; j++) {
+                if (modelSelect.options[j].value === keepSel) { modelSelect.value = keepSel; break; }
+            }
+            var stillThere = Array.prototype.some.call(modelSelect.options, function (o) { return o.value === keepSel; });
+            if (!stillThere) _prevSelection = "";
+        }
+
+        // Render the compact model-state line + Load/Unload button and gate the suites.
+        syncModelControls();
 
         if (models.length === 0) {
             setRuntimeState("warn", "No models");
