@@ -34,8 +34,13 @@
     // ---- DOM helpers ---------------------------------------------------
     function by(id) { return document.getElementById(id); }
 
-    function show(el) { if (el) el.classList.remove("hidden"); }
-    function hide(el) { if (el) el.classList.add("hidden"); }
+    // One visibility mechanism for this page: the page-specific .v2-hidden rule.
+    // Helpers also defensively clear any bare `hidden` (shared.css) so shell elements
+    // that still carry it in HTML (sticky/config/failures/error/loading) keep working
+    // without touching markup. hide() normalises to .v2-hidden rather than stacking a
+    // stray bare `hidden`, keeping state consistent across toggles.
+    function show(el) { if (!el) return; el.classList.remove("hidden"); el.classList.remove("v2-hidden"); }
+    function hide(el) { if (!el) return; el.classList.add("v2-hidden"); el.classList.remove("hidden"); }
 
     function fmt(n) {
         if (n === null || n === undefined || n === "") return "N/A";
@@ -188,8 +193,9 @@
         if (fp) {
             shortEl.textContent = shortFp(fp);
             fullEl.textContent = fp; // exact, untruncated value kept for copy + expand
-            show(fullEl);
-            hide(shortEl);
+            // Initial visibility is set exclusively via the page .v2-hidden rule (no bare
+            // `hidden`): adding one to shortEl would hide it through shared.css and break
+            // returning to the Short view. The helper mismatch previously did exactly this.
             // Show short first via explicit toggle state below.
             fullEl.classList.add("v2-hidden");
             shortEl.classList.remove("v2-hidden");
