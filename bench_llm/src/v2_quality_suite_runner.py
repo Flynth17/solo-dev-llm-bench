@@ -133,25 +133,79 @@ DEFAULT_MODEL = os.environ.get("BENCH_V2_MODEL", "ornith-1.5-35b-a3b")
 # The request payload carries NO reasoning / reasoning_effort -- policy = inherit.
 REASONING_POLICY = "inherit"
 
+# --- Fixed output-ceiling policy for the V2 QUALITY benchmark. ---
+#
+# This is an OUTPUT CEILING, not a target generation length. The quality corpus prompts
+# are intentionally small, so we cap generated tokens at a fixed fraction of the
+# effective context window and leave the remaining headroom implicit.
+#
+#   effective_context_capacity = min(model_max_context, loaded_context)      # when known
+#   requested_max_output_tokens = effective_context_capacity * 75 // 100
+#
+# We deliberately do NOT estimate or subtract prompt tokens: no chars/token heuristic,
+# no tokenizer library. Prompt-aware budgeting belongs to the separate long-context
+# benchmark, which uses its own policy later. If neither context value is known we raise
+# -- never fabricate a capacity and never fall back to a hardcoded token count.
+OUTPUT_BUDGET_POLICY: str = "75_percent_context"
+OUTPUT_BUDGET_PERCENT: int = 75
+
+
+def _resolve_effective_capacity(model_max_context: Optional[int],
+                                loaded_context: Optional[int]) -> Optional[int]:
+    """Return ``min(known model_max_context, known loaded_context)``.
+
+    If both are known this is their min; if only one is known it wins as-is; if neither
+    is known there is no ceiling (``None``). This intentionally never fabricates a
+    context size: any ``None``/non-positive input is simply ignored rather than assumed.
+    """
+    known = [c for c in (model_max_context, loaded_context)
+             if isinstance(c, int) and not isinstance(c, bool) and c > 0]
+    return min(known) if known else None
+
+
+def output_ceiling(model_max_context: Optional[int], loaded_context: Optional[int]) -> int:
+    """Return the fixed output ceiling for the V2 QUALITY benchmark.
+
+    ``floor(effective_context_capacity * OUTPUT_BUDGET_PERCENT / 100)`` where effective
+    capacity is :func:`_resolve_effective_capacity`. Raises
+    :class:`ConfigurationMismatchError` when neither context value is known -- we never
+    fabricate a capacity or fall back to a hardcoded token count. Integer arithmetic
+    keeps the policy exact and reproducible.
+    """
+    effective = _resolve_effective_capacity(model_max_context, loaded_context)
+    if effective is None:
+        raise ConfigurationMismatchError(
+            f"cannot apply output budget {OUTPUT_BUDGET_POLICY!r}: neither model_max_context "
+            "nor loaded_context is resolvable (min(model_max_context, loaded_context) unknown)"
+        )
+    return effective * OUTPUT_BUDGET_PERCENT // 100
+
 
 # ---------------------------------------------------------------------------
 # Fixed-denominator accounting (pure; the heart of this layer).
 # ---------------------------------------------------------------------------
 
-def account_checks(suite: str, case_results: list[Any], *, collapse: bool) -> tuple[int, int]:
+def account_checks(suite: str, case_results: list[Any]) -> tuple[int, int]:
     """Return ``(checks_passed, checks_total)`` for *suite* onto its fixed
     canonical denominator.
 
-    * ``checks_total`` is **always** the immutable constant ``CANONICAL_DENOMINATORS[suite]`` --
-      it is never derived from ``case_results`` and can never be ``0`` or inflated.
-    * If *collapse* (the suite's single deliverable failed to extract -> there is
-      nothing gradeable), passed is forced to ``0``; the denominator stays canonical,
-      e.g. ``0/58`` for python -- never ``0/0``.
-    * Otherwise passed is the count of passed check-units emitted by the frozen
+    * ``checks_total`` is **always** the immutable constant
+      ``CANONICAL_DENOMINATORS[suite]`` -- it is never derived from
+      ``case_results``, can never be ``0``, and can never be inflated, whatever
+      happened during the run. There is no ``collapse`` path that discards real
+      results: a partial validation must not zero the whole suite.
+    * ``checks_passed`` is the count of passed check-units emitted by the frozen
       validators, **capped** at the canonical denominator so a validator that emits
       more rows than canonical can never push the score above ``D``. Per-case
       failures (a Java compile failure, one evidence scenario dropped) simply emit
       fewer passing units; the denominator is untouched and cannot exceed ``D``.
+
+    The two behaviours below fall out of these rules without any special-casing:
+
+    * Successful extraction + partial validation preserves actual passed checks --
+      markdown 19/20 stays 19/20, drift 4/6 stays 4/6.
+    * An extraction failure leaves ``case_results`` empty, so the sum is ``0`` and
+      the score is ``0 / D`` (e.g. python 0/58) rather than a meaningless ``0/0``.
 
     This is the single place denominators are decided -- nowhere else in this
     layer may a canonical constant be derived from validator output.
@@ -159,8 +213,6 @@ def account_checks(suite: str, case_results: list[Any], *, collapse: bool) -> tu
     if suite not in CANONICAL_DENOMINATORS:
         raise KeyError(f"unknown suite {suite!r}; cannot assign a canonical denominator")
     total = CANONICAL_DENOMINATORS[suite]
-    if collapse:
-        return 0, total
     passed = sum(getattr(r, "checks_passed", 0) for r in case_results)
     return min(passed, total), total
 
@@ -206,8 +258,20 @@ class SuiteResult:
     loaded_context: Optional[int] = None
     mtp_state: str = "unknown"
     speculative_simple: bool = False
-    max_output_tokens: int = 4096
+    # max_output_tokens carries the fixed output ceiling for the suite. 0 means "unset";
+    # run_suite always sets it to a real computed ceiling.
+    max_output_tokens: int = 0
     temperature: float = 0.0
+
+    # --- Fixed output-ceiling budget telemetry (benchmark configuration, reproducible). ---
+    # effective_context_capacity: min(known model_max_context, loaded_context).
+    effective_context_capacity: Optional[int] = None
+    # output_budget_policy / output_budget_percent describe the ceiling policy used.
+    output_budget_policy: str = OUTPUT_BUDGET_POLICY
+    output_budget_percent: int = OUTPUT_BUDGET_PERCENT
+    # requested_max_output_tokens: the fixed ceiling actually sent to /api/v1/chat.
+    requested_max_output_tokens: Optional[int] = None
+
     requests: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -275,9 +339,19 @@ def _response_text(body: Any) -> tuple[Optional[str], Optional[bool]]:
         rp_stats = _stats_reasoning()
         if rp_stats is not None:
             reasoning_present = rp_stats
-    if not message_parts and isinstance(segments, list):
-        message_parts = [_seg_text(seg) for seg in segments if _seg_text(seg)]
-    answer = "\n".join(message_parts).strip() if message_parts else None
+    # Contract: only type="message" segments form the graded deliverable. A
+    # type="reasoning" segment is telemetry and must NEVER be used to back-fill
+    # missing message content -- doing so fed generated reasoning into extractors
+    # (e.g. a python response that was all reasoner output produced "multiple
+    # python code blocks"). If no final message exists, answer is None and the
+    # caller records a distinct extraction failure; telemetry above is preserved.
+    # Preserve the final-message bytes verbatim: do NOT strip a legitimate terminal
+    # newline (a Markdown document graded by MD-19 must keep its single trailing
+    # newline all the way through to the frozen validator). No suite relies on this
+    # normalisation -- Python/Java extractors trim internally, and Evidence/DRIFT are
+    # exact pass-throughs -- so leading/trailing whitespace is preserved faithfully
+    # for suite-specific extraction rather than collapsed here.
+    answer = "\n".join(message_parts) if message_parts else None
     return answer, reasoning_present
 
 
@@ -352,8 +426,13 @@ async def _invoke(transport: Callable[[httpx.AsyncClient, str, dict], Awaitable[
 
 
 def build_chat_payload(model: str, prompt: str, temperature: float = 0.0,
-                       max_output_tokens: int = 4096) -> dict:
+                       max_output_tokens: int = 0) -> dict:
     """Construct the canonical ``/api/v1/chat`` payload.
+
+    ``max_output_tokens`` is supplied by the caller as the fixed output ceiling for the
+    V2 QUALITY benchmark (see :func:`output_ceiling`). The default of ``0`` is only a
+    sentinel -- run_suite always passes a real computed ceiling, so no hardcoded ceiling
+    can silently survive in the request path.
 
     Deliberately carries **no** ``reasoning`` and **no** ``reasoning_effort`` key --
     policy is ``inherit`` and LM Studio runs with its loaded configuration. Tests
@@ -466,8 +545,12 @@ def _suite_requests(suite: str) -> list[tuple[str, str]]:
     if suite == "java":
         return [(c.id, _java_prompt(c)) for c in JAVA_SPECS]
     if suite == "markdown":
-        prompt, _ = _markdown_prompt()
-        return [("MD", prompt)]
+        # The canonical live prompt MUST carry the frozen broken document so the
+        # model has something to repair. ``_markdown_prompt`` returns
+        # (instruction, broken_document); append the fixture verbatim -- we do not
+        # touch the frozen markdown corpus or validator.
+        instruction, broken_document = _markdown_prompt()
+        return [("MD", f"{instruction}{broken_document}")]
     if suite == "evidence":
         return [(cid, _evidence_prompt(cid)) for cid in evidence_scenarios()]
     if suite == "drift":
@@ -491,7 +574,6 @@ async def run_suite(
     *,
     run_id: Optional[str] = None,
     temperature: float = 0.0,
-    max_output_tokens: int = 4096,
     chat_transport: Optional[Callable[[httpx.AsyncClient, str, dict], Awaitable[Any]]] = None,
     model_config_override: Optional[dict[str, Any]] = None,
 ) -> SuiteResult:
@@ -500,6 +582,10 @@ async def run_suite(
     ``chat_transport`` is injectable so the pipeline can be proven fully offline;
     when omitted the real ``/api/v1/chat`` POST is used. ``model_config_override``
     lets tests supply a config (and hence fingerprint) without touching LM Studio.
+
+    Every request uses the same fixed output ceiling for the V2 QUALITY benchmark,
+    :func:`output_ceiling` -- ``floor(effective_context_capacity * 75 // 100)``. The
+    policy does not estimate or subtract prompt tokens; it is a pure context ceiling.
     """
     if suite not in CANONICAL_DENOMINATORS:
         raise KeyError(f"unknown suite {suite!r}")
@@ -514,7 +600,11 @@ async def run_suite(
         cfg = dict(model_config_override)
     else:
         cfg = await _probe_model_config(lm_studio_url, model)
-    fingerprint = compute_configuration_fingerprint(cfg)
+    # The quality output-budget policy contributes to benchmark identity so that
+    # old 4096 / old 90% / new 75% runs are never treated as equivalent configurations.
+    fp_cfg = dict(cfg)
+    fp_cfg["output_budget_policy"] = OUTPUT_BUDGET_POLICY
+    fingerprint = compute_configuration_fingerprint(fp_cfg)
     classification = classify_run_for_result(cfg)
     loaded_reasoning_mode = cfg.get("reasoning_mode", "not_exposed")
     # LM Studio's registry / loaded-instance API (via resolve_loaded_instance_config)
@@ -524,23 +614,60 @@ async def run_suite(
     # records what was actually resolved.
     mtp_state = "unknown"
 
+    # --- Fixed output-ceiling budget (context ceiling, no prompt accounting). ---
+    # Computed once per suite and shared by every request; raises ConfigurationMismatchError
+    # when neither context value is known -- we never fabricate a capacity or hardcoded count.
+    _mmc = cfg.get("model_max_context")
+    _loaded = cfg.get("loaded_context")
+    effective_capacity = _resolve_effective_capacity(_mmc, _loaded)
+    requested_max_output_tokens = output_ceiling(_mmc, _loaded)
+    # Ceiling actually sent -- recorded on the suite result.
+    suite_requested_budget: Optional[int] = requested_max_output_tokens
+
     requests = _suite_requests(suite)
     all_results: list[Any] = []
     extraction_failures: list[dict[str, Any]] = []
     validation_failures: list[dict[str, Any]] = []
     req_records: list[dict[str, Any]] = []
 
-    # "collapse" => the suite's single deliverable failed to extract (python /
-    # markdown / drift each make exactly one request). Per-request suites (java /
-    # evidence) never collapse; a dropped request only removes that case's units.
-    collapse = suite in ("python", "markdown", "drift")
+    # No per-suite "collapse" flag exists here: account_checks() decides the
+    # denominator canonically. An empty all_results (extraction produced nothing)
+    # naturally scores 0 / D, while a partial validation keeps its passed units.
 
     async with httpx.AsyncClient(timeout=300.0) as client:
         for req_id, prompt in requests:
-            payload = build_chat_payload(model, prompt, temperature, max_output_tokens)
+            # Every request uses the same fixed output ceiling (see output_ceiling).
+            # It was computed once per suite before the loop; raises if capacity is unknown.
+            payload = build_chat_payload(model, prompt, temperature, requested_max_output_tokens)
             body, elapsed = await _invoke(transport, client, chat_url, payload)
             answer, _reasoning_present = _response_text(body)
             telem = _telemetry(body, elapsed)
+
+            # Contract: only type="message" segments may reach extractors/
+            # validators. A response with no final message (e.g. a reasoning-only
+            # turn) yields no graded deliverable -- record a distinct failure and
+            # never forward the reasoning to an extractor. Telemetry is preserved.
+            if answer is None:
+                extraction_failures.append(
+                    {"request_id": req_id, "reason": "no final message content"}
+                )
+                req_records.append({
+                    "request_id": req_id,
+                    "extraction_success": False,
+                    "checks_passed": 0,
+                    "checks_total_validator": 0,
+                    "effective_context_capacity": effective_capacity,
+                    "output_budget_policy": OUTPUT_BUDGET_POLICY,
+                    "output_budget_percent": OUTPUT_BUDGET_PERCENT,
+                    "requested_max_output_tokens": requested_max_output_tokens,
+                    "prompt_tokens": telem["prompt_tokens"],
+                    "completion_tokens": telem["completion_tokens"],
+                    "reasoning_tokens": telem["reasoning_tokens"],
+                    "ttft_seconds": telem["ttft_seconds"],
+                    "prefill_throughput": telem["prefill_throughput_tokens_per_second"],
+                    "decode_throughput": telem["decode_throughput_tokens_per_second"],
+                })
+                continue
 
             extracted: Optional[str] = None
             extraction_ok = False
@@ -559,7 +686,10 @@ async def run_suite(
                 if ext.success:
                     extraction_ok = True
                     extracted = ext.extracted_text
-                    case = next(c for c in JAVA_SPECS if c.id == req_id)
+                    # Resolve the CANONICAL java case (CaseDef with .checks) by stable id.
+                    # The frozen _run_case_test needs a canonical case object, never the
+                    # JavaPromptSpec prompt spec -- JAVA_SPECS is only used to build prompts.
+                    case = next(c for c in _java.JAVA_CASES if c.id == req_id)
                     validator_results = _java_run_case_test(case, ext.extracted_text)
                 else:
                     # Only this case's canonical checks are lost; denominator stays 52.
@@ -614,9 +744,13 @@ async def run_suite(
                 "ttft_seconds": telem["ttft_seconds"],
                 "prefill_throughput": telem["prefill_throughput_tokens_per_second"],
                 "decode_throughput": telem["decode_throughput_tokens_per_second"],
+                "effective_context_capacity": effective_capacity,
+                "output_budget_policy": OUTPUT_BUDGET_POLICY,
+                "output_budget_percent": OUTPUT_BUDGET_PERCENT,
+                "requested_max_output_tokens": requested_max_output_tokens,
             })
 
-    checks_passed, checks_total = account_checks(suite, all_results, collapse=collapse)
+    checks_passed, checks_total = account_checks(suite, all_results)
 
     ttfts = [rr["ttft_seconds"] for rr in req_records if rr["ttft_seconds"] is not None]
     prefills = [rr["prefill_throughput"] for rr in req_records if rr["prefill_throughput"] is not None]
@@ -647,8 +781,13 @@ async def run_suite(
         model_max_context=cfg.get("model_max_context"),
         loaded_context=cfg.get("loaded_context"),
         mtp_state=mtp_state,
-        max_output_tokens=max_output_tokens,
+        max_output_tokens=suite_requested_budget or 0,
         temperature=temperature,
+        # --- Fixed output-ceiling budget telemetry (benchmark config, reproducible) ---
+        effective_context_capacity=effective_capacity,
+        output_budget_policy=OUTPUT_BUDGET_POLICY,
+        output_budget_percent=OUTPUT_BUDGET_PERCENT,
+        requested_max_output_tokens=suite_requested_budget,
         requests=req_records,
     )
 

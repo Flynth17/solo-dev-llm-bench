@@ -488,6 +488,9 @@ _FINGERPRINT_KEYS = (
     "model_key",
     "model_quantization",
     "loaded_context",
+    # Quality output-budget policy: makes old 4096 / old 90% / new 75% runs
+    # distinguishable configurations even when every other setting is identical.
+    "output_budget_policy",
     "reasoning_mode",
     "kv_cache_k_quantization",
     "kv_cache_v_quantization",
