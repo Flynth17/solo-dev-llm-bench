@@ -470,7 +470,81 @@ def test_build_context_pressure_prompt_targets_range_and_content_insensitive():
 
 
 # ---------------------------------------------------------------------------
-# Engine: 14. run_speed_suite persists three completed rows with correct metrics
+# Engine: 16. Act 21 -- deterministic runtime-count calibration (no hardcoded ratio)
+# ---------------------------------------------------------------------------
+
+def test_filler_for_copies_is_deterministic_and_content_neutral():
+    assert vs._filler_for_copies(5) == vs._filler_for_copies(5)
+    assert len(vs._filler_for_copies(3).split(vs._PADDING_SENTENCE)) == 4
+    assert "test-model" not in vs._filler_for_copies(2).lower()
+
+
+def test_build_context_pressure_prompt_with_explicit_filler_uses_that_filler():
+    # Act 21: supplying a precomputed filler bypasses the estimate path entirely.
+    header = "[standard-speed 8192 token context-pressure point]\n"
+    payload = vs.build_context_pressure_prompt(8192, filler="X" * 400)
+    assert payload == header + "X" * 400
+
+
+def test_estimate_filler_copies_matches_default_builder_output():
+    # The estimate path (no calibration) still yields the same content-neutral payload as
+    # before Act 21 -- no network, model-agnostic, deterministic.
+    payload = vs.build_context_pressure_prompt(8192)
+    assert payload == (
+        "[standard-speed 8192 token context-pressure point]\n"
+        + vs._filler_for_copies(vs._estimate_filler_copies(8192))
+    )
+
+
+def _make_runtime_fake(chars_per_token):
+    # A chat fake whose tokenizer is denser than the //4 estimate heuristic, so a search that
+    # sizes by this runtime count can NOT be coincidentally correct via the //4 ratio.
+    async def fake_run_benchmark(**kwargs):
+        prompt = kwargs["prompt"]
+        tokens = max(1, len(prompt) // chars_per_token)
+        return {"runs": [{"input_tokens": tokens, "cold_or_warm": "cold",
+                         "tokens_per_second": 200.0, "ttft_seconds": 0.9,
+                         "output_tokens": kwargs.get("max_tokens", vs.SPEED_CALIBRATION_OUTPUT_TOKENS)}]}
+    return fake_run_benchmark
+
+
+def test_calibration_converges_within_tolerance_using_runtime_counts(monkeypatch):
+    # If the algorithm relied on a hardcoded //4 char/token ratio, sizing against this //6
+    # runtime tokenizer would undershoot badly. Landing near every canonical target proves
+    # it sizes from the AUTHORITATIVE runtime input-token count, not a heuristic.
+    monkeypatch.setattr(vs, "run_benchmark", _make_runtime_fake(6))
+
+    async def probe(point):
+        return await vs._speed_calibrated_filler_copies("rid-x", "model", URL, point)
+
+    for point in (8192, 16384, 32768):
+        n = asyncio.run(probe(point))
+        canon = vs.build_context_pressure_prompt(point, filler=vs._filler_for_copies(n))
+        actual_tokens = len(canon) // 6  # same runtime tokenizer the fake models
+        err_pct = 100.0 * (actual_tokens - point) / point
+        assert abs(err_pct) <= vs.SPEED_TARGET_TOLERANCE * 100 + 0.5, f"{point}: {err_pct:+.2f}%"
+
+
+def test_calibration_is_deterministic_for_same_inputs(monkeypatch):
+    monkeypatch.setattr(vs, "run_benchmark", _make_runtime_fake(6))
+
+    async def run_one():
+        return await vs._speed_calibrated_filler_copies("rid-x", "model", URL, 16384)
+
+    assert asyncio.run(run_one()) == asyncio.run(run_one())
+
+
+def test_calibration_falls_back_to_estimate_on_repeated_failure(monkeypatch):
+    # If every probe fails (network/exception), calibration aborts cleanly and falls back to
+    # the deterministic estimate-based copy count -- never raises, never loops unbounded.
+    async def failing_run_benchmark(**kwargs):
+        raise RuntimeError("simulated LM Studio unreachable")
+    monkeypatch.setattr(vs, "run_benchmark", failing_run_benchmark)
+
+    n = asyncio.run(
+        vs._speed_calibrated_filler_copies("rid-x", "model", URL, 8192)
+    )
+    assert n == vs._estimate_filler_copies(8192)   # graceful estimate fallback
 # ---------------------------------------------------------------------------
 
 def test_run_speed_persists_three_completed_rows_with_metrics(monkeypatch):
@@ -512,10 +586,13 @@ def test_run_speed_persists_three_completed_rows_with_metrics(monkeypatch):
         assert row["input_tokens"] == 9001
         # Prefill is derived from the persisted input tokens + TTFT.
         assert row["prefill_tokens_per_second"] == pytest.approx(round(9001 / 0.13, 1), rel=1e-6)
-        # Act 20: corrected runs persist a metric version so legacy cached-TTFT prefill on
-        # older runs is flagged without rewriting history.
+        # Act 20/21: corrected runs persist a metric version so legacy cached-TTFT prefill on
+        # older runs is flagged without rewriting history. Act 21 bumped it from 2 (corrected
+        # full-prefill semantics) to 3 because calibration changes the ACTUAL input size that
+        # each point reports while keeping the same 8K/16K/32K label -- the marker lets consumers
+        # tell the sizing era apart. Track the module constant so it evolves with the code.
         assert row["speed_metric_version"] == vs.SPEED_METRIC_VERSION
-        assert row["speed_metric_version"] == 2
+        assert vs.SPEED_METRIC_VERSION == 3
 
 
 # ---------------------------------------------------------------------------

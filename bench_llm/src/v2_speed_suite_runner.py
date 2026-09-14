@@ -80,8 +80,39 @@ STANDARD_OUTPUT_TOKENS: int = 512
 # Speed metric measurement version persisted with each corrected aggregate row (additive,
 # backward-safe). Historical rows carry no value (legacy semantics); every run produced by
 # this runner persists SPEED_METRIC_VERSION so the read model can distinguish corrected
-# full-prefill measurements from legacy cached-TTFT ones. 1 = legacy; 2 = corrected.
-SPEED_METRIC_VERSION: int = 2
+# full-prefill measurements from legacy cached-TTFT ones.
+#   1 = legacy        : pre-cache-correction cached-TTFT prefill.
+#   2 = corrected      : Act 20 fixed prefill semantics (cold full-prefill TTFT).
+#   3 = calibrated     : Act 21 sizes each deterministic payload so its runtime/tokenizer-
+#                        reported input_tokens lands near the canonical target (8K/16K/32K)
+#                        rather than undershooting to ~68% of nominal.
+# A new version is justified because pre- and post-calibration runs both claim 8K/16K/32K
+# labels while their ACTUAL input sizes differ materially (~5587 vs ~8192 at 8K); the marker
+# lets consumers tell the sizing era apart without re-deriving it. 2 and 3 are both non-
+# legacy (neither is a cached-TTFT artifact) per the read model's exemption rule.
+SPEED_METRIC_VERSION: int = 3
+
+# Target-tolerance band (fraction of nominal) for Standard Speed calibration. Act 21 sizes
+# each deterministic payload so its runtime/tokenizer-reported input_tokens lands within this
+# band of the canonical target; exact equality is not required because chat wrappers/templates
+# add a few tokens and tokenization differs across model families.
+SPEED_TARGET_TOLERANCE: float = 0.02
+
+# Upper bound on deterministic calibration passes per point when sizing filler from the
+# authoritative runtime input-token count. Bounded (never an unbounded search): convergence
+# typically takes 1-3 POSTs; this cap guarantees termination even under a noisy metric.
+SPEED_MAX_CALIBRATION_ITERATIONS: int = 6
+
+# Generation budget for calibration-only chat calls. Kept minimal so token-size discovery
+# does not spend meaningful decode/KV work; the authoritative full-prefill sample (iteration
+# 1, cache-busted prefix) is never among these calls -- see _speed_calibrated_filler_copies.
+SPEED_CALIBRATION_OUTPUT_TOKENS: int = 4
+
+# Distinctive prompt marker for calibration chat calls. It shares only a ~1-character common
+# prefix with both the authoritative full-prefill buster ("[speed-run:") and the warm payload
+# header ("[standard-speed"), so LM Studio's longest-common-prefix KV-cache reuse cannot let a
+# warmed calibration slot mask the genuine cold full-prefill TTFT.
+_SPEED_CALIBRATION_MARKER = "[calib-prefill-check:{run_id}:point:{target}]\n"
 
 # Status labels for an attempted point.
 POINT_COMPLETED = "completed"
@@ -100,23 +131,120 @@ _PADDING_SENTENCE = (
 )
 
 
-def build_context_pressure_prompt(target_tokens: int) -> str:
-    """Return a deterministic, content-insensitive payload targeting *target_tokens*.
+def _filler_for_copies(n: int) -> str:
+    """Return *n* concatenated copies of the fixed padding sentence (content-neutral)."""
+    return "".join([_PADDING_SENTENCE] * n) if n > 0 else ""
 
-    The filler is built by appending whole copies of a fixed sentence until an
-    internal token estimate reaches (or just passes) the target. No randomness, no
-    network calls, no quality challenge -- pure reproducible input pressure. Actual
-    loaded prompt tokens are authoritative from the runtime and recorded separately, so
-    a small estimation tolerance is expected and never misreported as exact.
+
+def _estimate_filler_copies(target_tokens: int) -> int:
+    """Deterministic copy count for *target_tokens* via the lightweight char/token estimate.
+
+    PURE heuristic used ONLY as a bounded starting point / graceful fallback. It is never
+    authoritative sizing (that comes from the runtime input-token count in Act 21), and it is
+    intentionally model-agnostic so the builder stays usable without any network call and unit
+    tests remain deterministic.
     """
     header = f"[standard-speed {target_tokens} token context-pressure point]\n"
-    blocks: list[str] = []
     est = estimate_tokens(header)
-    block_estimate = estimate_tokens(_PADDING_SENTENCE)
+    block_estimate = estimate_tokens(_PADDING_SENTENCE) or 1
+    n = 0
     while est < target_tokens:
-        blocks.append(_PADDING_SENTENCE)
+        n += 1
         est += block_estimate
-    return header + "".join(blocks)
+    return max(1, n)
+
+
+def build_context_pressure_prompt(target_tokens: int, filler: Optional[str] = None) -> str:
+    """Return a deterministic, content-insensitive payload targeting *target_tokens*.
+
+    When *filler* is supplied (Act 21 calibration), the header is combined with exactly that
+    precomputed filler so callers can size input from the authoritative runtime token count.
+    Otherwise the filler is estimated deterministically (no network) -- a bounded tolerance is
+    expected and never misreported as exact; actual loaded prompt tokens are authoritative and
+    recorded separately. Content stays neutral: no model-specific identifiers, no evaluatable
+    text, no randomness, so the payload is safe for every model.
+    """
+    header = f"[standard-speed {target_tokens} token context-pressure point]\n"
+    if filler is not None:
+        return header + filler
+    return header + _filler_for_copies(_estimate_filler_copies(target_tokens))
+
+
+async def _count_input_tokens(
+    run_id: str,
+    model: str,
+    base_url: str,
+    prompt: str,
+) -> Optional[int]:
+    """Return the authoritative runtime input-token count for *prompt* (or ``None``).
+
+    A single minimal chat call to the SAME endpoint that measures Speed reuses its exact
+    tokenization/reporting, so the returned ``input_tokens`` is the same value ultimately
+    recorded on the run. Generation budget is tiny and the probe carries a distinct cache-
+    marker (see ``_speed_calibrated_filler_copies``) so it can never warm a slot reused by the
+    authoritative cold full-prefill sample -- calibration must not undo Act 20.
+    """
+    try:
+        bench = await run_benchmark(
+            lm_studio_url=base_url,
+            model=model,
+            prompt=prompt,
+            full_prefill_prompt=None,
+            iterations=1,
+            max_tokens=SPEED_CALIBRATION_OUTPUT_TOKENS,
+            temperature=0.0,
+            hardware_label="",
+            execution_environment="Local",
+            connection_type="",
+            prompt_name=f"[calib {run_id}]",
+        )
+    except Exception:  # pragma: no cover - defensive; calibration must never abort the suite
+        return None
+    runs = bench.get("runs") if isinstance(bench, dict) else None
+    if not runs:
+        return None
+    first = runs[0]
+    count = first.get("input_tokens", 0) if isinstance(first, dict) else 0
+    return int(count) if isinstance(count, (int, float)) and count > 0 else None
+
+
+async def _speed_calibrated_filler_copies(
+    run_id: str,
+    model: str,
+    base_url: str,
+    point: int,
+) -> int:
+    """Pick the filler-copy count whose payload lands within tolerance of *point* tokens.
+
+    Bounded deterministic search over the AUTHORITATIVE runtime input-token count (no hardcoded
+    per-model char/token ratio -- tokenization is measured against THIS model at runtime). Each
+    probe shares only a ~1-character common prefix with the cold full-prefill buster and the
+    warm header, so warmed calibration slots cannot mask the genuine cold full-prefill TTFT.
+    Convergence uses a Newton-like step on the measured tokens-per-copy slope. Falls back to
+    the estimate-based copy count on any error or if no convergence is reached within the cap.
+    """
+    target_lo = point * (1.0 - SPEED_TARGET_TOLERANCE)
+    target_hi = point * (1.0 + SPEED_TARGET_TOLERANCE)
+    n = _estimate_filler_copies(point)  # bounded deterministic starting guess
+
+    for _ in range(SPEED_MAX_CALIBRATION_ITERATIONS):
+        prompt = (
+            _SPEED_CALIBRATION_MARKER.format(run_id=run_id, target=point)
+            + build_context_pressure_prompt(point, filler=_filler_for_copies(n))
+        )
+        actual = await _count_input_tokens(run_id, model, base_url, prompt)
+        if actual is None:  # probe failed (network/exception) -- retry next iteration
+            continue
+        if target_lo <= actual <= target_hi:
+            return n
+        slope = (actual / n) if (n > 0) else (estimate_tokens(_PADDING_SENTENCE) or 1)
+        delta = int(round((point - actual) / slope))
+        candidate = n + delta
+        if abs(candidate - n) <= 1:  # near convergence -- step by 1 to avoid overshooting
+            candidate = n + (1 if point > actual else -1)
+        n = max(1, candidate)
+
+    return n
 
 
 def _speed_cache_buster(run_id: str, target_tokens: int) -> str:
@@ -385,10 +513,21 @@ async def run_speed_suite(
             points.append(SpeedPointResult(label, point, POINT_UNSUPPORTED))
             continue
 
+        # Act 21: size the deterministic payload from the authoritative runtime token count so
+        # actual input_tokens lands near the canonical target (8K/16K/32K) instead of ~68% of
+        # it. The warmed calibration probe shares only a ~1-char prefix with the cold full-
+        # prefill buster, so this cannot mask the genuine full-prefill TTFT (Act 20 preserved).
+        try:
+            filler = _filler_for_copies(
+                await _speed_calibrated_filler_copies(rid, clean_model, base_url, point)
+            )
+        except Exception as exc:  # pragma: no cover - defensive; estimate path is always safe
+            print(f"warning: speed calibration failed for {label}: {exc}", file=sys.stderr)
+            filler = _filler_for_copies(_estimate_filler_copies(point))
         # Iteration 1 is the authoritative full-prefill sample; a deterministic, per-run,
         # per-point prefix at the START of its prompt defeats LM Studio's longest-common-
         # prefix KV-cache reuse so its TTFT is genuine full-prefill (not a cached hit).
-        plain_payload = build_context_pressure_prompt(point)
+        plain_payload = build_context_pressure_prompt(point, filler=filler)
         full_prefill_payload = _speed_cache_buster(rid, point) + plain_payload
         try:
             bench = await run_benchmark(

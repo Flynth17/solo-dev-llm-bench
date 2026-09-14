@@ -216,3 +216,53 @@ class TestMetricVersioning:
         rows = _run_rows(1)
         result = load_speed_run_by_id("speed-xyz", rows)
         assert result["legacy_prefill_warning"] is True
+
+    def test_calibration_run_version_three_is_not_legacy(self):
+        # Act 21: version 3 (calibrated targets) is non-legacy -- it is a corrected full-
+        # prefill measurement, not a cached-TTFT artifact, so no legacy warning fires.
+        rows = _run_rows(3)
+        result = load_speed_run_by_id("speed-xyz", rows)
+        assert result["speed_metric_version"] == 3
+        assert result["legacy_prefill_warning"] is False
+        assert all(not p["legacy_prefill_warning"] for p in result["points"])
+
+    def test_target_error_fields_are_derived_and_sign_preserved(self):
+        # Act 21: target-error evidence is derived from persisted columns (no schema churn);
+        # the signed token error and percent are recomputed here, not stored.
+        rows = [
+            _row(8192, 8150, 55, 0.692220, tps=40.0, version=3),   # slightly under target
+            _row(16384, 16410, 53, 0.69, tps=185.0, version=3),    # slightly over target
+            _row(32768, 32740, 63, 0.71, tps=184.0, version=3),    # slightly under target
+        ]
+        result = load_speed_run_by_id("speed-xyz", rows)
+        points = {p["target_context_tokens"]: p for p in result["points"]}
+        assert points[8192]["target_error_tokens"] == 8150 - 8192     # signed (-42)
+        assert points[16384]["target_error_tokens"] == 16410 - 16384  # signed (+26)
+        for p in result["points"]:
+            expected = round(
+                100.0 * (p["actual_prompt_tokens"] - p["target_context_tokens"])
+                / p["target_context_tokens"], 2
+            )
+            assert p["target_error_percent"] == expected
+        # Run-level summary surfaces worst-case absolute error and mean signed error tokens
+        # (percent is rounded to 2 dp by the read model).
+        assert result["max_abs_target_error_percent"] == pytest.approx(round(42 / 8192 * 100, 2), rel=1e-6)
+        assert result["mean_target_error_tokens"] == pytest.approx(
+            round(((-42) + (16410 - 16384) + (-28)) / 3, 1), rel=1e-6
+        )
+
+    def test_target_error_fields_are_none_when_input_missing(self):
+        # Act 21: a missing/unsupported point (no input tokens) yields None for target-error
+        # evidence -- the read model must not raise on the NULL-safe derivation.
+        rows = [
+            dict(run_id="speed-xyz", model_key="m", target_context_tokens=8192,
+                 input_tokens=None, output_tokens=55, ttft_seconds=0.69,
+                 prefill_tokens_per_second=None, tokens_per_second=40.0, wall_time_seconds=8.0,
+                 cold_or_warm="warm", speed_point_status="unsupported",
+                 speed_metric_version=3),
+            _row(16384, 16410, 53, 0.69, tps=185.0, version=3),
+        ]
+        result = load_speed_run_by_id("speed-xyz", rows)
+        by_t = {p["target_context_tokens"]: p for p in result["points"]}
+        assert by_t[8192]["target_error_tokens"] is None
+        assert by_t[8192]["target_error_percent"] is None

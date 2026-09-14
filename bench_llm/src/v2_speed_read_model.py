@@ -224,6 +224,15 @@ def _project_speed_point(row: dict) -> dict[str, Any]:
     status_raw = str((row.get("speed_point_status") or "").strip().lower()) if row.get("speed_point_status") else ""
     state_raw = str((row.get("cold_or_warm") or "").strip().lower()) if row.get("cold_or_warm") else ""
 
+    # Version >= 2 (corrected prefill, Act 20) and version >= 3 (calibrated targets, Act 21)
+    # are both non-legacy: neither is a cached-TTFT artifact. Legacy (missing/``None`` or 1)
+    # rows still carry the warning; never fabricate a version historical rows never had.
+    _metric_version = _norm_int(row.get("speed_metric_version"))
+    # Act 21 derived error fields are NULL-safe: a missing/unsupported point has no input
+    # tokens, so target-error evidence is None there (never an arithmetic TypeError).
+    _actual = _norm_int(row.get("input_tokens"))
+    _target = _norm_int(row.get("target_context_tokens"))
+
     return {
         "label": STANDARD_SPEED_CANONICAL_POINTS.get(
             _norm_int(row.get("target_context_tokens")), "?"
@@ -238,11 +247,21 @@ def _project_speed_point(row: dict) -> dict[str, Any]:
         # state/status kept verbatim so the UI renders them honestly.
         "state": state_raw or None,
         "status": status_raw or "completed",
-        # Metric version + legacy warning (Act 20). A missing/legacy row carries no metric
-        # version; only corrected runs (speed_metric_version == 2) are exempt from the
-        # cached-TTFT prefill warning. Never fabricate a version historical rows never had.
-        "speed_metric_version": _norm_int(row.get("speed_metric_version")),
-        "legacy_prefill_warning": _norm_int(row.get("speed_metric_version")) not in (2,),
+        # Metric version + legacy warning (Act 20/21). A missing/legacy row carries no metric
+        # version; runs at or above the corrected-metric baseline (>= 2) are exempt from the
+        # cached-TTFT prefill warning -- neither version 2 (corrected prefill) nor version 3
+        # (calibrated targets) is a cached-TTFT artifact. Never fabricate a version historical
+        # rows never had.
+        "speed_metric_version": _metric_version,
+        "legacy_prefill_warning": _metric_version is None or _metric_version < 2,
+        # Act 21: target-error evidence, derived from already-persisted columns (no schema
+        # churn). Lets the result page show that calibration landed near the canonical target.
+        "target_error_tokens": (_actual - _target) if _actual is not None else None,
+        "target_error_percent": (
+            round(100.0 * (_actual - _target) / _target, 2)
+            if _actual is not None and _target
+            else None
+        ),
     }
 
 
@@ -348,6 +367,22 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
         bool(p.get("legacy_prefill_warning")) for p in points
     )
 
+    # Act 21: run-level calibration summary derived from per-point error fields (no schema
+    # churn). Worst-case absolute target error (% of target) and mean signed error tokens
+    # across points that carry input data -- evidence the x-axis was calibrated on.
+    _err_pcts = [
+        abs(p.get("target_error_percent") or 0.0)
+        for p in points
+        if p.get("target_error_percent") is not None
+    ]
+    _abs_err_pct = max(_err_pcts) if _err_pcts else None
+    _toks = [
+        p.get("target_error_tokens")
+        for p in points
+        if p.get("target_error_tokens") is not None
+    ]
+    _mean_err_tokens = round(sum(_toks) / len(_toks), 1) if _toks else None
+
     return {
         "run_id": rid,
         "model_identifier": model_identifier,
@@ -359,4 +394,6 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
             None,
         ),
         "legacy_prefill_warning": legacy_prefill_warning,
+        "max_abs_target_error_percent": _abs_err_pct,
+        "mean_target_error_tokens": _mean_err_tokens,
     }
