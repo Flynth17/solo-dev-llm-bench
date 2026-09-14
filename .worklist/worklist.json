@@ -1,6 +1,6 @@
 {
 	"version": 1,
-	"revision": 17,
+	"revision": 18,
 	"goals": [
 		{
 			"id": "standard-speed-benchmark-family",
@@ -56,12 +56,13 @@
 		{
 			"id": "retire-legacy-results-product",
 			"title": "Retire legacy Results product",
-			"description": "Retire the legacy Results product (Maintenance M2) -- Status: PLANNED. Simplify /results into current history view: /results = Standard Speed history; /speed/results/{run_id} = single Standard Speed run; /v2/results/{run_id} = single Workflow run. Retirement candidates: legacy task-history UI, generic/custom benchmark rows, generic result charts, old comparison views, obsolete filtering/navigation, APIs only retired surfaces use, obsolete result tests. Historical runtime data may stay archived. Do not remove active result-history until its dependencies are separately retired (see M1).",
+			"description": "Retire the legacy Results product (Maintenance M2) -- DONE 2026-09-14 (implementation commit `53a4583`; 535/535 tests passed; `/results` simplified to Standard Speed history only; historical runtime data preserved). Simplify /results into current history view: /results = Standard Speed history; /speed/results/{run_id} = single Standard Speed run; /v2/results/{run_id} = single Workflow run. Retirement candidates: legacy task-history UI, generic/custom benchmark rows, generic result charts, old comparison views, obsolete filtering/navigation, APIs only retired surfaces use, obsolete result tests. Historical runtime data may stay archived. Do not remove active result-history until its dependencies are separately retired (see M1).",
 			"group": "Maintenance",
 			"dependsOn": ["retire-legacy-prompt-and-task-product"],
-			"status": "open",
+			"status": "done",
 			"createdAt": "2026-09-14T09:39:59.442Z",
-			"updatedAt": "2026-09-14T09:39:59.442Z"
+			"updatedAt": "2026-09-14T18:05:29.991Z",
+			"completedAt": "2026-09-14T18:05:29.991Z"
 		},
 		{
 			"id": "remove-production-dead-leftovers",

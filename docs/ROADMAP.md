@@ -195,7 +195,7 @@ Do not remove active result-history functionality until its dependencies are sep
 
 ## M2 — Retire Legacy Results Product
 
-**Status: PLANNED**
+**Status: DONE** -- retired in commit `53a4583` (implementation evidence); 535/535 tests passed; `/results` simplified to Standard Speed history only; historical runtime data preserved.
 
 Simplify `/results` into the current product's history view.
 
