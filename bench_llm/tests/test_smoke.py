@@ -221,25 +221,6 @@ def test_fastapi_results_store_exists():
 
 
 # ====================================================================
-# Test 5: Prompts file is valid
-# ====================================================================
-
-def test_prompts_file_valid():
-    """prompts.json can be loaded and has expected structure."""
-    prompts_path = _PROJECT_ROOT / "data" / "prompts.json"
-    assert prompts_path.exists(), "prompts.json should exist"
-
-    data = json.loads(prompts_path.read_text(encoding="utf-8"))
-    assert "prompts" in data
-    assert isinstance(data["prompts"], list)
-
-    if len(data["prompts"]) > 0:
-        first = data["prompts"][0]
-        assert "name" in first
-        assert "prompt" in first
-
-
-# ====================================================================
 # Test 7: DOM lifecycle regression — charts-container must not be destroyed
 # ====================================================================
 

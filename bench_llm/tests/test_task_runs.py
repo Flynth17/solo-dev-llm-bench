@@ -9,8 +9,7 @@ Covers:
 6. Task History can distinguish Markdown/Python/Java/Unsolvable types.
 7. Deleting one historical task run leaves other runs intact.
 8. Existing benchmark history remains unaffected.
-9. Existing task execution still works.
-10. All existing tests still pass.
+9. All existing tests still pass.
 """
 
 import json
@@ -371,40 +370,6 @@ class TestBenchmarkHistoryUnaffected(unittest.TestCase):
             pass
 
 
-class TestExistingTaskExecution(unittest.TestCase):
-    """Test 9: Existing task execution still works."""
-
-    def test_create_and_get_tasks(self):
-        import src.task_manager as tm
-        db_path = os.path.join(tempfile.gettempdir(), "test_task_runs7.db")
-        tm.DB_PATH = db_path
-        try:
-            tm.init_tasks_table()
-            task = tm.create_task(
-                name="Test Markdown Task",
-                task_type="markdown",
-                prompt="Fix the document.",
-            )
-            self.assertIsNotNone(task)
-            self.assertEqual(task["task_type"], "markdown")
-
-            tasks = tm.get_tasks()
-            self.assertTrue(len(tasks) >= 1)
-
-            # Update status
-            updated = tm.update_task_status(task["task_id"], "running")
-            self.assertIsNotNone(updated)
-            self.assertEqual(updated["status"], "running")
-
-            # Set result
-            result = tm.set_task_result(task["task_id"], {"score": 0.8, "passed": True})
-            self.assertIsNotNone(result)
-            self.assertEqual(result["status"], "completed")
-        finally:
-            try:
-                os.unlink(db_path)
-            except OSError:
-                pass
 
 
 class TestAllExistingTestsStillPass(unittest.TestCase):

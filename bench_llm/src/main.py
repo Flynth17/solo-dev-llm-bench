@@ -15,7 +15,6 @@ from src import task_manager
 from src import app_state
 from src.routes import config as config_routes
 from src.routes import models as models_routes
-from src.routes import prompts as prompts_routes
 from src.routes import results as results_routes
 from src.routes import tasks as tasks_routes
 from src.routes import v2_results as v2_results_routes
@@ -42,9 +41,6 @@ app.include_router(config_routes.router)
 
 # Register models route
 app.include_router(models_routes.router)
-
-# Register prompts route
-app.include_router(prompts_routes.router)
 
 # Register results route
 app.include_router(results_routes.router)
