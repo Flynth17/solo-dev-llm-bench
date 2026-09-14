@@ -26,11 +26,9 @@ from src.results import (
     BENCHMARK_REASONING_MODE,
     CSV_HEADERS,
     ResultsStore,
-    build_readable_config_label,
     classify_run_for_result,
     compute_configuration_fingerprint,
     normalize_loaded_instance_config,
-    readable_config_details,
 )
 
 # --- temp-store isolation helper -------------------------------------------
@@ -288,27 +286,6 @@ class TestClassification:
             rows = store.get_all()
             assert len(rows) == 1                       # persisted normally
             assert rows[0]["result_classification"] == "incomplete"
-
-
-# ---------------------------------------------------------------------------
-# Human-readable label (derived helper only; fingerprint stays canonical id)
-# ---------------------------------------------------------------------------
-class TestConfigLabel:
-    def test_label_example(self):
-        run = _base_run(model_display_name="Qwen 3.8 27B", model_quantization="Q5_K_M")
-        assert build_readable_config_label(run) == "Qwen 3.8 27B Q5_K_M — MTP OFF"
-
-    def test_label_reflects_mtp_state(self):
-        mtp_on = _base_run(speculative_draft_mtp=True, speculative_draft_model="d",
-                           model_display_name="M", model_quantization="Q4")
-        assert "MTP ON" in build_readable_config_label(mtp_on)
-
-    def test_details_available_separately(self):
-        run = _base_run(loaded_context=262144, model_max_context=262144)
-        details = readable_config_details(run)
-        assert "CTX 262144" in details["context"]
-        assert details["k_cache"] == "Q8_0"
-        assert details["reasoning"] == "OFF"
 
 
 # ---------------------------------------------------------------------------

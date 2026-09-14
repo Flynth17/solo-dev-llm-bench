@@ -463,52 +463,6 @@ def classify_run_for_result(run: dict) -> str:
 
     return "canonical"
 
-def build_readable_config_label(run: dict) -> str:
-    """Concise, human-readable configuration label (derived helper only).
-
-    Example: ``"Qwen 3.8 27B Q5_K_M \u2014 MTP ON"``. Full details are available
-    separately via :func:`readable_config_details`; this never encodes every obscure
-    setting into one giant string. The fingerprint remains the canonical identity —
-    this label is display-only.
-    """
-    if not isinstance(run, dict):
-        return ""
-
-    name = run.get("model_display_name") or run.get("model_key") or ""
-    quant = run.get("model_quantization") or ""
-    head = f"{name} {quant}".strip() if (name and quant) else (name or "")
-
-    mtp_on = bool(run.get("speculative_draft_mtp"))
-    return head + " \u2014 MTP ON" if mtp_on else head + " \u2014 MTP OFF"
-
-def readable_config_details(run: dict) -> dict:
-    """Structured, detailed view of a run's configuration (display helper only)."""
-    if not isinstance(run, dict):
-        return {}
-
-    loaded = run.get("loaded_context")
-    max_ctx = run.get("model_max_context")
-    mtp_on = bool(run.get("speculative_draft_mtp"))
-    ctx_str = (
-        f"CTX {int(loaded)}{f' / MAX {int(max_ctx)}' if _known(str(max_ctx)) else ''}"
-        if isinstance(loaded, int) and loaded > 0
-        else "CTX unknown"
-    )
-    mtp_str = (
-        f"{int(run['speculative_draft_max_tokens'])}/"
-        f"{int(run['speculative_draft_min_tokens'])}/"
-        f"{run.get('speculative_draft_min_continue_probability', 0)}"
-        if mtp_on
-        else "OFF"
-    )
-    return {
-        "context": ctx_str,
-        "k_cache": run.get("kv_cache_k_quantization") or "unknown",
-        "v_cache": run.get("kv_cache_v_quantization") or "unknown",
-        "reasoning": (run.get("reasoning_mode") or "unknown").upper(),
-        "mtp": mtp_str,
-    }
-
 class ResultsStore:
     """Manages benchmark results in memory and on disk.
 
@@ -803,34 +757,3 @@ class ResultsStore:
         """Clear all results from memory, SQLite, and CSV."""
         self.runs = []
         self.save()
-
-    # ------------------------------------------------------------------
-    # Delete
-    # ------------------------------------------------------------------
-
-    def delete_run(self, run_id: str) -> bool:
-        """Delete all rows for a given run_id from SQLite and memory.
-
-        Uses a transaction for safety.  Returns True if any rows were
-        removed, False if the run_id was not found.
-        """
-        conn = self._get_connection()
-        try:
-            # Count rows before deletion (for return value)
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM runs WHERE run_id = ?",
-                (run_id,),
-            )
-            count = cursor.fetchone()[0]
-            if count == 0:
-                return False
-
-            # Delete rows in a transaction
-            conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
-            conn.commit()
-        finally:
-            conn.close()
-
-        # Remove from in-memory list
-        self.runs = [r for r in self.runs if r.get("run_id") != run_id]
-        return True

@@ -1,8 +1,8 @@
 """Granular V2-quality-corpus persistence (Act 11C-4B).
 
-Stores *one completed* V2 quality result set — the structured dict returned by
-:func:`src.benchmark_v2_quality.run_v2_quality_corpus` — into SQLite WITHOUT
-touching any legacy schema, scoring or UI.
+Stores *one completed* V2 quality result set -- the structured V2
+quality-corpus result dict (suites + per-case granular evidence) -- into SQLite
+WITHOUT touching any legacy schema, scoring or UI.
 
 Design constraints honoured by this module:
 
@@ -10,7 +10,7 @@ Design constraints honoured by this module:
   run-level aggregate for one V2 result set) and ``v2_quality_results`` (one
   granular row per ``CaseResult``, linked to its parent by a stable
   ``run_id``). It never alters, renames or removes any column in the legacy
-  ``runs`` / ``task_runs`` tables, never reads them, and never touches CSV.
+  ``runs`` table, never reads it, and never touches CSV.
 
 * **Keeps three concepts distinct.** The run row records
   ``logical_cases_attempted`` (53), ``result_entries`` (141) and
@@ -18,15 +18,15 @@ Design constraints honoured by this module:
   its own per-case ``checks_passed`` / ``checks_total`` so the aggregate can be
   recomputed by summation. These are *not* conflated with one another.
 
-* **Stable ordering for repeated case_ids.** Python and Java suites reuse the
+* **Stable ordering for repeated case_ids.** The Python suite reuses the
   same ``case_id`` across multiple iterations, so every child row carries a
   monotonic ``seq`` index that preserves the original order on read-back.
 
 * **Idempotent schema creation / migration.** Follows the existing additive
-  pattern in :mod:`src.results` and :mod:`src.task_manager`: tables are created
-  with ``CREATE TABLE IF NOT EXISTS`` and any missing columns gain an
-  ``ALTER TABLE ... ADD COLUMN`` guarded by a ``PRAGMA table_info`` presence
-  check. Running it repeatedly against the same database file is safe.
+  pattern in :mod:`src.results`: tables are created with ``CREATE TABLE IF NOT
+  EXISTS`` and any missing columns gain an ``ALTER TABLE ... ADD COLUMN``
+  guarded by a ``PRAGMA table_info`` presence check. Running it repeatedly
+  against the same database file is safe.
 
 * **No live execution wiring.** This module only moves structured data in and
   out of SQLite; it performs no LM Studio / subprocess calls and imports none of
@@ -104,10 +104,10 @@ def _to_int_bool(value: Any) -> Optional[int]:
 def _init_schema(conn: sqlite3.Connection) -> None:
     """Idempotently ensure both V2 tables exist with all known columns.
 
-    Mirrors the additive migration strategy used in ``src.results`` and
-    ``src.task_manager``: create-if-not-exists, then guard every later-added
-    column behind a ``PRAGMA table_info`` presence check so existing databases
-    upgrade without losing data and re-running is always safe.
+    Mirrors the additive migration strategy used in ``src.results``:
+    create-if-not-exists, then guard every later-added column behind a
+    ``PRAGMA table_info`` presence check so existing databases upgrade without
+    losing data and re-running is always safe.
     """
     conn.execute("""
         CREATE TABLE IF NOT EXISTS v2_quality_runs (

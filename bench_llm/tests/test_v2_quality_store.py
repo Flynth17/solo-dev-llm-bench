@@ -7,10 +7,13 @@ built against temporary CSV/DB paths, so no active benchmark data, task_runs,
 CSV or archive is ever read from or written to during the test run.
 """
 
+import contextlib
+import io
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any, Optional
 
 import pytest
 
@@ -24,9 +27,116 @@ from src.results import (  # noqa: E402
     _DEFAULT_CSV_PATH,
     _DEFAULT_DB_PATH,
 )
-from src.benchmark_v2_quality import run_v2_quality_corpus  # noqa: E402
+from src.quality import python_cases as _python_cases  # noqa: E402
+from src.quality import java_cases as _java_cases  # noqa: E402
+from src.quality import markdown_cases as _markdown_cases  # noqa: E402
+from src.quality import evidence_cases as _evidence_cases  # noqa: E402
 from src.quality import drift_cases as _drift  # noqa: E402
 from src.v2_quality_store import V2QualityStore  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# Test-local V2 quality-corpus fixture helper (Act 11C-4B).
+#
+# Replaces the retired production shim ``src.benchmark_v2_quality`` as a source
+# of *valid* V2 run dicts for these store tests. It runs the retained frozen
+# ``src.quality`` validators directly and returns the SAME structured dict shape
+# that the store persists -- pure test scaffolding, not a production module.
+# ---------------------------------------------------------------------------
+
+def _run_v2_quality_corpus(
+    python_source: Optional[str] = None,
+    java_inputs: Optional[dict[str, str]] = None,
+    markdown_text: Optional[str] = None,
+    evidence_text: Optional[str] = None,
+    drift_response: Optional[str] = None,
+) -> dict[str, Any]:
+    """Return one valid V2 quality-corpus result dict from the frozen validators.
+
+    Mirrors the retired ``run_v2_quality_corpus`` so every assertion in this file
+    keeps protecting the exact store contract (53 logical cases / 141 evidence
+    entries / 166 checks for the good corpus, with a real DRIFT failure when an
+    override is supplied). No production orchestration module is retained.
+    """
+    def _default_python():
+        return "\n".join(_python_cases.REFERENCE_SOLUTIONS.values())
+
+    def _default_java():
+        return {c.id: _java_cases.REFERENCE_SOLUTIONS.get(c.id, "") for c in _java_cases.JAVA_CASES}
+
+    def _default_markdown():
+        return _markdown_cases.load_corrected_fixture()
+
+    def _default_evidence():
+        return _evidence_cases.render_input()
+
+    specs = [
+        ("python", "python", lambda: len(_python_cases.PY_CASES), python_source, _default_python),
+        ("java", "java", lambda: len(_java_cases.JAVA_CASES), java_inputs, _default_java),
+        ("markdown", "markdown", lambda: len(_markdown_cases.MARKDOWN_CASES), markdown_text, _default_markdown),
+        ("evidence", "evidence", lambda: len(_evidence_cases.EVID_CASES), evidence_text, _default_evidence),
+        ("drift", "drift-01", lambda: len(_drift.DRIFT_CASES), drift_response, (lambda: _drift.GOOD_RESPONSE)),
+    ]
+
+    def _flatten(key, inputs):
+        if key == "java":
+            flat = []
+            for case in _java_cases.JAVA_CASES:
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    flat.extend(_java_cases._run_case_test(case, inputs[case.id]))
+            return flat
+        validator = {"python": _python_cases.validate, "markdown": _markdown_cases.validate,
+                     "evidence": _evidence_cases.validate, "drift": _drift.validate}[key]
+        res = validator(inputs)
+        if isinstance(res, list) and res and isinstance(res[0], list):
+            res = [r for sub in res for r in sub]  # normalise nested -> flat
+        return list(res)
+
+    def _case_dict(r):
+        return {
+            "case_id": r.case_id,
+            "category": r.category,
+            "passed": r.passed,
+            "checks_passed": r.checks_passed,
+            "checks_total": r.checks_total,
+            "failure_type": r.failure_type,
+            "failure_reason": r.failure_reason,
+            "expected": r.expected,
+            "actual": r.actual,
+        }
+
+    flat_all = []
+    suites_out = {}
+    logical_total = 0
+    for key, label, logical_getter, override, input_getter in specs:
+        cases_count = logical_getter()
+        logical_total += cases_count
+        inputs = override if override is not None else input_getter()
+        results = _flatten(key, inputs)
+        checks_passed = sum(r.checks_passed for r in results)
+        checks_total = sum(r.checks_total for r in results)
+        flat_all.extend(results)
+        suites_out[label] = {
+            "suite": label,
+            "logical_cases": cases_count,
+            "checks_passed": checks_passed,
+            "checks_total": checks_total,
+            "results": [_case_dict(r) for r in results],
+        }
+
+    total_passed = sum(r.checks_passed for r in flat_all)
+    total_total = sum(r.checks_total for r in flat_all)
+
+    return {
+        "suite": "v2-quality",
+        "logical_cases_attempted": logical_total,
+        "checks_passed": total_passed,
+        "checks_total": total_total,
+        "v2_quality_checks_passed": total_passed,
+        "v2_quality_checks_total": total_total,
+        "suites": suites_out,
+        "results": [_case_dict(r) for r in flat_all],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +185,7 @@ def _count_rows(db_path: Path, table: str) -> int:
 def test_good_reference_round_trip():
     """Persist the full good corpus and read it back unchanged."""
     for _, db_p in _temp_paths():
-        result = run_v2_quality_corpus()
+        result = _run_v2_quality_corpus()
         store = V2QualityStore(db_path=db_p)
         run_id = store.save_run(result, run_id="v2-good-ref")
 
@@ -121,7 +231,7 @@ def test_good_reference_round_trip():
 def test_drift_failure_round_trip():
     """Persist a corpus with a injected DRIFT failure; evidence survives."""
     for _, db_p in _temp_paths():
-        result = run_v2_quality_corpus(drift_response=_drift.INVENTED_RULE_BAD_RESPONSE)
+        result = _run_v2_quality_corpus(drift_response=_drift.INVENTED_RULE_BAD_RESPONSE)
         store = V2QualityStore(db_path=db_p)
         run_id = store.save_run(result, run_id="v2-drift-fail")
 
@@ -165,7 +275,7 @@ def test_persistence_does_not_touch_active_data():
 
         # Isolated V2 write only touches the temp DB.
         store = V2QualityStore(db_path=db_p)
-        rid = store.save_run(run_v2_quality_corpus(), run_id="v2-isolated")
+        rid = store.save_run(_run_v2_quality_corpus(), run_id="v2-isolated")
         assert len(_run_ids(db_p)) == 1
         assert store.load_run(rid)["run"]["logical_cases_attempted"] == 53
 
@@ -198,7 +308,7 @@ def test_legacy_rows_still_load_and_schema_is_additive():
 
         # V2 store on the SAME file adds (does not replace) tables.
         v2 = V2QualityStore(db_path=db_p)
-        rid = v2.save_run(run_v2_quality_corpus(), run_id="v2-compat")
+        rid = v2.save_run(_run_v2_quality_corpus(), run_id="v2-compat")
         conn = sqlite3.connect(str(db_p))
         table_names = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
@@ -225,9 +335,9 @@ def test_save_is_idempotent_per_run():
     """Re-saving the same run replaces child rows rather than duplicating them."""
     for _, db_p in _temp_paths():
         store = V2QualityStore(db_path=db_p)
-        rid = store.save_run(run_v2_quality_corpus(), run_id="v2-repeat")
+        rid = store.save_run(_run_v2_quality_corpus(), run_id="v2-repeat")
         # Second save of the same run_id must not duplicate evidence.
-        store.save_run(run_v2_quality_corpus(), run_id="v2-repeat")
+        store.save_run(_run_v2_quality_corpus(), run_id="v2-repeat")
 
         conn = sqlite3.connect(str(db_p))
         run_rows = conn.execute(
@@ -242,7 +352,7 @@ def test_save_is_idempotent_per_run():
 def test_clear_run_removes_parent_and_children():
     for _, db_p in _temp_paths():
         store = V2QualityStore(db_path=db_p)
-        rid = store.save_run(run_v2_quality_corpus(), run_id="v2-temp")
+        rid = store.save_run(_run_v2_quality_corpus(), run_id="v2-temp")
         assert store.clear_run(rid) is True
         assert store.load_run(rid) is None
         assert _run_ids(db_p) == []
@@ -310,7 +420,7 @@ def test_two_configurations_remains_distinguishable_with_identical_scores():
         assert fp_a and fp_b and fp_a != fp_b, "precondition: fingerprints must differ"
 
         # The SAME corpus (identical 53 / 141 / 166) persisted under each identity.
-        result = run_v2_quality_corpus()
+        result = _run_v2_quality_corpus()
         store = V2QualityStore(db_path=db_p)
         rid_a = store.save_run(
             result, run_id="v2-ident-A",
@@ -370,7 +480,7 @@ def test_missing_identity_is_blank_and_still_persistable():
     (Backwards compatibility for the opaque-run_id / pre-linkage behaviour.)"""
     for _, db_p in _temp_paths():
         store = V2QualityStore(db_path=db_p)
-        rid = store.save_run(run_v2_quality_corpus(), run_id="v2-no-identity")
+        rid = store.save_run(_run_v2_quality_corpus(), run_id="v2-no-identity")
         loaded = store.load_run(rid)["run"]
         assert loaded["logical_cases_attempted"] == 53
         assert loaded["configuration_fingerprint"] in (None, "")
