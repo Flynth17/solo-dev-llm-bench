@@ -1,321 +1,150 @@
 # Solo Dev LLM Bench — Roadmap
 
-Solo Dev LLM Bench is evolving into a focused local-LLM benchmark with four benchmark families:
+Focused local-LLM benchmark with four benchmark families: **Standard Speed**, **Workflow**, **Context**, and **AI Intelligence**. This document is the single canonical project roadmap.
 
-1. Standard Speed
-2. Workflow
-3. Context
-4. AI Intelligence
+Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derived from `TODO` in document order and is never stored. Identifiers `RM-26-AA-NNNN` are immutable identities only; they do not encode status, priority, hierarchy, or execution order. Legacy Acts/slugs are preserved as metadata, not as canonical keys.
 
-The project deliberately separates performance, deterministic workflow reliability, long-context behaviour, and general model capability rather than collapsing them into one score.
+## ACTIVE
 
----
+### RM-26-AA-0006 — Maintain the roadmap document
 
-# Current Product State
+Standing maintenance of this canonical ROADMAP.md: keep structure valid, reconcile state against implementation, and preserve legacy Acts as metadata (not one item per commit). Git history is implementation evidence, not the roadmap itself.
 
-## 1. Standard Speed
+- Category: documentation
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: maintain-the-roadmap-document; D2
 
-**Status: DELIVERED**
+## TODO
 
-Purpose:
+### RM-26-AA-0007 — Rewrite README
 
-Measure practical local-model execution performance at fixed context sizes.
+Rewrite (not patch) the README to describe the current application: four benchmark families, delivered vs planned, LM Studio requirements, model lifecycle, Standard Speed + Workflow methodology, result pages, limitations. Key wording: Workflow measures deterministic developer-task correctness; Solo Dev LLM Bench is **not** a universal intelligence leaderboard; the future AI Intelligence suite is separate from Workflow.
 
-Current standard points:
+- Category: documentation
+- Depends on: RM-26-AA-0003
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: rewrite-readme; D1
 
-- 8K
-- 16K
-- 32K
+### RM-26-AA-0008 — Author architecture documentation
 
-Current metrics:
+Concise architecture document covering: launcher, four benchmark families, active routes, LM Studio lifecycle, heavyweight-run guard, persistence, read models, result pages, test organisation. Conceptual layout preserved in this roadmap.
 
-- TTFT
-- full-prefill throughput
-- generation throughput
-- actual input tokens
-- target-vs-actual context error
-- output tokens
-- wall time
+- Category: documentation
+- Depends on: RM-26-AA-0007
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: author-architecture-documentation; D3
 
-Current methodology:
+### RM-26-AA-0009 — Context benchmark family
 
-- calibrated runtime token sizing
-- cache-busted full-prefill measurement
-- warm generation samples
-- metric-versioned persistence
-- current metric version: v3
+Measure how model quality and performance change as usable context grows. Planned points 15K/30K/60K/120K/180K/240K where supported: quality retention, workflow degradation, TTFT/prefill/degradation growth, context-capacity limits, unsupported-point handling (shown as gaps; scores must not be rescaled to hide unsupported sizes).
 
-Delivered supporting features:
+- Category: product
+- Depends on: RM-26-AA-0003
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: context-benchmark-family
 
-- model discovery
-- model load/unload lifecycle
-- shared heavyweight-run guard
-- dedicated Standard Speed result page
-- Standard Speed history grouped by run
-- 8K → 16K → 32K point-level summaries
-- legacy metric warnings
-- calibrated context targets within tolerance
+### RM-26-AA-0011 — Test architecture and fast gate
 
----
+Establish a clean test architecture plus a FAST local test gate (unit/source-contract tests GPU-free and in-memory; ordered fast gate) so refactors across retirement can be validated quickly. Complements dead-code cleanup (M3); does not require production modules to be restructured first.
 
-## 2. Workflow
+- Category: testing
+- Depends on: RM-26-AA-0005
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: test-architecture-and-fast-gate; D4
 
-**Status: DELIVERED**
+## FUTURE
 
-Purpose:
+### RM-26-AA-0010 — AI Intelligence benchmark family
 
-Measure whether a model can reliably perform deterministic developer-workflow tasks.
+Genuinely discriminative model-capability benchmark for cases where Workflow tasks saturate and materially different models achieve similar deterministic scores. Tests reasoning, synthesis, planning, judgement, problem solving, instruction interpretation, ambiguity handling, and multi-step decision quality. Design goals: avoid easy/saturated tasks, separate materially different capability levels, avoid simply duplicating Workflow, never present one arbitrary number as universal intelligence, and define scoring methodology before implementation. Not implemented; research item until a benchmark contract is agreed.
 
-Current contract:
+- Category: product / research
+- Depends on: RM-26-AA-0002, RM-26-AA-0009
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: ai-intelligence-benchmark-family
 
-- 166 deterministic checks
-- 5 suites
-- no LLM judge
-- no subjective scoring
-- authoritative V2 runner
-- separate suite execution
-- durable result artifacts
-- dedicated Workflow result page
+### RM-26-AA-0012 — Streaming research
 
-Workflow is a task-correctness and reliability benchmark.
+Investigate streaming token-by-token results and live metrics (TTFT / throughput as tokens arrive) for the dashboard, evaluating a scripted headless render against LM Studio versus the current non-streaming flow. Independent exploration; no hard dependency on earlier engineering buckets.
 
-It is **not** intended to be a universal model-intelligence benchmark.
+- Category: research
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: streaming-research
 
----
+### RM-26-AA-0013 — Multi-model comparison view
 
-# Planned Benchmark Families
+Side-by-side degradation / comparison across MULTIPLE models at IDENTICAL context points (15K/30K/60K/120K/180K/240K where supported); unsupported points shown as gaps, scores not rescaled. Builds on the Context benchmark family before AI Intelligence research.
 
-## 3. Context
+- Category: product / research
+- Depends on: RM-26-AA-0009
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: multi-model-comparison-view
 
-**Status: PLANNED**
+## DONE
 
-Purpose:
+### RM-26-AA-0001 — Standard Speed benchmark family
 
-Measure how model quality and performance change as usable context grows.
+Delivered. Measures practical local-model execution performance at fixed context points (8K/16K/32K): TTFT, full-prefill + generation throughput, actual input/output tokens, target-vs-actual context error, wall time; calibrated token sizing, cache-busted prefill, warm generation samples, metric versioning v3. Supporting features: model discovery, model load/unload lifecycle, shared heavyweight-run guard, dedicated Standard Speed result page, Standard Speed history grouped by run, 8K→16K→32K point-level summaries, legacy metric warnings, calibrated context targets within tolerance.
 
-Planned standard points:
+- Category: product
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: standard-speed-benchmark-family; Acts 17, 17.1, 18, 19, 19.1, 20, 22, 23
 
-- 15K
-- 30K
-- 60K
-- 120K
-- 180K
-- 240K where supported
+#### Evidence
 
-Planned measurements:
+- docs/ROADMAP.md status DELIVERED
+- Canonical provenance corpus, runner+execution contract, live executor/extractors/prompts, authoritative artifacts
 
-- quality retention
-- workflow degradation
-- TTFT growth
-- prefill degradation
-- generation degradation
-- context-capacity limits
-- unsupported-point handling
+### RM-26-AA-0002 — Workflow benchmark family
 
-Unsupported context points should be represented as unsupported/gaps.
+Delivered. Deterministic developer-workflow correctness/reliability benchmark: 166 checks, 5 suites, no LLM judge, no subjective scoring, authoritative V2 runner, separate suite execution, durable result artifacts, dedicated Workflow result page. NOT intended as a universal model-intelligence leaderboard.
 
-Scores must not be rescaled to hide unsupported context sizes.
+- Category: product
+- Depends on: RM-26-AA-0001
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: workflow-benchmark-family; Acts 8, 9, 10, 11, 12 (v2 results UI), Act 16 (workflow suite launch)
 
-Future comparison view:
+#### Evidence
 
-- multiple models
-- identical context points
-- side-by-side degradation curves
+- docs/ROADMAP.md status DELIVERED
 
-Planned multi-model comparison view (tracked as goal `multi-model-comparison-view`):
+### RM-26-AA-0003 — Retire legacy Prompt and Task product (M1)
 
-**Status: PLANNED**
+Retired the obsolete custom Prompt / Task Manager product. Scope: orphaned Prompt Manager frontend, orphaned Task Manager frontend, prompt CRUD APIs, obsolete Task CRUD APIs, dead task-management persistence/helpers, associated tests, stale CSS/DOM references. Did not remove active result-history until its dependencies were separately retired.
 
-Compares several models at identical context points via side-by-side degradation curves.
+- Category: maintenance
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: retire-legacy-prompt-and-task-product; M1
 
----
+#### Evidence
 
-## 4. AI Intelligence
+- commit `4d79064` — refactor: retire legacy Prompt and Task product
+- 591/591 tests passed; legacy Results compatibility preserved
 
-**Status: PLANNED / RESEARCH**
+### RM-26-AA-0004 — Retire legacy Results product (M2)
 
-**Not implemented in the current application.**
+Retired the legacy Results product. Simplified `/results` into the current history view: `/results` = Standard Speed history; `/speed/results/{run_id}` = single Standard Speed run; `/v2/results/{run_id}` = single Workflow run. Retirement candidates addressed; historical runtime data preserved. Did not remove active result-history until its dependencies (M1) were separately retired.
 
-Purpose:
+- Category: maintenance
+- Depends on: RM-26-AA-0003
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: retire-legacy-results-product; M2
 
-Provide a genuinely discriminative model-capability benchmark for cases where Workflow tasks saturate and materially different models achieve similar deterministic scores.
+#### Evidence
 
-This suite should test harder capabilities such as:
+- commit `53a4583` — refactor: retire legacy Results product
+- 535/535 tests passed
 
-- reasoning
-- synthesis
-- planning
-- judgement
-- problem solving
-- instruction interpretation
-- ambiguity handling
-- multi-step decision quality
+### RM-26-AA-0005 — Remove production-dead leftovers (M3)
 
-Design goals:
+After legacy retirement, re-ran reachability analysis and removed production-dead modules, stale imports/CSS, obsolete compatibility helpers, forbidden/superseded executor entry points, dead source-string tests, and obsolete historical product comments. `benchmark_v2_quality.py` flagged for re-evaluation. Did not refactor large active modules before dead code was removed. Protected runtime data (`benchmark_results.csv`, `benchmark_results.db`) byte-for-byte unchanged; Standard Speed + Workflow products unaffected.
 
-- avoid easy/saturated tasks
-- separate materially different model capability levels
-- avoid simply duplicating Workflow
-- avoid presenting one arbitrary number as universal intelligence
-- define scoring methodology before implementation
+- Category: maintenance
+- Depends on: RM-26-AA-0004
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: remove-production-dead-leftovers; M3
 
-Current state:
+#### Evidence
 
-- no runner
-- no API
-- no persistence schema
-- no UI card
-- no production tests
-
-This remains a research item until a benchmark contract is agreed.
-
----
-
-# Maintenance Roadmap
-
-The current priority is to finish removing the legacy product before adding another major benchmark suite.
-
-## M1 — Retire Prompt / Task Manager Product
-
-**Status: DONE** -- retired in commit `4d79064` (implementation evidence); 591/591 tests passed; legacy Results compatibility preserved.
-
-The obsolete custom Prompt / Task Manager product has been removed.
-
-Scope:
-
-- orphaned Prompt Manager frontend
-- orphaned Task Manager frontend
-- prompt CRUD APIs
-- obsolete Task CRUD APIs
-- dead task-management persistence/helpers
-- associated tests
-- stale CSS and DOM references
-
-Do not remove active result-history functionality until its dependencies are separately retired.
-
-## M2 — Retire Legacy Results Product
-
-**Status: DONE** -- retired in commit `53a4583` (implementation evidence); 535/535 tests passed; `/results` simplified to Standard Speed history only; historical runtime data preserved.
-
-Simplify `/results` into the current product's history view.
-
-Target:
-
-`/results`
-- Standard Speed history
-
-`/speed/results/{run_id}`
-- single Standard Speed run
-
-`/v2/results/{run_id}`
-- single Workflow run
-
-Retirement candidates:
-
-- legacy task-history UI
-- generic/custom benchmark rows
-- generic result charts
-- old comparison views
-- obsolete filtering/navigation
-- APIs used only by retired result surfaces
-- obsolete result tests
-
-Historical runtime data may remain archived.
-
-Removing runtime interpretation code does not require deleting historical data.
-
-## M3 — Remove Production-Dead Leftovers
-
-**Status: PLANNED**
-
-After legacy product retirement, re-run reachability analysis.
-
-Candidates include:
-
-- production-dead modules
-- stale imports
-- stale CSS
-- obsolete compatibility helpers
-- forbidden/superseded executor entry points
-- dead source-string tests
-- obsolete historical product comments
-
-Known candidate for re-evaluation:
-
-- `benchmark_v2_quality.py`
-
-Do not refactor large active modules before dead code is removed.
-
----
-
-# Documentation Roadmap
-
-## D1 — Rewrite README
-
-**Status: PLANNED**
-
-The existing README describes an older version of the application and should be rewritten rather than patched incrementally.
-
-New README should cover:
-
-1. What Solo Dev LLM Bench is
-2. Four benchmark families
-3. Delivered vs planned functionality
-4. LM Studio requirements
-5. Model lifecycle
-6. Standard Speed methodology
-7. Workflow methodology
-8. Result pages
-9. Limitations
-10. Links to architecture and roadmap documents
-
-Important wording:
-
-Workflow measures deterministic developer-task correctness.
-
-Solo Dev LLM Bench is **not a universal intelligence leaderboard**.
-
-The future AI Intelligence suite is separate from Workflow.
-
-## D2 — Maintain This ROADMAP.md
-
-**Status: PLANNED**
-
-This document should be the canonical future-work roadmap.
-
-Git commit history remains implementation evidence, not the roadmap itself.
-
-Historical Acts should not be recreated as one roadmap item per commit.
-
-## D3 — Architecture Documentation
-
-**Status: PLANNED**
-
-Create a concise architecture document covering:
-
-- launcher
-- four benchmark families
-- active routes
-- LM Studio lifecycle
-- heavyweight-run guard
-- persistence
-- read models
-- result pages
-- test organisation
-
-Target conceptual architecture:
-
-```text
-Solo Dev LLM Bench
-│
-├── Standard Speed       DELIVERED
-├── Workflow             DELIVERED
-├── Context              PLANNED
-└── AI Intelligence      PLANNED / RESEARCH
-```
-
-## D4 — Test Architecture & Fast Gate
-
-**Status: PLANNED**
-
-Document the test architecture across the four benchmark families and establish a fast regression gate so the suite can run frequently without waiting on slow or LLM-judge tests. Tracked as goal `test-architecture-and-fast-gate`.
+- commit `075ece1` — refactor: remove production-dead leftovers
+- 524/524 tests passed against isolated temp storage
