@@ -1,9 +1,8 @@
 """Results routes for Solo Dev LLM Bench."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 import src.app_state
-from src.results import enriched_run
 
 # Standard Speed read model (baseline contract only). Reused verbatim so the combined
 # /results history page and the dedicated /speed/results/{run_id} page surface the SAME
@@ -28,19 +27,15 @@ def _get_results_store():
 
 @router.get("/api/results")
 async def get_past_results():
-    """Return benchmark results plus normalized Standard Speed history.
+    """Return normalized Standard Speed history for the /results page.
 
-    ``results`` -- every stored row as individual entries, newest first, each enriched
-    with presentation-ready fields for the existing result/comparison view. Canonical
-    byte/token fields are preserved; enrichment adds keys only, so historical rows
-    carrying missing Act 7/8 metadata render as blank/unavailable rather than zero.
-
-    ``speed_runs`` -- a normalized, point-level history of Standard Speed runs (the fixed
-    8K/16K/32K contract), built by reusing :func:`load_speed_run_by_id`. Each entry is the
-    SAME authoritative data shown on the dedicated /speed/results/{run_id} page, so the
-    combined history never blends 8K+16K+32K into one misleading run-wide tok/s and never
-    invents a different average than the dedicated speed view. Legacy/custom runs are NOT
-    included here; they continue to render via the existing ``results`` path below.
+    The payload carries only ``speed_runs`` -- a normalized, point-level history of
+    Standard Speed runs (the fixed 8K/16K/32K contract), built by reusing
+    :func:`load_speed_run_by_id`. Each entry is the SAME authoritative data shown on the
+    dedicated /speed/results/{run_id} page, so the combined history never blends 8K+16K+32K
+    into one misleading run-wide tok/s and never invents a different average than the
+    dedicated speed view. Legacy/custom benchmark runs are excluded from this surface; they
+    render via their own dedicated result pages (e.g. /v2/results/{run_id} for Workflow).
     """
     results_store = _get_results_store()
     all_runs = results_store.get_all()
@@ -51,7 +46,6 @@ async def get_past_results():
     all_runs.sort(key=lambda r: (r.get("timestamp") or ""), reverse=True)
 
     return {
-        "results": [enriched_run(run) for run in all_runs],
         "speed_runs": _normalize_standard_speed_history(all_runs),
     }
 
@@ -165,16 +159,3 @@ def _normalize_standard_speed_history(all_runs: list[dict]) -> list[dict]:
     speed_runs.sort(key=lambda s: s.get("timestamp") or "", reverse=True)
     return speed_runs
 
-
-@router.delete("/api/results/{run_id}")
-async def delete_past_result(run_id: str):
-    """Delete a single benchmark run by its run_id."""
-    # Validate: reject arbitrary SQL or database identifiers
-    if not run_id or "\x00" in run_id or "/" in run_id:
-        raise HTTPException(status_code=400, detail="Invalid run_id")
-
-    results_store = _get_results_store()
-    deleted = results_store.delete_run(run_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    return {"status": "ok", "run_id": run_id}

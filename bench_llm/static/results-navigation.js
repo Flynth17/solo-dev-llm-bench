@@ -1,76 +1,27 @@
-/** Solo Dev LLM Bench - Results page navigation logic (extracted). */
+/** Solo Dev LLM Bench - Results page navigation (Standard Speed history only). */
 
 // Navigation DOM references
 var navRawSpeed = document.getElementById("nav-raw-speed");
-var navMarkdown = document.getElementById("nav-markdown");
-var navPython = document.getElementById("nav-python");
-var navJava = document.getElementById("nav-java");
-var navUnsolvable = document.getElementById("nav-unsolvable");
-var taskHistorySection = document.getElementById("task-history-section");
-
-// Active view — default to "raw" (Raw Speed)
-var activeView = "raw"; // "raw", "markdown", "python", "java", "unsolvable"
+var filterBar = document.getElementById("filter-bar");
 
 // ---------------------------------------------------------------------------
-// Navigation (Raw Speed | Markdown | Python | Java | Unsolvable)
+// Navigation (Raw Speed only)
 // ---------------------------------------------------------------------------
 
-function switchView(view) {
-    activeView = view;
-
-    // Clear any stale chart content from the previous view before rendering.
-    if (chartsContainer) chartsContainer.innerHTML = "";
-
-    // Update active button
-    var navButtons2 = [navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
-    for (var i = 0; i < navButtons2.length; i++) {
-        if (navButtons2[i]) navButtons2[i].classList.remove("active");
+function switchView() {
+    if (navRawSpeed) {
+        navRawSpeed.classList.add("active");
     }
-    switch (view) {
-        case "raw": if (navRawSpeed) navRawSpeed.classList.add("active"); break;
-        case "markdown": if (navMarkdown) navMarkdown.classList.add("active"); break;
-        case "python": if (navPython) navPython.classList.add("active"); break;
-        case "java": if (navJava) navJava.classList.add("active"); break;
-        case "unsolvable": if (navUnsolvable) navUnsolvable.classList.add("active"); break;
-    }
-
-    if (view === "raw") {
-        // Raw Speed mode — show performance data, hide task results
-        if (taskHistorySection) taskHistorySection.classList.add("hidden");
-        if (filterBar) filterBar.classList.remove("hidden");
-        resultsPanel.classList.remove("hidden");
-        if (filteredRuns.length > 0) {
-            if (chartsPanel) chartsPanel.classList.remove("hidden");
-            // Re-render chart
-            renderHistoryCharts();
-        } else if (chartsPanel) {
-            chartsPanel.classList.add("hidden");
-        }
-    } else {
-        // Task results mode — hide performance data, show task results
-        if (filterBar) filterBar.classList.add("hidden");
-        resultsPanel.classList.add("hidden");
-        if (chartsPanel) chartsPanel.classList.remove("hidden");
-        // Set active task type from view
-        activeTaskType = view;
-        // Load and render tasks + comparison chart for correctness tabs.
-        allTasks = [];
-        loadTasks().then(function () {
-            renderCorrectnessComparisonChart(allTasks);
-            renderTasks();
-        });
-    }
+    // The Results page is a single view (Standard Speed history): always surface the
+    // filter bar. Past-runs panel visibility is owned by results.js renderResults().
+    if (filterBar) { filterBar.classList.remove("hidden"); }
 }
 
-// Attach click handlers to all nav buttons
-var _navBtns = [navRawSpeed, navMarkdown, navPython, navJava, navUnsolvable];
-for (var ni = 0; ni < _navBtns.length; ni++) {
-    (function (btn) {
-        if (btn) {
-            btn.addEventListener("click", function () {
-                var type = btn.getAttribute("data-type");
-                switchView(type);
-            });
-        }
-    })(_navBtns[ni]);
-}
+// Wire up the single Raw Speed tab and surface the filter bar on load.
+(function () {
+    var btn = navRawSpeed;
+    if (btn) {
+        btn.addEventListener("click", function () { switchView(); });
+    }
+    switchView();
+})();

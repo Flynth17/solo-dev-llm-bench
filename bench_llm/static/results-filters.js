@@ -40,9 +40,8 @@ function applyFilters() {
     var modelFilter = (filterModelInput.value || "").toLowerCase().trim();
     var hardwareFilter = (filterHardwareInput.value || "").toLowerCase().trim();
     var envFilter = filterEnvSelect.value;
-    filteredRuns = allRuns.filter(matchesFilter);
-    // Standard Speed runs are filtered identically, then rendered separately as point-based
-    // cards (never blended into legacy run-wide aggregates).
+    // The Results page surfaces only Standard Speed history, so the shared predicate is
+    // applied to the normalized speed runs.
     filteredSpeedRuns = allSpeedRuns.filter(matchesFilter);
 
     renderResults();

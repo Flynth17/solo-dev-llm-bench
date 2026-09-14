@@ -11,12 +11,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.config_loader import load_config, save_config
-from src import task_manager
 from src import app_state
 from src.routes import config as config_routes
 from src.routes import models as models_routes
 from src.routes import results as results_routes
-from src.routes import tasks as tasks_routes
 from src.routes import v2_results as v2_results_routes
 from src.routes import v2_workflow as v2_workflow_routes
 from src.routes import v2_speed as v2_speed_routes
@@ -45,9 +43,6 @@ app.include_router(models_routes.router)
 # Register results route
 app.include_router(results_routes.router)
 
-# Register task CRUD and history routes
-app.include_router(tasks_routes.router)
-
 # Register read-only V2 results API (consumes the validated read model only)
 app.include_router(v2_results_routes.router)
 
@@ -58,9 +53,6 @@ app.include_router(v2_workflow_routes.router)
 # Shares the cross-suite concurrency guard with Workflow so only one standard benchmark
 # uses the local model at a time.
 app.include_router(v2_speed_routes.router)
-
-# Initialize tasks table
-task_manager.init_tasks_table()
 
 # ---------------------------------------------------------------------------
 # Pages

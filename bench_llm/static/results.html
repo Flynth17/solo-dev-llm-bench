@@ -20,10 +20,6 @@
         <section class="panel" style="padding:0.75rem 1rem;">
             <div class="tab-bar">
                 <button id="nav-raw-speed" class="tab-btn active" data-type="raw">Raw Speed</button>
-                <button id="nav-markdown" class="tab-btn" data-type="markdown">Markdown</button>
-                <button id="nav-python" class="tab-btn" data-type="python">Python</button>
-                <button id="nav-java" class="tab-btn" data-type="java">Java</button>
-                <button id="nav-unsolvable" class="tab-btn" data-type="unsolvable">Unsolvable</button>
             </div>
         </section>
 
@@ -57,23 +53,10 @@
         <!-- Results Count -->
         <div id="results-count" class="results-count"></div>
 
-        <!-- Historical Comparison Chart (Raw Speed) -->
-        <section id="charts-panel" class="panel">
-            <h2>Historical Comparison</h2>
-            <div id="charts-container"></div>
-        </section>
-
         <!-- Benchmark Runs (Raw Speed) -->
         <section id="results-panel" class="panel">
             <h2>Past Runs</h2>
             <div id="results-container"></div>
-        </section>
-
-        <!-- Task Results (Markdown / Python / Java / Unsolvable) -->
-        <section id="task-history-section" class="panel hidden">
-            <h2>Results</h2>
-            <div id="task-history-container"></div>
-            <div id="task-history-empty" class="empty-state hidden">No results yet.</div>
         </section>
 
         <!-- Empty State (fallback) -->
@@ -83,24 +66,10 @@
             <a href="/" class="btn-primary">Run Benchmark</a>
         </section>
 
-        <!-- Delete Confirmation Modal -->
-        <div id="delete-modal" class="modal-overlay hidden">
-            <div class="modal-content">
-                <h3>Delete this benchmark run?</h3>
-                <div id="delete-modal-body"></div>
-                <div class="modal-actions">
-                    <button id="cancel-delete" class="btn-secondary">Cancel</button>
-                    <button id="confirm-delete" class="btn-danger">Delete</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script src="/static/results-utils.js"></script>
-    <script src="/static/results-delete-modal.js"></script>
     <script src="/static/results-filters.js"></script>
-    <script src="/static/results-task-history.js"></script>
-    <script src="/static/results-charts.js"></script>
     <script src="/static/results-navigation.js"></script>
     <script src="/static/results.js"></script>
 </body>

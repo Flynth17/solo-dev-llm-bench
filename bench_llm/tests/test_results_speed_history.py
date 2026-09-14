@@ -2,10 +2,11 @@
 
 Validates the backend normalization contract that powers the /results history page:
 
-* GET /api/results returns a backward-compatible payload -- the original ``results``
-  array (every row, newest-first) is preserved UNCHANGED so legacy/custom runs keep
-  rendering on their existing path, PLUS a new normalized ``speed_runs`` list of
-  Standard Speed run summaries built by reusing load_speed_run_by_id().
+* GET /api/results returns a normalized ``speed_runs`` list of Standard Speed run
+  summaries built by reusing load_speed_run_by_id(). Legacy/custom benchmark rows are
+  intentionally excluded from this surface; they render on their own dedicated result
+  pages (/v2/results/{run_id} for Workflow) rather than via the retired flat ``results``
+  array that M2 removed.
 
 The dedicated /speed/results/{run_id} page stays authoritative for per-run inspection;
 the combined history never blends 8K/16K/32K into one misleading run-wide tok/s and never
@@ -39,7 +40,7 @@ def history_store(client):
     Seed layout (deliberately messy to prove normalization is robust, not order-dependent):
 
       * ``legacy-run``        : ordinary benchmark run -- no canonical context point.
-                                MUST stay only in the flat ``results`` array.
+                                Excluded from speed_runs by design (M2 retirement).
       * ``speed-aaa`` (v2)     : Standard Speed with points inserted OUT of canonical
                                 order (32K, 8K, 16K) -> normalized order must be 8K,16K,32K.
       * ``speed-bbb`` (v2)     : another Standard Speed run (single point) -> different
@@ -80,7 +81,7 @@ def _row(**kw):
 
 
 def _seed(store):
-    # --- legacy/custom run (no canonical context point); only flat results path
+    # --- legacy/custom run (no canonical context point); excluded from speed_runs by design
     store.add_run(_row(
         run_id="legacy-run", timestamp="2026-04-15T00:00:00+00:00",
         context_point="", target_context_tokens=None,
@@ -124,26 +125,16 @@ def _seed(store):
 
 
 # ---------------------------------------------------------------------------
-# Payload shape / backward compatibility
+# Payload shape: only the normalized Standard Speed history is returned.
 # ---------------------------------------------------------------------------
-
-def test_payload_is_backward_compatible(history_store):
-    """`results` array is preserved unchanged; `speed_runs` is an ADDITIVE new key."""
-    from src.routes.results import get_past_results
-    payload = asyncio_run(get_past_results())
-
-    assert set(payload.keys()) == {"results", "speed_runs"}
-    # Every seeded run_id still appears in the flat results array (legacy path intact).
-    result_run_ids = {r["run_id"] for r in payload["results"]}
-    for rid in ("legacy-run", "speed-aaa", "speed-bbb", "speed-legacy"):
-        assert rid in result_run_ids, f"flat results lost run {rid}"
-
 
 def test_legacy_custom_run_excluded_from_speed_runs(history_store):
     from src.routes.results import get_past_results
     payload = asyncio_run(get_past_results())
+    # GET /api/results returns ONLY the standardized speed history surface (M2 retirement).
+    assert set(payload.keys()) == {"speed_runs"}
     speed_ids = {s["run_id"] for s in payload["speed_runs"]}
-    assert "legacy-run" not in speed_ids          # ordinary benchmark run -> legacy path only
+    assert "legacy-run" not in speed_ids          # ordinary benchmark run -> excluded
     assert {"speed-aaa", "speed-bbb", "speed-legacy"} <= speed_ids
 
 
@@ -291,29 +282,15 @@ def test_frontend_renders_point_based_speed_cards_not_blended():
     """The history page builds Standard Speed cards (point-based), never a blended aggregate."""
     static_js = Path(__file__).parent.parent / "static" / "results.js"
     text = static_js.read_text(encoding="utf-8")
-    # Dedicated card renderer exists and excludes SS runs from the legacy grouped path.
+    # Dedicated point-cell renderer exists => per-point (not blended) Standard Speed cards.
     assert "renderSpeedRuns(" in text
-    assert "ssRunIds" in text  # SS run_ids identified by normalized identity, not model/position
+    assert "renderSpeedPointCell(" in text  # per-point cell => point-based identity, not model/position
     # Metric-version badges + legacy banner text are rendered per SS card (v2 / v3 / legacy).
     for needle in ('Metric v2', 'Metric v3', 'Legacy metric', "Legacy prefill semantics"):
         assert needle in text
     # Point metrics are shown individually, with the canonical label distinct from actual input.
     for needle in ("Input", "TTFT", "Prefill", "Generation", "target "):
         assert needle in text
-
-
-# ---------------------------------------------------------------------------
-# Non-Speed legacy results remain available on the flat array (req 11)
-# ---------------------------------------------------------------------------
-
-def test_non_speed_legacy_results_remain_available(history_store):
-    from src.routes.results import get_past_results
-    payload = asyncio_run(get_past_results())
-    legacy_rows = [r for r in payload["results"] if r["run_id"] == "legacy-run"]
-    assert len(legacy_rows) >= 1
-    # Legacy row keeps its canonical byte/token fields intact for the existing view.
-    assert legacy_rows[0]["tokens_per_second"] == 42.0
-    assert legacy_rows[0]["input_tokens"] == 1200
 
 
 # ---------------------------------------------------------------------------

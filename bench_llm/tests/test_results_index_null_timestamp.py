@@ -1,14 +1,14 @@
-"""Regression guard: GET /api/results must not crash when a stored run has no timestamp.
+"""Regression guard: GET /api/results must not crash when a stored Speed run has no timestamp.
 
 Standalone Speed runs persist ``timestamp = None`` (only legacy quality rows carry an ISO
-timestamp). The results index sorts newest-first with ``key=lambda r: r.get("timestamp", "")``
--- but a NULL/None value makes Python compare ``None < None`` and raise ``TypeError``, which
-FastAPI surfaces as a 500 and breaks the entire /results page (and thus "View Result") for
-everyone.
+timestamp). The Standard Speed history is sorted newest-first with
+``key=lambda s: s.get("timestamp") or ""`` -- and a NULL/None value would make Python compare
+``None < None`` and raise ``TypeError``, which FastAPI surfaces as a 500 and breaks the entire
+/results page (and thus "View Result") for everyone.
 
-This seeds one row with ``timestamp=None`` (Speed-shaped) alongside a normal timestamped row
-and asserts the endpoint returns 200, includes the untimed row enriched, and does not crash.
-Mirrors the temp-store + app_state.patch convention in tests/test_delete.py.
+This seeds one row with ``timestamp=None`` (Speed-shaped) alongside timestamped Speed rows and
+asserts the endpoint returns 200, includes the untimed row in the Standard Speed history, and
+does not crash. Mirrors the temp-store + app_state.patch convention in tests/test_delete.py.
 """
 
 from __future__ import annotations
@@ -43,10 +43,10 @@ def seeded_store(client):
         app_state_module.results_store = old_store
 
 
-def _speed_row(run_id: str) -> dict:
+def _speed_row(run_id: str, timestamp=None) -> dict:
     """A standalone Speed run row -- note timestamp is None, exactly like the real runner."""
     return {
-        "timestamp": None,
+        "timestamp": timestamp,
         "run_id": run_id,
         "model_key": "ornith-1.5-35b-a3b",
         "model_display_name": "Ornith 1.5 35B A3B",
@@ -76,28 +76,24 @@ def test_results_index_does_not_crash_on_null_timestamp(client, seeded_store):
 
     # Previously: 500 Internal Server Error (TypeError on None < None in the sort key).
     assert resp.status_code == 200
-    rows = {r["run_id"]: r for r in resp.json().get("results", [])}
-    assert "speed-reg-1" in rows
-    # Enrichment still applied to the untimed row (display keys present, no zeroing).
-    enriched = rows["speed-reg-1"]
-    assert enriched.get("context_point") == "8K"
-    assert enriched.get("input_tokens") == 5561
-    assert enriched.get("tokens_per_second") == 185.72
-    for key in ("installed_ram", "total_vram", "context_utilisation_pct", "comparison_summary"):
-        assert key in enriched
+    speed_runs = {r["run_id"]: r for r in resp.json().get("speed_runs", [])}
+    assert "speed-reg-1" in speed_runs
+    # The untimed Speed run is still surfaced as a Standard Speed history entry.
+    entry = speed_runs["speed-reg-1"]
+    assert entry.get("type") == "standard_speed"
+    points = entry.get("points") or []
+    assert points and points[0].get("label") == "8K"
 
 
 def test_results_index_still_sorts_newest_first(client, seeded_store):
-    seeded_store.add_run(_speed_row("speed-old"))  # timestamp=None -> sorts last
-    # A normal timestamped legacy row should rank ahead of the untimed Speed row.
-    seeded_store.add_run({
-        "timestamp": "2026-01-01T00:00:00+00:00",
-        "run_id": "legacy-one", "model_key": "m", "model_display_name": "Legacy",
-        "tokens_per_second": 10.0, "input_tokens": 10, "output_tokens": 5,
-    })
+    # Two timed Speed rows (different dates) plus one untimed (None) Speed run.
+    seeded_store.add_run(_speed_row("fast-new", timestamp="2026-03-01T00:00:00+00:00"))
+    seeded_store.add_run(_speed_row("slow-old", timestamp="2026-01-01T00:00:00+00:00"))
+    seeded_store.add_run(_speed_row("none-ts"))  # timestamp=None -> sorts last
 
     resp = client.get("/api/results")
     assert resp.status_code == 200
-    ordered = [r["run_id"] for r in resp.json().get("results", [])]
-    # Newest-first: the timestamped row precedes the untimed (None) one.
-    assert ordered.index("legacy-one") < ordered.index("speed-old")
+    ordered = [r["run_id"] for r in resp.json().get("speed_runs", [])]
+    # Newest-first: the newer timestamp precedes the older, and the untimed row lands last.
+    assert ordered.index("fast-new") < ordered.index("slow-old")
+    assert ordered.index("slow-old") < ordered.index("none-ts")
