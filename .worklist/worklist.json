@@ -1,6 +1,6 @@
 {
 	"version": 1,
-	"revision": 18,
+	"revision": 19,
 	"goals": [
 		{
 			"id": "standard-speed-benchmark-family",
@@ -70,9 +70,10 @@
 			"description": "Remove production-dead leftovers (Maintenance M3) -- Status: PLANNED. After legacy retirement, re-run reachability analysis and remove: production-dead modules, stale imports/CSS, obsolete compatibility helpers, forbidden/superseded executor entry points, dead source-string tests, obsolete historical product comments. Re-evaluate benchmark_v2_quality.py. Do not refactor large active modules before dead code is removed.",
 			"group": "Maintenance",
 			"dependsOn": ["retire-legacy-results-product"],
-			"status": "open",
+			"status": "done",
 			"createdAt": "2026-09-14T09:39:59.442Z",
-			"updatedAt": "2026-09-14T09:39:59.442Z"
+			"updatedAt": "2026-09-14T19:38:54.140Z",
+			"completedAt": "2026-09-14T19:38:54.140Z"
 		},
 		{
 			"id": "rewrite-readme",
