@@ -460,7 +460,7 @@ def test_build_context_pressure_prompt_is_deterministic():
 
 def test_build_context_pressure_prompt_targets_range_and_content_insensitive():
     payload = vs.build_context_pressure_prompt(8192)
-    est = src.evaluation_prompts.estimate_tokens(payload)
+    est = vs.estimate_tokens(payload)
     # Actual loaded tokens are authoritative from the runtime; a bounded estimation
     # tolerance is expected and never misreported as exact.
     assert 8192 <= est <= 8192 + 512

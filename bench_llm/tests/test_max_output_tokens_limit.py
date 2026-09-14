@@ -8,75 +8,11 @@ import inspect
 class TestBackendValidation:
     """Verify backend accepts new range and rejects invalid values."""
 
-    def test_100000_accepted(self):
-        """Value 100000 must not raise validation error (source check)."""
-        from src.routes import evaluation as eval_mod
-        source = inspect.getsource(eval_mod)
-        assert "10000000" in source, "Backend should accept up to 10000000"
-
     def test_10000000_accepted(self):
         """Value 10000000 must not raise validation error (source check)."""
         from src.routes import benchmark as bench_mod
         source = inspect.getsource(bench_mod)
         assert "10000000" in source, "Benchmark route should accept up to 10000000"
-
-    def test_10000001_rejected(self):
-        """Value 10000001 must raise validation error."""
-        from fastapi.testclient import TestClient
-        from src.routes.evaluation import router as evaluation_router
-
-        app = __import__("fastapi", fromlist=["FastAPI"]).FastAPI()
-        app.add_api_route("/api/evaluation/run", evaluation_router.routes[0].endpoint, methods=["POST"])
-        client = TestClient(app)
-
-        resp = client.post("/api/evaluation/run", json={
-            "model": "test-model",
-            "correctness_tests": ["markdown"],
-            "speed_tests": [],
-            "iterations": 1,
-            "max_output_tokens": 10000001,
-            "temperature": 0,
-        })
-        assert resp.status_code == 400
-
-    def test_0_rejected(self):
-        """Value 0 must raise validation error."""
-        from fastapi.testclient import TestClient
-        from src.routes.evaluation import router as evaluation_router
-
-        app = __import__("fastapi", fromlist=["FastAPI"]).FastAPI()
-        app.add_api_route("/api/evaluation/run", evaluation_router.routes[0].endpoint, methods=["POST"])
-        client = TestClient(app)
-
-        resp = client.post("/api/evaluation/run", json={
-            "model": "test-model",
-            "correctness_tests": ["markdown"],
-            "speed_tests": [],
-            "iterations": 1,
-            "max_output_tokens": 0,
-            "temperature": 0,
-        })
-        assert resp.status_code == 400
-
-    def test_negative_rejected(self):
-        """Negative values must raise validation error."""
-        from fastapi.testclient import TestClient
-        from src.routes.evaluation import router as evaluation_router
-
-        app = __import__("fastapi", fromlist=["FastAPI"]).FastAPI()
-        app.add_api_route("/api/evaluation/run", evaluation_router.routes[0].endpoint, methods=["POST"])
-        client = TestClient(app)
-
-        resp = client.post("/api/evaluation/run", json={
-            "model": "test-model",
-            "correctness_tests": ["markdown"],
-            "speed_tests": [],
-            "iterations": 1,
-            "max_output_tokens": -1,
-            "temperature": 0,
-        })
-        assert resp.status_code == 400
-
 
 class TestValueReachesLmStudio:
     """Verify the selected value reaches LM Studio payload unchanged."""

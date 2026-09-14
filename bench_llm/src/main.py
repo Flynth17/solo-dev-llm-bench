@@ -19,7 +19,6 @@ from src.routes import prompts as prompts_routes
 from src.routes import results as results_routes
 from src.routes import benchmark as benchmark_routes
 from src.routes import tasks as tasks_routes
-from src.routes import evaluation as evaluation_routes
 from src.routes import v2_results as v2_results_routes
 from src.routes import v2_workflow as v2_workflow_routes
 from src.routes import v2_speed as v2_speed_routes
@@ -56,9 +55,6 @@ app.include_router(benchmark_routes.router)
 
 # Register task CRUD and history routes
 app.include_router(tasks_routes.router)
-
-# Register evaluation route
-app.include_router(evaluation_routes.router)
 
 # Register read-only V2 results API (consumes the validated read model only)
 app.include_router(v2_results_routes.router)

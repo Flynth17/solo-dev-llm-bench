@@ -8,8 +8,9 @@ evidence (rule id, line where meaningful, expected condition, actual problem).
 
 Detection is **pure** -- no external linter, no subprocess, no disk.  The detectors
 are small, self-contained regex checks over the fixture text.  This extends the same
-deterministic quality path used by ``python_cases`` / ``java_cases``; it never touches
-the active CLI-based benchmark in ``benchmark_markdown.py`` / ``task_markdown.py``.
+deterministic quality path used by ``python_cases`` / ``java_cases``; it is pure and
+never shells out or executes a model -- unlike the retired legacy CLI-based benchmark
+fixtures that were removed in Act 24.
 
 Two bundled fixtures live next to this module::
 

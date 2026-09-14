@@ -46,8 +46,6 @@ from src.benchmark import (  # noqa: E402
     resolve_context_capacity,
     resolve_loaded_instance_config,
 )
-from src.evaluation_prompts import estimate_tokens
-
 # Shared cross-suite concurrency guard (Act 17). Launch registers the child handle here
 # so Workflow and Speed reject overlapping launches bidirectionally.
 import src.standard_run_guard as standard_run_guard  # noqa: E402
@@ -55,6 +53,21 @@ import src.standard_run_guard as standard_run_guard  # noqa: E402
 # Canonical benchmark reasoning rule: throughput metrics are measured with reasoning
 # explicitly OFF (identical to run_benchmark's payload and the legacy speed path).
 from src.results import BENCHMARK_REASONING_MODE  # noqa: E402
+
+# Migrated from the retired legacy-Evaluation ``evaluation_prompts`` module (Act 24).
+# Retained here as the sole active consumer of this lightweight char/token estimator so no
+# dead "evaluation" module survives solely to host a Speed calibration helper.
+def estimate_tokens(text: str) -> int:
+    """Rough token-count estimate for *text*.
+
+    Uses a simple characters-per-token heuristic (~4 characters per token), matching the
+    behaviour that previously lived in the retired ``evaluation_prompts`` module. This is
+    only an estimation-tolerance bound; actual loaded tokens remain authoritative from the
+    runtime.
+    """
+    if not text:
+        return 0
+    return max(1, len(text) // 4)
 
 
 # ---------------------------------------------------------------------------
