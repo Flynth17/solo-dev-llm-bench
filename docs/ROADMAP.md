@@ -177,9 +177,9 @@ The current priority is to finish removing the legacy product before adding anot
 
 ## M1 — Retire Prompt / Task Manager Product
 
-**Status: NEXT**
+**Status: DONE** -- retired in commit `4d79064` (implementation evidence); 591/591 tests passed; legacy Results compatibility preserved.
 
-Remove the obsolete custom Prompt / Task Manager product.
+The obsolete custom Prompt / Task Manager product has been removed.
 
 Scope:
 

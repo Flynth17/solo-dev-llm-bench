@@ -48,9 +48,10 @@
 			"title": "Retire legacy Prompt and Task product",
 			"description": "Retire the obsolete custom Prompt / Task Manager product (Maintenance M1) -- Status: NEXT / current priority. Scope: orphaned Prompt Manager frontend, orphaned Task Manager frontend, prompt CRUD APIs, obsolete Task CRUD APIs, dead task-management persistence/helpers, associated tests, stale CSS/DOM references. Do not remove active result-history until its dependencies are separately retired.\n\nRelated completed local retirements (provenance, NOT this item): Act 24 'retire legacy Evaluation product' (96d8d52) and Act 25 'retire legacy generic benchmark product' (1a99da4).",
 			"group": "Maintenance",
-			"status": "active",
+			"status": "done",
 			"createdAt": "2026-09-14T09:39:59.442Z",
-			"updatedAt": "2026-09-14T09:43:09.884Z"
+			"updatedAt": "2026-09-14T14:55:10.000Z",
+			"completedAt": "2026-09-14T14:55:10.000Z"
 		},
 		{
 			"id": "retire-legacy-results-product",
