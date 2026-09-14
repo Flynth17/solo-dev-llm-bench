@@ -122,6 +122,12 @@ Future comparison view:
 - identical context points
 - side-by-side degradation curves
 
+Planned multi-model comparison view (tracked as goal `multi-model-comparison-view`):
+
+**Status: PLANNED**
+
+Compares several models at identical context points via side-by-side degradation curves.
+
 ---
 
 ## 4. AI Intelligence
@@ -273,7 +279,7 @@ The future AI Intelligence suite is separate from Workflow.
 
 ## D2 — Maintain This ROADMAP.md
 
-**Status: ACTIVE**
+**Status: PLANNED**
 
 This document should be the canonical future-work roadmap.
 
@@ -307,3 +313,9 @@ Solo Dev LLM Bench
 ├── Context              PLANNED
 └── AI Intelligence      PLANNED / RESEARCH
 ```
+
+## D4 — Test Architecture & Fast Gate
+
+**Status: PLANNED**
+
+Document the test architecture across the four benchmark families and establish a fast regression gate so the suite can run frequently without waiting on slow or LLM-judge tests. Tracked as goal `test-architecture-and-fast-gate`.
