@@ -6,7 +6,8 @@ This is a **pure view-model / adapter layer only** -- it performs NO benchmark l
 * it never executes a benchmark, never loads an LM Studio model and never recomputes
   any measurement;
 * it reads ONLY already-persisted dedicated speed rows from the ``ResultsStore``
-  (SQLite/CSV) -- the same persistence that ``src.routes.benchmark`` appends to;
+  (SQLite/CSV), the shared persistence used across suites to durably store runs; it no
+  longer shares a route with the retired generic benchmark product.
 * it associates speed data with a quality result by **explicit identity only** and
   never by assuming the two systems' configuration fingerprints are equivalent.
 

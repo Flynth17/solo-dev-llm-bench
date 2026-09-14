@@ -21,7 +21,6 @@ import pytest
 
 import src.app_state
 from src.results import ResultsStore, CSV_HEADERS, OPTIONAL_METADATA_COLUMNS
-from src.hardware import snapshot_hardware
 from src.benchmark import resolve_context_capacity
 
 
@@ -102,23 +101,6 @@ def _full_run(**overrides):
     return run
 
 
-def _hardware_row(run=None):
-    row = _full_run() if run is None else dict(run)
-    row.update({
-        "cpu_model": "Mock CPU",
-        "cpu_logical_cores": 8,
-        "cpu_physical_cores": 4,
-        "installed_ram_bytes": 17179869184,
-        "gpu_model": "Fake GPU",
-        "total_vram_bytes": 5368709120,
-        "os_platform": "Linux",
-        "os_version": "6.1.0",
-        "nvidia_driver_version": "550.0",
-        "python_version": "3.13.0",
-    })
-    return row
-
-
 # ----------------------------------------------------------------------
 # Schema consistency
 # ----------------------------------------------------------------------
@@ -195,89 +177,6 @@ class TestTimingPreservation:
         # TTFT has not been renamed/reinterpreted into something else.
         assert "prefill_latency_seconds" not in CSV_HEADERS
         assert "total_duration_seconds" not in CSV_HEADERS
-
-    def test_route_persists_total_duration_and_keeps_ttft(self):
-        """End-to-end: the benchmark route persists wall_time_seconds per row and
-        preserves ttft_seconds unchanged, without conflating them."""
-        import src.routes.benchmark as rb
-        from unittest.mock import patch, AsyncMock
-
-        fake_result = {
-            "run_id": "dur-1", "timestamp": "2026-01-01T00:00:00+00:00", "model": "m",
-            "iterations": 1,
-            "benchmark_duration_seconds": 5.0,
-            "runs": [{
-                "iteration": 1, "cold_or_warm": "cold",
-                "tokens_per_second": 50.0, "ttft_seconds": 0.25,
-                "input_tokens": 1000, "output_tokens": 200,
-                "model_load_time_seconds": 1.0, "wall_time_seconds": 2.50,
-            }],
-        }
-        for csv_p, db_p in _temp_paths():
-            store = ResultsStore(csv_path=csv_p, db_path=db_p)
-            with patch.object(src.app_state, "results_store", store), \
-                 patch("src.routes.benchmark.run_benchmark", new=AsyncMock(return_value=fake_result)), \
-                 patch("src.routes.benchmark.resolve_persisted_quantization",
-                       new=AsyncMock(return_value="Q4_K_M")):
-                asyncio.run(rb.run_benchmark_endpoint({
-                    "model": "m", "prompt": "p", "iterations": 1,
-                    "max_tokens": 500, "temperature": 0.0,
-                    "lm_studio_url": "http://localhost:1234",
-                }))
-            rows = store.get_all()
-            assert len(rows) == 1
-            r = rows[0]
-            # Total per-request duration captured; TTFT preserved separately (not renamed).
-            assert r["wall_time_seconds"] == 2.50
-            assert r["ttft_seconds"] == 0.25
-            assert r["tokens_per_second"] == 50.0
-
-
-# ----------------------------------------------------------------------
-# Hardware snapshot: serialization + persistence
-# ----------------------------------------------------------------------
-
-class TestHardwareSnapshotSerialization:
-    def test_snapshot_returns_expected_keys_json_serializable(self):
-        snap = snapshot_hardware()
-        expected = {
-            "cpu_model", "cpu_logical_cores", "cpu_physical_cores",
-            "installed_ram_bytes", "gpu_model", "total_vram_bytes",
-            "os_platform", "os_version", "nvidia_driver_version", "python_version",
-        }
-        assert set(snap.keys()) == expected
-        # Every value is a JSON-serialisable primitive (str / int / None).
-        json.dumps(snap)  # must not raise
-        for v in snap.values():
-            assert v is None or isinstance(v, (str, int))
-
-    def test_snapshot_never_raises(self):
-        # A crash-proof snapshot is the whole point; calling it twice must agree.
-        a = snapshot_hardware()
-        b = snapshot_hardware()
-        assert a == b
-
-    def test_hardware_snapshot_round_trips_through_store(self):
-        for csv_p, db_p in _temp_paths():
-            store = ResultsStore(csv_path=csv_p, db_path=db_p)
-            store.add_run(_hardware_row())
-            row = store.get_all()[0]
-            assert row["cpu_model"] == "Mock CPU"
-            assert row["cpu_logical_cores"] == 8
-            assert row["installed_ram_bytes"] == 17179869184
-            assert row["gpu_model"] == "Fake GPU"
-            assert row["total_vram_bytes"] == 5368709120
-
-    def test_hardware_columns_present_in_sqlite_schema(self):
-        for csv_p, db_p in _temp_paths():
-            store = ResultsStore(csv_path=csv_p, db_path=db_p)
-            conn = sqlite3.connect(str(db_p))
-            conn.row_factory = sqlite3.Row
-            cols = {r["name"] for r in conn.execute("PRAGMA table_info(runs)")}
-            for col, _ in OPTIONAL_METADATA_COLUMNS:
-                assert col in cols, f"missing from runs table: {col}"
-            conn.close()
-
 
 # ----------------------------------------------------------------------
 # Historical / missing-metadata compatibility
@@ -440,38 +339,3 @@ class TestBenchmarkInvocationDuration:
         max_wall = max(r["wall_time_seconds"] for r in result["runs"])
         assert duration >= max_wall > 0
 
-    def test_duration_field_present_per_row_via_route(self):
-        """benchmark_duration_seconds is attached identically to every iteration row
-        (mirrors run_id/timestamp), while wall_time_seconds stays per-request."""
-        import src.routes.benchmark as rb
-        fake_result = {
-            "run_id": "dur-2", "timestamp": "2026-01-01T00:00:00+00:00", "model": "m",
-            "iterations": 2,
-            "benchmark_duration_seconds": 5.5,
-            "runs": [
-                {"iteration": 1, "cold_or_warm": "cold", "tokens_per_second": 40.0,
-                 "ttft_seconds": 0.3, "input_tokens": 1000, "output_tokens": 200,
-                 "model_load_time_seconds": 1.0, "wall_time_seconds": 2.5},
-                {"iteration": 2, "cold_or_warm": "warm", "tokens_per_second": 60.0,
-                 "ttft_seconds": 0.15, "input_tokens": 1000, "output_tokens": 300,
-                 "model_load_time_seconds": None, "wall_time_seconds": 2.7},
-            ],
-        }
-        for csv_p, db_p in _temp_paths():
-            store = ResultsStore(csv_path=csv_p, db_path=db_p)
-            with patch.object(src.app_state, "results_store", store), \
-                 patch("src.routes.benchmark.run_benchmark", new=AsyncMock(return_value=fake_result)), \
-                 patch("src.routes.benchmark.resolve_persisted_quantization",
-                       new=AsyncMock(return_value="Q4_K_M")), \
-                 patch("src.routes.benchmark.resolve_context_capacity",
-                       new=AsyncMock(return_value={"model_max_context": None, "loaded_context": None})):
-                asyncio.run(rb.run_benchmark_endpoint({
-                    "model": "m", "prompt": "p", "iterations": 2, "max_tokens": 500,
-                    "temperature": 0.0, "lm_studio_url": "http://localhost:1234"}))
-            rows = store.get_all()
-            assert len(rows) == 2
-            # Invocation duration attached consistently to every row...
-            assert all(r["benchmark_duration_seconds"] == 5.5 for r in rows)
-            # ...while wall_time_seconds stays distinct per request (not overloaded).
-            assert rows[0]["wall_time_seconds"] == 2.5
-            assert rows[1]["wall_time_seconds"] == 2.7

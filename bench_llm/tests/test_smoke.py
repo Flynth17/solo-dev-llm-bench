@@ -26,12 +26,10 @@ def test_config_loads():
 
     config = load_config()
     assert isinstance(config, dict)
+    # Only model identity + LM Studio URL remain active; the retired generic-benchmark
+    # knobs (iterations / prompt / max_tokens / temperature) no longer live here.
     assert "lm_studio_url" in config
     assert "model" in config
-    assert "iterations" in config
-    assert "prompt" in config
-    assert "max_tokens" in config
-    assert "temperature" in config
 
 
 def test_config_save_roundtrip():
@@ -239,20 +237,6 @@ def test_prompts_file_valid():
         first = data["prompts"][0]
         assert "name" in first
         assert "prompt" in first
-
-
-# ====================================================================
-# Test 6: Settings.json has new fields
-# ====================================================================
-
-def test_settings_has_hardware_fields():
-    """settings.json includes the hardware/environment fields."""
-    from src.config_loader import load_config
-
-    config = load_config()
-    assert "hardware_label" in config
-    assert "execution_environment" in config
-    assert "connection_type" in config
 
 
 # ====================================================================
