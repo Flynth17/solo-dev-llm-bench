@@ -1,0 +1,146 @@
+{
+	"version": 1,
+	"revision": 17,
+	"goals": [
+		{
+			"id": "standard-speed-benchmark-family",
+			"title": "Standard Speed benchmark family",
+			"description": "Standard Speed benchmark family -- DELIVERED. Measures practical local-model execution performance at fixed context points (8K/16K/32K): TTFT, full-prefill + generation throughput, actual input/output tokens, target-vs-actual context error, wall time; calibrated token sizing, cache-busted prefill, warm samples, metric versioning v3. Supporting: model discovery, load/unload lifecycle, shared heavyweight-run guard, dedicated Standard Speed result page, history grouped by run, 8K->16K->32K summaries.\n\nlegacy_id (implementation provenance): Act 17, Act 17.1, Act 18, Act 19, Act 19.1, Act 20, Act 22, Act 23. Reference: docs/act-18-model-lifecycle.md.",
+			"group": "Delivered",
+			"status": "done",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.716Z",
+			"completedAt": "2026-09-14T09:39:59.716Z"
+		},
+		{
+			"id": "workflow-benchmark-family",
+			"title": "Workflow benchmark family",
+			"description": "Workflow benchmark family -- DELIVERED. Deterministic developer-workflow correctness/reliability benchmark: 166 checks, 5 suites, no LLM judge, no subjective scoring, authoritative V2 runner, separate suite execution, durable result artifacts, dedicated Workflow result page. NOT a universal intelligence leaderboard.\n\nlegacy_id (implementation provenance): unlabeled v2 quality engine commits (canonical provenance, corpus, runner+execution contract, live executor/extractors/prompts, authoritative artifacts) + Act 8, Act 9, Act 10, Act 11, Act 12 (v2 results UI) + Act 16 (workflow suite launch).",
+			"group": "Delivered",
+			"dependsOn": ["standard-speed-benchmark-family"],
+			"status": "done",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.833Z",
+			"completedAt": "2026-09-14T09:39:59.833Z"
+		},
+		{
+			"id": "context-benchmark-family",
+			"title": "Context benchmark family",
+			"description": "Context benchmark family -- PLANNED. Measures how model quality/performance change as usable context grows (planned points 15K/30K/60K/120K/180K/240K where supported): quality retention, workflow degradation, TTFT/prefill/degradation growth, context-capacity limits, unsupported-point handling. Unsupported points shown as gaps; scores not rescaled. Future multi-model side-by-side degradation curves.\n\nStatus per docs/ROADMAP.md: PLANNED.",
+			"group": "Planned families",
+			"dependsOn": ["retire-legacy-prompt-and-task-product"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.442Z"
+		},
+		{
+			"id": "ai-intelligence-benchmark-family",
+			"title": "AI Intelligence benchmark family",
+			"description": "AI Intelligence benchmark family -- PLANNED / RESEARCH. Not implemented. Genuinely discriminative model-capability benchmark for cases where Workflow saturates: reasoning, synthesis, planning, judgement, problem solving, instruction interpretation, ambiguity handling, multi-step decision quality. Design goals: avoid easy/saturated tasks, separate capability levels, avoid duplicating Workflow, no single universal number, define scoring before implementation. Current state: no runner/API/persistence/UI/tests.\n\nStatus per docs/ROADMAP.md: PLANNED / RESEARCH.",
+			"group": "Planned families",
+			"dependsOn": ["workflow-benchmark-family", "context-benchmark-family"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.442Z"
+		},
+		{
+			"id": "retire-legacy-prompt-and-task-product",
+			"title": "Retire legacy Prompt and Task product",
+			"description": "Retire the obsolete custom Prompt / Task Manager product (Maintenance M1) -- Status: NEXT / current priority. Scope: orphaned Prompt Manager frontend, orphaned Task Manager frontend, prompt CRUD APIs, obsolete Task CRUD APIs, dead task-management persistence/helpers, associated tests, stale CSS/DOM references. Do not remove active result-history until its dependencies are separately retired.\n\nRelated completed local retirements (provenance, NOT this item): Act 24 'retire legacy Evaluation product' (96d8d52) and Act 25 'retire legacy generic benchmark product' (1a99da4).",
+			"group": "Maintenance",
+			"status": "active",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:43:09.884Z"
+		},
+		{
+			"id": "retire-legacy-results-product",
+			"title": "Retire legacy Results product",
+			"description": "Retire the legacy Results product (Maintenance M2) -- Status: PLANNED. Simplify /results into current history view: /results = Standard Speed history; /speed/results/{run_id} = single Standard Speed run; /v2/results/{run_id} = single Workflow run. Retirement candidates: legacy task-history UI, generic/custom benchmark rows, generic result charts, old comparison views, obsolete filtering/navigation, APIs only retired surfaces use, obsolete result tests. Historical runtime data may stay archived. Do not remove active result-history until its dependencies are separately retired (see M1).",
+			"group": "Maintenance",
+			"dependsOn": ["retire-legacy-prompt-and-task-product"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.442Z"
+		},
+		{
+			"id": "remove-production-dead-leftovers",
+			"title": "Remove production-dead leftovers",
+			"description": "Remove production-dead leftovers (Maintenance M3) -- Status: PLANNED. After legacy retirement, re-run reachability analysis and remove: production-dead modules, stale imports/CSS, obsolete compatibility helpers, forbidden/superseded executor entry points, dead source-string tests, obsolete historical product comments. Re-evaluate benchmark_v2_quality.py. Do not refactor large active modules before dead code is removed.",
+			"group": "Maintenance",
+			"dependsOn": ["retire-legacy-results-product"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.442Z"
+		},
+		{
+			"id": "rewrite-readme",
+			"title": "Rewrite README",
+			"description": "Rewrite the README (Documentation D1) -- Status: PLANNED. Existing README describes an older app; rewrite (not patch). Cover: what it is, four benchmark families, delivered vs planned, LM Studio requirements, model lifecycle, Standard Speed + Workflow methodology, result pages, limitations, links to architecture/roadmap. Key wording: Workflow measures deterministic developer-task correctness; Solo Dev LLM Bench is NOT a universal intelligence leaderboard; future AI Intelligence suite is separate from Workflow.",
+			"group": "Documentation",
+			"dependsOn": ["retire-legacy-prompt-and-task-product"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.442Z"
+		},
+		{
+			"id": "maintain-the-roadmap-document",
+			"title": "Maintain the roadmap document",
+			"description": "Maintain docs/ROADMAP.md (Documentation D2) -- Status: ACTIVE. This document is the canonical future-work roadmap. Git commit history remains implementation evidence, not the roadmap itself. Historical Acts must NOT be recreated as one roadmap item per commit; coarse feature-level RM items are used instead.\n\nNote: Stepstone enforces a single active goal; this standing maintenance responsibility holds that slot here so 'current' reflects ongoing roadmap upkeep (the work being done now), while M1 is the next engineering milestone to start.",
+			"group": "Documentation",
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:43:09.884Z"
+		},
+		{
+			"id": "author-architecture-documentation",
+			"title": "Author architecture documentation",
+			"description": "Author architecture documentation (Documentation D3) -- Status: PLANNED. Concise architecture doc covering: launcher, four benchmark families, active routes, LM Studio lifecycle, heavyweight-run guard, persistence, read models, result pages, test organisation.\n\nConceptual layout in docs/ROADMAP.md.",
+			"group": "Documentation",
+			"dependsOn": ["rewrite-readme"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:39:59.442Z",
+			"updatedAt": "2026-09-14T09:39:59.442Z"
+		},
+		{
+			"id": "test-architecture-and-fast-gate",
+			"title": "Test architecture and fast gate",
+			"description": "Future engineering item (Maintenance follow-on). Establish a clean test architecture plus a FAST local test gate before scaling suites: keep unit/source-contract tests GPU-free and in-memory, add an ordered fast gate so refactors across retirement can be validated quickly. Complements dead-code cleanup (M3); does not require prod modules to be restructured first.",
+			"group": "Testing",
+			"dependsOn": ["remove-production-dead-leftovers"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:43:22.656Z",
+			"updatedAt": "2026-09-14T09:43:22.656Z"
+		},
+		{
+			"id": "streaming-research",
+			"title": "Streaming research",
+			"description": "Future research item. Investigate streaming token-by-token results and live metrics (TTFT/throughput as tokens arrive) for the dashboard, evaluating a scripted headless render against LM Studio vs the current non-streaming flow. Independent exploration; no hard dependency on earlier engineering buckets.",
+			"group": "Research",
+			"status": "open",
+			"createdAt": "2026-09-14T09:43:22.656Z",
+			"updatedAt": "2026-09-14T09:43:22.656Z"
+		},
+		{
+			"id": "multi-model-comparison-view",
+			"title": "Multi-model comparison view",
+			"description": "Planned future item (Context family's 'Future comparison view'). Side-by-side degradation/comparison across MULTIPLE models at IDENTICAL context points (15K/30K/60K/120K/180K/240K where supported); unsupported points shown as gaps, scores not rescaled. Builds on the Context benchmark family before AI Intelligence research.",
+			"group": "Comparison",
+			"dependsOn": ["context-benchmark-family"],
+			"status": "open",
+			"createdAt": "2026-09-14T09:43:22.656Z",
+			"updatedAt": "2026-09-14T09:43:22.656Z"
+		}
+	],
+	"retiredIds": [
+		"standard-speed-benchmark-family-2",
+		"workflow-benchmark-family-2",
+		"context-benchmark-family-2",
+		"ai-intelligence-benchmark-family-2",
+		"retire-legacy-prompt-and-task-product-2",
+		"retire-legacy-results-product-2",
+		"remove-production-dead-leftovers-2",
+		"rewrite-readme-2",
+		"maintain-the-roadmap-document-2",
+		"author-architecture-documentation-2"
+	]
+}
