@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.execution_boundary import run_generated_code, ExecutionBoundaryError
+
 
 @dataclass
 class PythonValidationResult:
@@ -77,20 +79,19 @@ def validate_python_solution(
             test_file = workspace / "test_solution.py"
             test_file.write_text(test_code, encoding="utf-8")
 
-            # Run pytest via subprocess (no shell)
+            # Run pytest via the execution boundary (no shell, minimal env, isolated
+            # workspace, hard timeout). Generated code never runs with host trust.
             # Note: removed "-x" so all tests run even if some fail
             # This gives accurate partial scoring for partial solutions
-            proc = subprocess.run(
+            outcome = run_generated_code(
                 ["python", "-m", "pytest", "--assert=plain", "--tb=short", "-q", str(test_file)],
-                cwd=str(workspace),
-                capture_output=True,
-                text=True,
+                cwd=workspace,
                 timeout=timeout,
             )
 
-            result.exit_code = proc.returncode
-            result.stdout = proc.stdout
-            result.stderr = proc.stderr
+            result.exit_code = outcome.exit_code
+            result.stdout = outcome.stdout
+            result.stderr = outcome.stderr
 
             # Parse pytest output for test counts — robust multi-format parser.
             # pytest -q output format examples:
@@ -98,8 +99,8 @@ def validate_python_solution(
             #   "5 passed, 1 failed in 0.03s"
             #   "1 failed, 5 passed in 0.03s"
             #   "...... [100%]"  (dot output lines before summary)
-            result.failed_tests = _parse_pytest_count(proc.stdout, "failed")
-            result.passed_tests = _parse_pytest_count(proc.stdout, "passed")
+            result.failed_tests = _parse_pytest_count(outcome.stdout, "failed")
+            result.passed_tests = _parse_pytest_count(outcome.stdout, "passed")
 
             result.total_tests = result.passed_tests + result.failed_tests
 
@@ -141,6 +142,13 @@ def validate_python_solution(
         result.total_tests = _count_test_functions(test_code)
         result.passed_tests = 0
         result.failed_tests = result.total_tests
+        result.score = 0.0
+        result.passed = False
+    except ExecutionBoundaryError as exc:
+        # Fail closed: the secure runner could not execute generated code. Report an
+        # execution / infrastructure failure; never fall back to host execution.
+        result.error = f"python executable unavailable (execution boundary): {exc}"
+        result.exit_code = -1
         result.score = 0.0
         result.passed = False
     except FileNotFoundError:

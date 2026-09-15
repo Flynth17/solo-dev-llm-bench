@@ -19,6 +19,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from src.execution_boundary import run_generated_code, ExecutionBoundaryError
+
 from ._common import (CaseDef, CaseResult, Check, COMPILE_ERROR, EXTRACTION_FAILURE,
     RUNTIME_FAILURE, ASSERTION_FAILURE, WRONG_OUTPUT, TIMEOUT)
 
@@ -591,22 +593,22 @@ def _run_case_test(case, generated_code):
         test_path = Path(tmpdir) / 'TestSolution.java'
         test_path.write_text(test_harness, encoding='utf-8')
 
-        compile_proc = subprocess.run(
+        compile_outcome = run_generated_code(
             ['javac', 'Solution.java', 'TestSolution.java'],
-            cwd=tmpdir, capture_output=True, text=True, timeout=30.0)
+            cwd=tmpdir, timeout=30.0)
 
-        if compile_proc.returncode != 0:
+        if compile_outcome.exit_code != 0:
             return [CaseResult(case_id=case.id, category=case.category, name=case.name,
                 passed=False, checks_passed=0, checks_total=len(case.checks),
                 failure_type='compile_error',
-                failure_reason='javac error: ' + compile_proc.stderr[:200])
+                failure_reason='javac error: ' + compile_outcome.stderr[:200])
                 for _ in case.checks]
 
-        run_proc = subprocess.run(
+        run_outcome = run_generated_code(
             ['java', 'TestSolution'],
-            cwd=tmpdir, capture_output=True, text=True, timeout=15.0)
+            cwd=tmpdir, timeout=15.0)
 
-        stdout = run_proc.stdout or ''
+        stdout = run_outcome.stdout or ''
         test_results = _parse_java_output(stdout)
 
         results = []

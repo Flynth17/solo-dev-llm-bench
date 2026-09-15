@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.execution_boundary import run_generated_code, ExecutionBoundaryError
+
 
 # ------------------------------------------------------------------
 # Result dataclass
@@ -175,17 +177,14 @@ def validate_java_solution(fixed_code: str, test_fixture: str = _TEST_SOLUTION) 
         solution_path.write_text(fixed_code, encoding="utf-8")
         test_path.write_text(test_fixture, encoding="utf-8")
 
-        # Compile
-        compile_proc = subprocess.run(
+        # Compile via the execution boundary (isolated env, no console window).
+        compile_outcome = run_generated_code(
             ["javac", "Solution.java", "TestSolution.java"],
             cwd=tmp_dir,
-            capture_output=True,
-            text=True,
             timeout=COMPILE_TIMEOUT,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
         )
 
-        if compile_proc.returncode != 0:
+        if compile_outcome.exit_code != 0:
             # Compilation failed
             return JavaValidationResult(
                 total_tests=expected_count,
@@ -194,40 +193,22 @@ def validate_java_solution(fixed_code: str, test_fixture: str = _TEST_SOLUTION) 
                 score=0.0,
                 passed=False,
                 compile_success=False,
-                exit_code=compile_proc.returncode,
+                exit_code=compile_outcome.exit_code,
                 timed_out=False,
-                stdout=compile_proc.stdout or "",
-                stderr=compile_proc.stderr or "",
+                stdout=compile_outcome.stdout or "",
+                stderr=compile_outcome.stderr or "",
             )
 
-        # Run
-        run_proc = subprocess.run(
+        # Run via the execution boundary (isolated env, no console window). Timeout is
+        # enforced by the boundary; a TimeoutExpired propagates to the handler below.
+        run_outcome = run_generated_code(
             ["java", "TestSolution"],
             cwd=tmp_dir,
-            capture_output=True,
-            text=True,
             timeout=RUN_TIMEOUT,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
         )
 
-        timed_out = False
-        if run_proc.returncode == -9 or (hasattr(subprocess, "TimeoutExpired") and False):
-            timed_out = True
-            return JavaValidationResult(
-                total_tests=expected_count,
-                passed_tests=0,
-                failed_tests=expected_count,
-                score=0.0,
-                passed=False,
-                compile_success=True,
-                exit_code=None,
-                timed_out=True,
-                stdout=run_proc.stdout or "",
-                stderr=run_proc.stderr or "",
-            )
-
-        stdout = run_proc.stdout or ""
-        stderr = run_proc.stderr or ""
+        stdout = run_outcome.stdout or ""
+        stderr = run_outcome.stderr or ""
         passed, failed = _parse_results(stdout)
         total = passed + failed
 
@@ -245,7 +226,7 @@ def validate_java_solution(fixed_code: str, test_fixture: str = _TEST_SOLUTION) 
             score=round(score, 4),
             passed=passed == total,
             compile_success=True,
-            exit_code=run_proc.returncode,
+            exit_code=run_outcome.exit_code,
             timed_out=False,
             stdout=stdout,
             stderr=stderr,
@@ -265,6 +246,22 @@ def validate_java_solution(fixed_code: str, test_fixture: str = _TEST_SOLUTION) 
             stderr="",
         )
 
+    except ExecutionBoundaryError as exc:
+        # Fail closed: the secure runner could not execute generated code. Report an
+        # execution / infrastructure failure; never fall back to host execution.
+        return JavaValidationResult(
+            total_tests=expected_count,
+            passed_tests=0,
+            failed_tests=expected_count,
+            score=0.0,
+            passed=False,
+            compile_success=False,
+            exit_code=None,
+            timed_out=False,
+            stdout="",
+            stderr="",
+            error=f"execution boundary failure: {exc}",
+        )
     except Exception as e:
         return JavaValidationResult(
             total_tests=expected_count,

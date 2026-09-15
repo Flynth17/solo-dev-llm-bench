@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from src.v2_workflow_runner import launch_workflow, workflow_status, WorkflowLaunchError
+from src.backend_url_policy import validate_backend_url, resolve_allowed_hosts, BackendUrlPolicyError
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -36,6 +37,13 @@ async def run_workflow_endpoint(config: dict):
     """
     model = config.get("model") if isinstance(config, dict) else None
     lm_studio_url = config.get("lm_studio_url") if isinstance(config, dict) else None
+
+    # Reject a caller-provided backend that violates the allow-list before spawning.
+    if isinstance(lm_studio_url, str):
+        try:
+            validate_backend_url(lm_studio_url, resolve_allowed_hosts())
+        except BackendUrlPolicyError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid backend URL: {exc}") from exc
 
     try:
         result = launch_workflow(model, lm_studio_url)

@@ -23,6 +23,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from src.execution_boundary import run_generated_code
+
 from ._common import (
     CaseDef,
     CaseResult,
@@ -393,8 +395,6 @@ def _run_case_test(case: CaseDef, generated_code: str) -> list[CaseResult]:
     ``-v`` verbose output, and parses per-test results line-by-line into
     CaseResult objects.  Uses the same trust model as :func:`src.python_validator.validate_python_solution`.
     """
-    import subprocess
-
     tmpdir = tempfile.mkdtemp(prefix="benchllm_py_case_")
     try:
         # Write generated solution code
@@ -406,17 +406,16 @@ def _run_case_test(case: CaseDef, generated_code: str) -> list[CaseResult]:
         test_path = Path(tmpdir) / "test_solution.py"
         test_path.write_text(test_code, encoding="utf-8")
 
-        # Run pytest via subprocess (canonical model — same as python_validator.py)
-        proc = subprocess.run(
+        # Run pytest via the execution boundary (canonical model — same trust model as
+        # python_validator.py): isolated env, isolated workspace, hard timeout.
+        outcome = run_generated_code(
             ["python", "-m", "pytest", "--tb=short", "-v", str(test_path)],
             cwd=tmpdir,
-            capture_output=True,
-            text=True,
             timeout=60.0,
         )
 
         # Parse verbose output line-by-line for per-test results
-        test_results = _parse_verbose_output(proc.stdout + proc.stderr)
+        test_results = _parse_verbose_output(outcome.stdout + outcome.stderr)
 
         # Map per-test results back to CaseResult objects
         results: list[CaseResult] = []

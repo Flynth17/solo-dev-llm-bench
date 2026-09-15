@@ -37,6 +37,7 @@ from src.v2_speed_read_model import (
     SpeedReadModelIntegrityError,
     SpeedRunNotFoundError,
 )
+from src.backend_url_policy import validate_backend_url, resolve_allowed_hosts, BackendUrlPolicyError
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -58,6 +59,13 @@ async def run_speed_endpoint(config: dict):
     lm_studio_url = config.get("lm_studio_url")
     # hardware_label is optional metadata; never treated as an override knob.
     hardware_label = config.get("hardware_label", "") if isinstance(config.get("hardware_label"), str) else ""
+
+    # Reject a caller-provided backend that violates the allow-list before spawning.
+    if isinstance(lm_studio_url, str):
+        try:
+            validate_backend_url(lm_studio_url, resolve_allowed_hosts())
+        except BackendUrlPolicyError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid backend URL: {exc}") from exc
 
     try:
         result = launch_speed(model, lm_studio_url, hardware_label=hardware_label)

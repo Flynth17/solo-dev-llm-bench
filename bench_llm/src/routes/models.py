@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from src.config_loader import load_config
+from src.backend_url_policy import validate_backend_url, resolve_allowed_hosts, BackendUrlPolicyError
 from src.benchmark import fetch_models
 from src.model_lifecycle import (
     load_model as lifecycle_load,
@@ -32,11 +33,20 @@ def _reject_if_benchmark_active():
 
 
 def _resolve_url(request_body: dict) -> str:
-    """Prefer the caller-provided LM Studio URL, else the configured default."""
+    """Prefer the caller-provided LM Studio URL, else the configured default.
+
+    The resolved URL is validated against the backend allow-list (loopback-only by
+    default; ``trusted_backend_hosts`` in config extends it). A disallowed or malformed
+    host raises :class:`BackendUrlPolicyError` so callers can surface a 400 -- this
+    prevents a caller-provided override from bypassing the SSRF boundary.
+    """
     provided = request_body.get("lm_studio_url")
-    if isinstance(provided, str) and provided.strip():
-        return provided.strip().rstrip("/")
-    return (load_config().get("lm_studio_url") or "http://localhost:1234").rstrip("/")
+    raw = (
+        provided.strip()
+        if isinstance(provided, str) and provided.strip()
+        else (load_config().get("lm_studio_url") or "http://localhost:1234")
+    )
+    return validate_backend_url(raw, resolve_allowed_hosts())
 
 
 def _map_lifecycle(exc: ModelLifecycleError) -> HTTPException:
@@ -50,6 +60,10 @@ async def get_models():
     """Fetch LLM models from LM Studio native v1 API."""
     config = load_config()
     lm_studio_url = config.get("lm_studio_url", "http://localhost:1234").rstrip("/")
+    try:
+        validate_backend_url(lm_studio_url, resolve_allowed_hosts())
+    except BackendUrlPolicyError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid backend URL: {exc}") from exc
     try:
         models = await fetch_models(lm_studio_url)
         return {"models": models}
@@ -91,7 +105,10 @@ async def load_model_endpoint(request_body: dict):
         raise HTTPException(status_code=400, detail="A model must be selected to load.")
 
     _reject_if_benchmark_active()
-    base_url = _resolve_url(request_body)
+    try:
+        base_url = _resolve_url(request_body)
+    except BackendUrlPolicyError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid backend URL: {exc}") from exc
 
     try:
         result = await lifecycle_load(base_url, model.strip())
@@ -123,7 +140,10 @@ async def unload_model_endpoint(request_body: dict):
         raise HTTPException(status_code=400, detail="A model must be selected to unload.")
 
     _reject_if_benchmark_active()
-    base_url = _resolve_url(request_body)
+    try:
+        base_url = _resolve_url(request_body)
+    except BackendUrlPolicyError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid backend URL: {exc}") from exc
 
     try:
         result = await lifecycle_unload(base_url, model.strip())

@@ -247,7 +247,9 @@ class TestTimeout:
             # java TestSolution -> timeout
             raise subprocess.TimeoutExpired(args[0], 10)
 
-        with patch("src.java_validator.subprocess.run", side_effect=mock_run):
+        # Generated-code execution now flows through the execution boundary
+        # (src.execution_boundary); timeout behaviour is unchanged.
+        with patch("src.execution_boundary.subprocess.run", side_effect=mock_run):
             result = validate_java_solution(_correct_code())
 
         assert result.score == 0.0
