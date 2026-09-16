@@ -41,8 +41,13 @@ function applyFilters() {
     var hardwareFilter = (filterHardwareInput.value || "").toLowerCase().trim();
     var envFilter = filterEnvSelect.value;
     // The Results page surfaces only Standard Speed history, so the shared predicate is
-    // applied to the normalized speed runs.
-    filteredSpeedRuns = allSpeedRuns.filter(matchesFilter);
+    // applied to the normalized speed runs. Pass the DOM-derived values explicitly:
+    // Array.prototype.filter invokes its callback with (element, index, array), so passing
+    // matchesFilter as a bare callback would bind its parameters to (run, index, array)
+    // and exclude every run.
+    filteredSpeedRuns = allSpeedRuns.filter(function (run) {
+        return matchesFilter(run, modelFilter, hardwareFilter, envFilter);
+    });
 
     renderResults();
 }
