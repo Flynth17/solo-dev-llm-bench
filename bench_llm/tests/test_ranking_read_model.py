@@ -260,3 +260,71 @@ def test_legacy_single_row_speed_row_is_readable():
     out = rm.build_ranking([legacy])
     versions = {m["model_version"] for m in out["models"]}
     assert "legacy-model" in versions
+
+
+# ---------------------------------------------------------------------------
+# 7. Speed evidence model-ownership guard (regression: cross-model contamination).
+#
+# Each persisted Speed run has exactly one authoritative model identity; the L0
+# construction must attach it only to that model's buckets -- mirroring the
+# Quality loop's existing ``model_identifier != mv`` guard.
+# ---------------------------------------------------------------------------
+
+def _speed_run_ids(model_entry):
+    return sorted(
+        rid for c in model_entry["configurations"] if c["benchmark_family"] == "speed"
+        for rid in c["run_ids"]
+    )
+
+
+def test_speed_runs_attach_only_to_their_own_model_bucket():
+    """Regression: the Speed loop once iterated every run for every L0 bucket, so each
+    model inherited all foreign Speed Run IDs. Each run must appear under exactly its
+    own model identity."""
+    ornith = _speed_run_rows("run-ornith", "model-ornith", exp=8)
+    nemotron = _speed_run_rows("run-nemotron", "model-nemotron", exp=6)
+    out = rm.build_ranking(ornith + nemotron)
+    by_version = {m["model_version"]: m for m in out["models"]}
+    assert set(by_version) == {"model-ornith", "model-nemotron"}
+    assert _speed_run_ids(by_version["model-ornith"]) == ["run-ornith"]
+    assert _speed_run_ids(by_version["model-nemotron"]) == ["run-nemotron"]
+
+
+def test_model_with_only_quality_evidence_keeps_no_foreign_speed_runs():
+    """An L0 identity anchored only by a Quality view must not inherit Speed runs it did
+    not produce (the dev-fixture-model contamination shape)."""
+    ornith = _speed_run_rows("run-ornith", "model-ornith", exp=8)
+    fixture_qv = _quality_view("dev-fixture-model", passed=148, total=166,
+                               classification="incomplete")
+    out = rm.build_ranking(ornith, [fixture_qv])
+    by_version = {m["model_version"]: m for m in out["models"]}
+    fixture = by_version["dev-fixture-model"]
+    assert _speed_run_ids(fixture) == []  # no Speed evidence of its own -> none attached
+    agentic_cfgs = [c for c in fixture["configurations"] if c["benchmark_family"] == "agentic"]
+    assert len(agentic_cfgs) == 1 and agentic_cfgs[0]["run_ids"] == ["q-dev-fixture-model"]
+
+
+def test_speed_and_quality_evidence_join_only_under_their_own_model():
+    """A model with both families keeps exactly its own evidence of each family; a second
+    model's bucket never sees it. (Architecture-bucket reconciliation is out of scope:
+    every arch bucket of the owning version carries that version's own evidence.)"""
+    ornith = _speed_run_rows("run-ornith", "model-ornith", exp=8)   # anchors (ornith, moe)
+    other = _speed_run_rows("run-other", "model-other")             # anchors (other, unknown)
+    qv = _quality_view("model-ornith", passed=148, total=166)       # anchors (ornith, unknown)
+    out = rm.build_ranking(ornith + other, [qv])
+    buckets = {(m["model_version"], m["architecture"]): m for m in out["models"]}
+    assert set(buckets) == {
+        ("model-ornith", "moe"), ("model-ornith", "unknown"), ("model-other", "unknown")
+    }
+    for (mv, arch), m in buckets.items():
+        speed_ids = _speed_run_ids(m)
+        agentic_ids = sorted(
+            rid for c in m["configurations"] if c["benchmark_family"] == "agentic"
+            for rid in c["run_ids"]
+        )
+        if mv == "model-ornith":
+            assert speed_ids == ["run-ornith"], f"{(mv, arch)} inherited foreign Speed evidence: {speed_ids}"
+            assert agentic_ids == ["q-model-ornith"]
+        else:
+            assert speed_ids == ["run-other"], f"{(mv, arch)} inherited foreign Speed evidence: {speed_ids}"
+            assert agentic_ids == []

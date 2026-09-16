@@ -417,6 +417,14 @@ def build_ranking(
 
             # Speed evidence -> L1 config keyed by the (Speed) configuration fingerprint.
             for rid, rows in speed_by_run.items():
+                if not rows:
+                    continue
+                # Model-ownership guard: a persisted Speed run belongs to exactly one model
+                # identity; attach it only to that model's buckets -- mirroring the Quality
+                # loop's identity check below. Without this every L0 bucket inherits every
+                # Speed run (cross-model contamination).
+                if _model_version(rows[0]) != mv:
+                    continue
                 first = next((r for r in rows if r.get("configuration_fingerprint")), None) or rows[0]
                 fp = _norm_str(first.get("configuration_fingerprint"))
                 classification = classify_run_for_result(rows[0])
