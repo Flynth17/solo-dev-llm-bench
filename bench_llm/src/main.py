@@ -18,6 +18,7 @@ from src.routes import results as results_routes
 from src.routes import v2_results as v2_results_routes
 from src.routes import v2_workflow as v2_workflow_routes
 from src.routes import v2_speed as v2_speed_routes
+from src.routes import ranking as ranking_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
 
@@ -53,6 +54,11 @@ app.include_router(v2_workflow_routes.router)
 # Shares the cross-suite concurrency guard with Workflow so only one standard benchmark
 # uses the local model at a time.
 app.include_router(v2_speed_routes.router)
+
+# Register canonical ranking / aggregation read-only API (Results UI prerequisite).
+# Combines already-persisted Standard Speed rows with validated Workflow views into the
+# presentation-facing L0/L1/L2 view; performs no benchmark logic and makes no DB change.
+app.include_router(ranking_routes.router)
 
 # ---------------------------------------------------------------------------
 # Pages

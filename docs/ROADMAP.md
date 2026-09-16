@@ -6,14 +6,6 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## ACTIVE
 
-### RM-26-AA-0006 — Maintain the roadmap document
-
-Standing maintenance of this canonical ROADMAP.md: keep structure valid, reconcile state against implementation, and preserve legacy Acts as metadata (not one item per commit). Git history is implementation evidence, not the roadmap itself.
-
-- Category: documentation
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: maintain-the-roadmap-document; D2
-
 ## TODO
 
 ### RM-26-AA-0007 — Rewrite README
@@ -148,3 +140,60 @@ After legacy retirement, re-ran reachability analysis and removed production-dea
 
 - commit `075ece1` — refactor: remove production-dead leftovers
 - 524/524 tests passed against isolated temp storage
+
+### RM-26-AA-0006 — Maintain the roadmap document
+
+Reconciled this canonical ROADMAP.md against implementation and the project-goal mirror: verified DONE/ACTIVE/TODO/FUTURE state, preserved legacy Acts as metadata (not one item per commit), confirmed `NEXT` derivation, and closed out standing maintenance. Git history is implementation evidence, not the roadmap itself.
+
+- Category: documentation
+- Updated: 2026-09-16T00:00:00Z
+- Legacy ID: maintain-the-roadmap-document; D2
+
+#### Evidence
+
+- docs/ROADMAP.md status DONE (reconciled)
+- reconcile against implementation completed; `RM-26-AA-0014` verified and recorded
+
+### RM-26-AA-0014 — Speed benchmark repeatability contract
+
+Delivered. Standard Speed now executes one independent run per stage for every canonical point: 1 cold (cache-busted full-prefill) plus 2 warm (`warm_a` / `warm_b`). Each run is persisted independently so cold and warm are never averaged together; prefill throughput stays a cold-only signal and generation is a warm-only mean. A stage-aware read model relaxes the one-row-per-point guard to accept cold + two warm, preserves explicit per-stage provenance (stage tag, status, telemetry) for successful runs by default with unsuccessful ones behind an explicit toggle, keeps legacy single-row evidence backwards-compatible, rejects duplicate-stage rows instead of collapsing them, and captures optional reasoning-token metrics only when the backend reports them.
+
+- Category: product
+- Updated: 2026-09-16T00:00:00Z
+- Legacy ID: speed-benchmark-repeatability-contract
+
+#### Evidence
+
+- design artifact: `docs/speed-repeatability-contract.md`
+- independent `cold` / `warm_a` / `warm_b` runs persisted independently (`bench_llm/src/v2_speed_suite_runner.py`)
+- stage-aware read model + per-stage provenance (`bench_llm/src/v2_speed_read_model.py`)
+- warm-only generation aggregation; prefill kept cold-only
+- legacy single-row compatibility preserved
+- duplicate-stage evidence rejected rather than collapsed
+- optional reasoning-token capture only when reported
+- full suite: 558 passed
+- focused repeatability suite: 94 passed
+
+### RM-26-AA-0015 — Canonical ranking / aggregation read model (Results UI prerequisite)
+
+Delivered the backend/read-model layer that projects already-persisted Standard Speed and V2 Quality (Agentic) evidence into the canonical L0/L1/L2 representation the future Results UI consumes. Purely read-only: it reuses verified existing readers (:func:`load_speed_run_by_id`, :func:`classify_run_for_result`, :func:`src.v2_quality_read_model.build_read_model`) by composition, performs no benchmark logic, rewrites no historical rows, and implements NO composite score.
+
+- Category: product
+- Updated: 2026-09-16T00:00:00Z
+- Legacy ID: canonical-ranking-read-model; results-aggregation-backend
+
+#### Evidence
+
+- design artifacts: `docs/results-data-contract.md`
+- read-only aggregation layer: `bench_llm/src/ranking_read_model.py`
+- read-only HTTP adapter registered in `bench_llm/src/main.py`: GET `/api/ranking`, GET `/api/ranking/summary`, GET `/api/ranking/models` (HTTP 200 verified)
+- identity rules: L0 = `(model_version, architecture)` with dense / moe / unknown resolved from `num_experts`; configurations are children keyed by `(benchmark_family, configuration_fingerprint)`; per-run provenance + Run IDs preserved
+- eligibility (§6): completed + canonical + all required fields present contribute; partial/failed/interrupted/unsupported evidence never coerces to numeric zero
+- **composite Overall Solo Bench score remains explicitly `unavailable`** (no weights/formula invented); reserved placeholder is null
+- N/A rendered as `None` (`score: None`, `status: unavailable`) for unimplemented dimensions -- verified distinct from `0`
+- speed repeatability contract preserved and never collapsed (cold full-prefill vs warm-only generation kept separate)
+- integrity-skip behaviour: one invalid Workflow artifact is excluded from the Agentic dimension without aborting the whole ranking surface
+- test evidence: ranking read-model tests 12/12, route tests 8/8; focused speed/results/v2-quality regression 219 passed; **full suite 578 passed**
+
+Not delivered by this item (deferred): visual Results UI, overall Solo Bench weighting/formula, model-vs-model / scorecard UI, Markdown/JPEG/PDF export, Agentic context-degradation scoring, Intelligence benchmark/scoring.
+
