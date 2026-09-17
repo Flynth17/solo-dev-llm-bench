@@ -8,15 +8,6 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
-### RM-26-AA-0007 — Rewrite README
-
-Rewrite (not patch) the README to describe the current application: four benchmark families, delivered vs planned, LM Studio requirements, model lifecycle, Standard Speed + Workflow methodology, result pages, limitations. Key wording: Workflow measures deterministic developer-task correctness; Solo Dev LLM Bench is **not** a universal intelligence leaderboard; the future AI Intelligence suite is separate from Workflow.
-
-- Category: documentation
-- Depends on: RM-26-AA-0003
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: rewrite-readme; D1
-
 ### RM-26-AA-0008 — Author architecture documentation
 
 Concise architecture document covering: launcher, four benchmark families, active routes, LM Studio lifecycle, heavyweight-run guard, persistence, read models, result pages, test organisation. Conceptual layout preserved in this roadmap.
@@ -73,6 +64,20 @@ Side-by-side degradation / comparison across MULTIPLE models at IDENTICAL contex
 - Legacy ID: multi-model-comparison-view
 
 ## DONE
+
+### RM-26-AA-0007 — Rewrite README
+
+Rewrite (not patch) the README to describe the current application: four benchmark families, delivered vs planned, LM Studio requirements, model lifecycle, Standard Speed + Workflow methodology, result pages, limitations. Key wording: Workflow measures deterministic developer-task correctness; Solo Dev LLM Bench is **not** a universal intelligence leaderboard; the future AI Intelligence suite is separate from Workflow.
+
+- Category: documentation
+- Depends on: RM-26-AA-0003
+- Updated: 2026-09-17T22:42:15Z
+- Legacy ID: rewrite-readme; D1
+
+#### Evidence
+
+- commit `6c79c2d` — docs: rewrite README for current benchmark architecture
+- README unchanged since commit (no regression to HEAD)
 
 ### RM-26-AA-0001 — Standard Speed benchmark family
 
