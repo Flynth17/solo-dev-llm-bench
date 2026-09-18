@@ -18,6 +18,7 @@ from src.routes import results as results_routes
 from src.routes import v2_results as v2_results_routes
 from src.routes import v2_workflow as v2_workflow_routes
 from src.routes import v2_speed as v2_speed_routes
+from src.routes import context as context_routes
 from src.routes import ranking as ranking_routes
 
 logger = logging.getLogger("solo_dev_llm_bench")
@@ -54,6 +55,10 @@ app.include_router(v2_workflow_routes.router)
 # Shares the cross-suite concurrency guard with Workflow so only one standard benchmark
 # uses the local model at a time.
 app.include_router(v2_speed_routes.router)
+
+# Register Context benchmark family launcher + read-only API (RM-26-AA-0009).
+# Execution plumbing only; the Results UI that consumes this is RM-26-AA-0018.
+app.include_router(context_routes.router)
 
 # Register canonical ranking / aggregation read-only API (Results UI prerequisite).
 # Combines already-persisted Standard Speed rows with validated Workflow views into the
@@ -104,5 +109,27 @@ async def speed_result_page(run_id: str):
     """
     html_file = STATIC_DIR / "speed-result.html"
     return html_file.read_text(encoding="utf-8")
+
+
+@app.get("/context/results/{run_id}", response_class=HTMLResponse)
+async def context_result_page(run_id: str):
+    """Temporary shell for a single Context run (RM-26-AA-0009 delivery).
+
+    The full Context degradation Results UI is RM-26-AA-0018 and is **not** part of
+    this family's delivery. This minimal placeholder exists only so the launcher's
+    ``result_url`` deep-link resolves; it surfaces no benchmark rendering and simply
+    points consumers at the authoritative read API that future UI will consume.
+    """
+    return (
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
+        "  <meta charset=\"utf-8\">\n"
+        "  <title>Context Result (shell)</title>\n"
+        "  <p>Context run <code>{run_id}</code>.</p>\n"
+        "  <p>The full Context degradation Results UI is pending RM-26-AA-0018.\n"
+        "     Authoritative evidence is available at\n"
+        "     <a href=\"/api/context/runs/{run_id}\">/api/context/runs/{run_id}</a>.</p>\n"
+        "</head>\n</html>"
+    ).format(run_id=run_id)
+
 
 

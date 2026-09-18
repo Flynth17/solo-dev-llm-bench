@@ -8,15 +8,6 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
-### RM-26-AA-0009 — Context benchmark family
-
-Measure how model quality and performance change as usable context grows. Planned points 15K/30K/60K/120K/180K/240K where supported: quality retention, workflow degradation, TTFT/prefill/degradation growth, context-capacity limits, unsupported-point handling (shown as gaps; scores must not be rescaled to hide unsupported sizes).
-
-- Category: product
-- Depends on: RM-26-AA-0003
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: context-benchmark-family
-
 ### RM-26-AA-0011 — Test architecture and fast gate
 
 Establish a clean test architecture plus a FAST local test gate (unit/source-contract tests GPU-free and in-memory; ordered fast gate) so refactors across retirement can be validated quickly. Complements dead-code cleanup (M3); does not require production modules to be restructured first.
@@ -112,6 +103,25 @@ Results UI for the AI Intelligence benchmark family. Purely downstream: cannot b
 - Legacy ID: intelligence-results-integration
 
 ## DONE
+
+### RM-26-AA-0009 — Context benchmark family
+
+Delivered as a deterministic, evidence-preserving benchmark measuring how model capability changes as usable context grows at fixed points 15K/30K/60K/120K/180K/240K where supported. Quality retention (exact-match fact recall) and performance degradation (TTFT/prefill/degradation growth, context-capacity limits). Unsupported points persist as null-scored gaps and are never rescaled to zero. Distinct from Standard Speed, prompt/prefill throughput, Workflow/Agentic, AI Intelligence, composite scoring, and the Results UI (RM-26-AA-0018).
+
+- Category: product
+- Depends on: RM-26-AA-0003
+- Updated: 2026-09-18T14:00:00Z
+- Legacy ID: context-benchmark-family
+
+#### Evidence
+
+- `bench_llm/src/context_corpus/` — deterministic corpus (builder + scoring): fixed known facts, cache-busting per-run filler, exact-match scoring with a None-not-zero contract and divide-by-zero guard
+- `bench_llm/src/v2_context_suite_runner.py` — execution plumbing only; never imports the legacy executor
+- `bench_llm/src/v2_context_artifact.py` — atomic schema-versioned artifacts; one row per supported point; unsupported points persisted as null-scored gaps with an explicit reason
+- `bench_llm/src/v2_context_read_model.py` — authoritative projection with baseline/degradation over authoritative scores and ownership-fingerprint integrity checks (no cross-model evidence leakage)
+- `bench_llm/src/routes/context.py` + temporary shell in `bench_llm/src/main.py` — launch/status/read API; the full degradation Results UI is RM-26-AA-0018
+- `docs/architecture.md` §5.3 updated to DELIVERED
+- tests: test_context_corpus.py, test_context_suite_runner.py, test_context_read_model.py, test_context_route.py (full suite 623 passed)
 
 ### RM-26-AA-0008 — Author architecture documentation
 

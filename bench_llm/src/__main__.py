@@ -30,6 +30,7 @@ from src.v2_quality_suite_runner import (  # noqa: E402
     ConfigurationMismatchError,
 )
 from src.v2_speed_suite_runner import run_speed_suite  # noqa: E402
+from src.v2_context_suite_runner import run_context_suite  # noqa: E402
 
 
 def _dump(obj: Any) -> str:
@@ -70,6 +71,23 @@ def cmd_v2_run(args: argparse.Namespace) -> int:
         print(_dump({"error": "configuration_mismatch", "details": str(exc)}), file=sys.stderr)
         return 2
     print(_dump(agg))
+    return 0
+
+
+def cmd_context_suite(args: argparse.Namespace) -> int:
+    try:
+        document = asyncio.run(
+            run_context_suite(
+                lm_studio_url=args.lm_studio_url,
+                model=args.model,
+                run_id=args.run_id,
+            )
+        )
+    except Exception as exc:
+        # Concise, non-zero exit signal for orchestrators/tests; never a raw traceback.
+        print(_dump({"status": "failed", "error": str(exc)}), file=sys.stderr)
+        return 1
+    print(_dump(document))
     return 0
 
 
@@ -117,6 +135,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_speed.add_argument("--run-id", default=None)
     p_speed.add_argument("--hardware-label", default="")
     p_speed.set_defaults(func=cmd_v2_speed)
+
+    p_context = sub.add_parser(
+        "context-suite",
+        help="Run the Context benchmark family (15K..240K where supported) as a fresh process.",
+    )
+    p_context.add_argument("--lm-studio-url", default=DEFAULT_LM_STUDIO_URL)
+    p_context.add_argument("--model", default=DEFAULT_MODEL)
+    p_context.add_argument("--run-id", default=None)
+    p_context.set_defaults(func=cmd_context_suite)
 
     return parser
 

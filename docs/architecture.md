@@ -208,14 +208,46 @@ compilation). It measures correctness, **not** general intelligence.
 - **Launch + status:** `routes/v2_workflow.py` exposes the launcher API; single-run detail is
   served via `routes/v2_results.py` (`GET /api/v2/results/{run_id}`) and the `/v2/results/{run_id}` page.
 
-### 5.3 Context — PLANNED · not implemented
+### 5.3 Context — DELIVERED
 
-No runner, API, persistence, or result UI exists in the current source. Roadmap intent is to
-measure how model quality and performance change as usable context grows at points
-**15K / 30K / 60K / 120K / 180K / 240K where supported**, focusing on quality retention and
-performance degradation (TTFT/prefill/degradation growth, context-capacity limits). Unsupported
-points would be shown as gaps; scores are never rescaled to hide them. This family underpins a
-future multi-model comparison view.
+Context measures **how model capability changes as usable context grows** at the fixed points
+**15K / 30K / 60K / 120K / 180K / 240K where supported**. It is a quality-retention /
+degradation family: exact-match fact recall (quality) and TTFT/prefill/degradation growth
+(performance), with capacity limits surfaced as gaps. It is deliberately **not** Standard Speed,
+prompt/prefill throughput, Workflow/Agentic, AI Intelligence, composite scoring, or the final
+Results UI (that is RM-26-AA-0018).
+
+- **Deterministic corpus (`src/context_corpus/`):** a fixed, known fact set with stable expected
+  values. `builder.build_prompt()` grows cache-busting deterministic filler until the prompt
+  reaches the requested size and embeds the facts block; per-run salt defeats cross-run KV-cache
+  reuse without changing gradeable content. `scoring.point_score()` is exact-match only, returns
+  `None` (never `0`) when nothing is gradeable, and degradation/retention math guards against
+  divide-by-zero so an unsupported point can never be coerced to a numeric score.
+- **Execution plumbing only (`src/v2_context_suite_runner.py`):** orchestrates the locked suite,
+  builds deterministic payloads (`temperature=0`, `reasoning=off`), and persists one durable row
+  per attempted point. It explicitly **never imports or calls** the legacy executor — matching
+  the Workflow isolation contract.
+- **Persistence (`src/v2_context_artifact.py`):** atomic, schema-versioned artifacts keyed by a
+  unique `ctx-*` run id; each supported point persists exactly one independent row. Unsupported
+  points persist as null-scored gaps with an explicit reason — never zero, never rescaled.
+- **Ownership isolation:** every artifact records a per-run configuration fingerprint and model
+  identity. The read model validates that the baseline points at a *persisted* supported point
+  and refuses to "repair" inconsistent data — so one run's evidence can never attach to another
+  model/config (the class of bug Standard Speed had).
+- **Read model (`src/v2_context_read_model.py`):** projects authoritative per-point data verbatim
+  for future UI; surfaces `supported_point_count`, `gap_point_count`, baseline, and per-point
+  degradation/retention. It never recomputes scores.
+- **Baseline + degradation:** the baseline is the smallest *supported* point; degradation is
+  computed over authoritative per-point scores so a zero-correct deep point reads as real loss,
+  not a rescale.
+- **Launch + status:** `routes/context.py` exposes execution plumbing only (`POST /api/context/run`,
+  `GET /api/context/runs/{id}/status`) plus a read-only single-run view (`GET /api/context/runs/{id}`).
+  Completion is proven by a durable artifact, not a live process. A temporary result-page shell in
+  `main.py` exists only so the launcher's `result_url` deep-link resolves; the full degradation UI
+  is RM-26-AA-0018.
+- **CLI:** `python -m src context-suite` runs the family as a fresh process (see §3).
+- **Tests:** `tests/test_context_corpus.py`, `tests/test_context_suite_runner.py`,
+  `tests/test_context_read_model.py`, `tests/test_context_route.py`. Full suite: 623 passed.
 
 ### 5.4 AI Intelligence — RESEARCH · not implemented
 
@@ -410,8 +442,10 @@ guarantee than the code provides:
 
 These map to roadmap items, not to current implementation:
 
-- **Context benchmark family (RM-26-AA-0009)** — measured quality/performance vs. growing usable
-  context; would add a new runner, persistence shape, and result surface.
+- **Context benchmark family (RM-26-AA-0009)** — DELIVERED: runner (`src/v2_context_suite_runner.py`),
+  deterministic corpus (`src/context_corpus/`), atomic artifacts (`src/v2_context_artifact.py`), read
+  model (`src/v2_context_read_model.py`) and API (`src/routes/context.py`). Only the degradation Results
+  UI surface remains (RM-26-AA-0018).
 - **AI Intelligence benchmark family (RM-26-AA-0010)** — discriminative capability benchmark for
   cases where Workflow saturates; requires corpus, scoring methodology, and UI before any
   implementation.
@@ -427,13 +461,13 @@ These map to roadmap items, not to current implementation:
 | Area | Authoritative files | Status |
 |------|---------------------|--------|
 | Application / FastAPI app | `src/main.py`, `src/server_launcher.py`, `src/__main__.py` | DELIVERED |
-| Route modules | `src/routes/{config,models,results,v2_results,v2_workflow,v2_speed,ranking}.py` | DELIVERED |
+| Route modules | `src/routes/{config,models,results,v2_results,v2_workflow,v2_speed,context,ranking}.py` | DELIVERED |
 | Static UI / pages | `bench_llm/static/*.{html,js,css}` | DELIVERED |
 | Configuration boundary | `src/config_loader.py`, `config/settings.json` | DELIVERED |
 | Model lifecycle / LM Studio | `src/model_lifecycle.py`, `src/benchmark.py` (`fetch_models`) | DELIVERED |
 | Standard Speed family | `src/v2_speed_suite_runner.py`, `src/routes/v2_speed.py`, `src/routes/results.py` | DELIVERED |
 | Workflow family | `src/v2_workflow_runner.py`, `src/v2_quality_suite_runner.py`, `src/routes/v2_workflow.py`, `src/routes/v2_results.py` | DELIVERED |
-| Context family | — (roadmap only) | PLANNED |
+| Context family | `src/context_corpus/`, `src/v2_context_suite_runner.py`, `src/v2_context_artifact.py`, `src/v2_context_read_model.py`, `src/routes/context.py` | DELIVERED |
 | AI Intelligence family | — (roadmap only) | RESEARCH |
 | Execution boundary | `src/execution_boundary.py` | DELIVERED |
 | Backend URL allow-list | `src/backend_url_policy.py` | DELIVERED |
