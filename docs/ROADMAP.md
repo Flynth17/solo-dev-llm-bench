@@ -26,6 +26,37 @@ Establish a clean test architecture plus a FAST local test gate (unit/source-con
 - Updated: 2026-09-14T20:00:00Z
 - Legacy ID: test-architecture-and-fast-gate; D4
 
+### RM-26-AA-0016 — Unified Results UI foundation
+
+Common Results experience rather than independent disconnected result pages. Provides the shared shell consumed by every benchmark-family results surface: unified Results navigation with benchmark-specific tabs/views, shared cards/modules and collapsible sections, L0→L1→L2 drill-down conventions (model family/version → configuration/quantization → individual run evidence), and a single loading/error/N/A/invalid-state contract. Consumes authoritative backend/read models only (`build_ranking`, `load_speed_run_by_id`, `load_v2_result`); the frontend performs no benchmark scoring or dimension recomputation, and N/A is never treated as zero. Applies the agreed dark visual system (dark mode or nothing — no light/dark toggle unless a future item explicitly adds one). Extensible with slots for later benchmark families (Context, Intelligence) without restructuring the shell.
+
+- Category: product
+- Depends on: RM-26-AA-0015, RM-26-AA-0008
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: unified-results-ui-foundation
+
+### RM-26-AA-0017 — Speed & Workflow Results experience
+
+Integrate the two delivered benchmark families into the unified Results foundation as one cohesive results experience (not disconnected pages).
+
+Standard Speed telemetry exposed where available: TTFT, prompt/prefill processing throughput, generation/decode throughput, cold + warm repeatability runs, per-run/config evidence, config/quantization transparency, unsupported/gap points (never converted to zero), and validity/failure state — drill-down rather than only headline metrics. Prompt/prefill processing is a visible dimension of the Speed results experience, not a separate benchmark.
+
+Workflow presented against its authoritative backend/read-model output: overall Workflow result/score, suite-level breakdown, test/case/request evidence where available, failure-first presentation with collapsible successful evidence, filters, model/config transparency, validity/failure state, and deep-link/run evidence where appropriate. The frontend does not independently recompute Workflow scoring; Workflow remains a deterministic correctness benchmark, never an LLM-judge quality measure.
+
+- Category: product
+- Depends on: RM-26-AA-0016, RM-26-AA-0015
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: speed-workflow-results-experience
+
+### RM-26-AA-0018 — Context degradation Results UI
+
+Results surface for the Context benchmark family's degradation signal. Distinct from, and downstream of, RM-26-AA-0009 (the benchmark must exist before this UI can consume authoritative results). Scope: context-size progression, degradation/drift curve, baseline/reference point, unsupported/gap states, validity/failure states, individual run/evidence drill-down, and model/config transparency. Consumes the Context read-model output through the unified Results foundation; does not define or hard-code benchmark design (e.g. target context points) here — that is owned by RM-26-AA-0009. N/A/unsupported never coerced to zero.
+
+- Category: product
+- Depends on: RM-26-AA-0016, RM-26-AA-0009
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: context-degradation-results-ui
+
 ## FUTURE
 
 ### RM-26-AA-0010 — AI Intelligence benchmark family
@@ -47,12 +78,38 @@ Investigate streaming token-by-token results and live metrics (TTFT / throughput
 
 ### RM-26-AA-0013 — Multi-model comparison view
 
-Side-by-side degradation / comparison across MULTIPLE models at IDENTICAL context points (15K/30K/60K/120K/180K/240K where supported); unsupported points shown as gaps, scores not rescaled. Builds on the Context benchmark family before AI Intelligence research.
+Side-by-side comparison of exactly two selectable model/configurations across every available benchmark dimension (Standard Speed, Workflow/Agentic, Context once delivered, Intelligence once delivered), plus config/quantization transparency. Compares only dimensions that are valid for each subject; missing / unsupported / N/A is preserved as a gap and never coerced to zero. Shows/hides unsuccessful runs where useful, keeps validity/failure state visible, and preserves evidence drill-down (L0→L1→L2) into the underlying run. Ships incrementally: supports currently delivered dimensions first and extends once Context and Intelligence are delivered — it does not depend on AI Intelligence to ship Speed/Workflow/Context comparison. Includes exportable scorecards (Markdown, image/JPEG, PDF). The unified Results UI foundation underpins this surface; frontend performs no scoring or dimension recomputation.
 
 - Category: product / research
-- Depends on: RM-26-AA-0009
+- Depends on: RM-26-AA-0016
 - Updated: 2026-09-14T20:00:00Z
-- Legacy ID: multi-model-comparison-view
+- Legacy ID: multi-model-comparison-view; scorecard-export
+
+### RM-26-AA-0019 — Composite scoring contract design
+
+Research/design item that decides whether an Overall Solo Bench composite score should exist at all, and if so under what approved methodology. Defines (and only then approves) any weighting/formula; guarantees N/A/unsupported is never coerced to zero; requires explicit human approval before any composite value exists. Explicitly blocks any Overall/composite Results UI: the current ranking read model provides no overall score (`overall_solo_bench_score` reserved placeholder stays null), and this contract must be approved before RM-26-AA-0020 ships.
+
+- Category: product / research
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: composite-scoring-contract-design
+
+### RM-26-AA-0020 — Overall / composite Results view
+
+Future presentation shell for an Overall/composite results area. Blocked on an approved composite scoring contract (RM-26-AA-0019); it must not invent a composite score, average existing benchmark values, treat N/A as 0, or define arbitrary weights. Distinguishes "Overall UI shell / future presentation" from the "approved composite scoring contract": this item builds only the presentation surface once a contract exists, consuming component scores from the ranking read model without recomputation.
+
+- Category: product
+- Depends on: RM-26-AA-0019
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: overall-composite-results-view
+
+### RM-26-AA-0021 — Intelligence Results integration
+
+Results UI for the AI Intelligence benchmark family. Purely downstream: cannot be implemented until its benchmark contract exists (RM-26-AA-0010). Represents only the results-integration work and its dependency; does not design the Intelligence corpus, tasks, or scoring here. Consumes authoritative Intelligence output through the unified Results foundation once delivered.
+
+- Category: product / research
+- Depends on: RM-26-AA-0010, RM-26-AA-0016
+- Updated: 2026-09-14T20:00:00Z
+- Legacy ID: intelligence-results-integration
 
 ## DONE
 
