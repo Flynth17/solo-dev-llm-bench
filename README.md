@@ -162,13 +162,15 @@ The dashboard never invents loaded-state; it reports what the runtime actually h
 
 ## Results
 
-Three distinct result surfaces, each owned by one benchmark family (there is no generic mixed-Results product):
+Three distinct result surfaces, each owned by one benchmark family (there is no generic mixed-Results product). They share one **Unified Results UI foundation** (RM-26-AA-0016): a single dark visual system (no light/dark toggle), shared navigation with benchmark-specific tabs/views, shared cards/modules and collapsible sections, an L0→L1→L2 drill-down convention (model family/version → configuration/quantization → individual run evidence), and one loading/error/N/A contract. The frontend formats and drills down only — the ranking read model stays authoritative, so there is no client-side benchmark scoring or dimension recomputation.
 
 | URL | Family | Contents |
 |-----|--------|----------|
-| `/results` | Standard Speed | History of runs, point-level, newest first. |
+| `/results` | Unified Results shell | Standard Speed history (point-level, newest first) plus the Overall / Speed / Workflow tabs, collapsible model drill-down, and Context & Intelligence placeholders. Dark visual system; composite score stays explicitly unavailable. |
 | `/speed/results/{run_id}` | Standard Speed | Detail for a single run by context point (8K/16K/32K). |
 | `/v2/results/{run_id}` | Workflow | Detail for a single Workflow run by suite and check. |
+
+Delivered now: the unified Results shell, dark visual system, shared navigation/modules, and L0→L1→L2 convention. **Not yet delivered:** Context-degradation Results UI (RM-26-AA-0018), AI Intelligence Results (research), multi-model comparison view, and any Overall/composite score.
 
 ---
 

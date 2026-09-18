@@ -422,14 +422,19 @@ mixed-Results product:
 | History (newest first, point-level) | `/results` → `results.html` | `/api/results` (`routes/results.py`) | Standard Speed |
 | Single run detail by point | `/speed/results/{run_id}` → `speed-result.html` | `/api/speed/runs/{run_id}` (`routes/v2_speed.py`) | Standard Speed |
 | Single run detail by suite/check | `/v2/results/{run_id}` → `v2-result.html` | `/api/v2/results/{run_id}` (`routes/v2_results.py`) | Workflow |
-| Ranking / aggregation grid (future UI) | — | `/api/ranking*` (`routes/ranking.py`) | Speed + Agentic |
+| Ranking / aggregation grid | `/results` → `results.html` (`results-shell.js`) | `/api/ranking*` (`routes/ranking.py`) | Speed + Agentic |
 
 All data comes from validated read models; static pages derive `run_id` from the URL and fetch it.
-No per-run HTML is generated server-side.
+No per-run HTML is generated server-side. The unified Results shell (RM-26-AA-0016) renders the
+ranking/aggregation grid client-side: shared navigation with benchmark-specific tabs/views, shared
+cards/modules and collapsible sections, L0→L1→L2 drill-down conventions, and a single loading/error/
+N/A/invalid-state contract. The frontend formats and drills down only — it performs no benchmark
+scoring or dimension recomputation, and the ranking read model stays authoritative.
 
-**Planned UI (not built):** Context-degradation results, Intelligence results, multi-model
-comparison view, and future composite-score views have no implementation today. The ranking API
-exists as a prerequisite for a future Results UI but does not itself render any grid.
+**Not built (planned):** Context-degradation results (RM-26-AA-0018), Intelligence results,
+multi-model comparison view, and future composite-score views have no implementation today. The
+ranking API provides data only; it does not itself render any grid — the delivered shell consumes it
+client-side.
 
 ---
 

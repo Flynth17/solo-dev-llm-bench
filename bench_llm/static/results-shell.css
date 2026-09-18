@@ -1,0 +1,578 @@
+/* Solo Dev LLM Bench — Unified Results UI foundation (RM-26-AA-0016).
+ *
+ * Dark visual system for the shared Results shell. Scoped to a `.results-shell`
+ * root via CSS custom properties so this never disturbs the dashboard's light
+ * theme (which shares shared.css) or the dedicated single-run pages.
+ *
+ * "Dark mode or nothing" — no light/dark toggle is implemented here; a future
+ * item may add one explicitly. Semantic state tokens keep loading / no-results /
+ * unavailable / N-A / unsupported / invalid / failed states visually distinct and
+ * never communicated by colour alone (each also carries a text label).
+ */
+
+.results-shell {
+    /* --- Palette: aligned with the dashboard .dapp-dark language ---------- */
+    --rs-bg: #07111f;
+    --rs-surface: #0f1b2d;
+    --rs-surface-2: #12253f;
+    --rs-border: #1e3350;
+    --rs-border-soft: #243754;
+    --rs-text: #e8eef6;
+    --rs-text-muted: #9fb0c7;
+    --rs-text-faint: #7f93af;
+
+    --rs-accent: #93c4f5;
+    --rs-accent-strong: #7dd3fc;
+    --rs-accent-hover: #183a5e;
+
+    --rs-ok: #34d399;
+    --rs-ok-text: #8ce6a8;
+    --rs-warn: #fbbf24;
+    --rs-warn-text: #fcd34d;
+    --rs-error: #f87171;
+    --rs-error-text: #fca5a5;
+    --rs-info: #93c4f5;
+    --rs-unavailable: #6b7f99;
+
+    color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+   Shell layout
+   --------------------------------------------------------------------------- */
+
+.results-shell {
+    background: var(--rs-bg);
+    color: var(--rs-text);
+    min-height: 100vh;
+}
+
+.rs-shell-wrap {
+    width: min(94vw, 1280px);
+    margin: 0 auto;
+    padding: 1.75rem 1rem 3rem;
+}
+
+@media (min-width: 1280px) {
+    .rs-shell-wrap {
+        padding: 2rem 1.5rem 3rem;
+    }
+}
+
+/* Header */
+.rs-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.rs-header h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #f4f8ff;
+    margin: 0;
+}
+
+.rs-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--rs-surface-2);
+    color: var(--rs-accent);
+    border: 1px solid var(--rs-border-soft);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.rs-back:hover {
+    background: var(--rs-accent-hover);
+    border-color: #3a6ea5;
+}
+
+/* ---------------------------------------------------------------------------
+   Tab navigation (shared Results nav)
+   --------------------------------------------------------------------------- */
+
+.rs-nav {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--rs-border);
+    margin-bottom: 1.5rem;
+}
+
+.rs-tab {
+    position: relative;
+    padding: 0.65rem 1.35rem;
+    background: transparent;
+    color: var(--rs-text-faint);
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.rs-tab:hover {
+    color: var(--rs-text);
+    background: var(--rs-surface);
+}
+
+.rs-tab:focus-visible {
+    outline: 2px solid var(--rs-accent);
+    outline-offset: -2px;
+    color: var(--rs-text);
+}
+
+.rs-tab[aria-selected="true"] {
+    color: var(--rs-accent);
+    border-bottom-color: var(--rs-accent);
+}
+
+/* Status chip on a tab (delivered / planned / research) — never colour-only. */
+.rs-tab-chip {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+}
+
+.rs-tab-chip.rs-chip-delivered {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--rs-ok-text);
+}
+
+.rs-tab-chip.rs-chip-planned {
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--rs-warn-text);
+}
+
+.rs-tab-chip.rs-chip-research {
+    background: rgba(107, 127, 153, 0.15);
+    color: var(--rs-unavailable);
+}
+
+/* ---------------------------------------------------------------------------
+   Views
+   --------------------------------------------------------------------------- */
+
+.rs-view {
+    display: none;
+}
+
+.rs-view.rs-active {
+    display: block;
+}
+
+/* ---------------------------------------------------------------------------
+   Panels / cards (reusable presentation primitives)
+   --------------------------------------------------------------------------- */
+
+.rs-panel {
+    background: var(--rs-surface);
+    border: 1px solid var(--rs-border);
+    border-radius: 12px;
+    padding: 1.25rem 1.35rem;
+    margin-bottom: 1.25rem;
+}
+
+.rs-panel-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--rs-text-faint);
+    margin-bottom: 0.9rem;
+}
+
+/* Metric / stat card */
+.rs-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.85rem;
+}
+
+.rs-metric-card {
+    background: var(--rs-surface-2);
+    border: 1px solid var(--rs-border-soft);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+}
+
+.rs-metric-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--rs-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.rs-metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--rs-text);
+    margin-top: 0.3rem;
+    line-height: 1.1;
+}
+
+/* ---------------------------------------------------------------------------
+   Banners (warning / error / unavailable / info) — labelled, not colour-only.
+   --------------------------------------------------------------------------- */
+
+.rs-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid;
+}
+
+.rs-banner-icon {
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    line-height: 1;
+    margin-top: 0.05rem;
+}
+
+.rs-banner-text {
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.rs-banner-title {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.15rem;
+}
+
+.rs-banner-unavailable {
+    background: rgba(107, 127, 153, 0.10);
+    border-color: var(--rs-border);
+    color: var(--rs-text-muted);
+}
+.rs-banner-unavailable .rs-banner-icon {
+    background: var(--rs-unavailable);
+    color: #07111f;
+}
+
+.rs-banner-info {
+    background: rgba(147, 196, 245, 0.08);
+    border-color: var(--rs-border-soft);
+    color: var(--rs-text);
+}
+.rs-banner-info .rs-banner-icon {
+    background: var(--rs-info);
+    color: #07111f;
+}
+
+.rs-banner-warn {
+    background: rgba(251, 191, 36, 0.10);
+    border-color: rgba(251, 191, 36, 0.4);
+    color: var(--rs-text);
+}
+.rs-banner-warn .rs-banner-icon {
+    background: var(--rs-warn);
+    color: #07111f;
+}
+
+.rs-banner-error {
+    background: rgba(248, 113, 113, 0.10);
+    border-color: rgba(248, 113, 113, 0.4);
+    color: var(--rs-text);
+}
+.rs-banner-error .rs-banner-icon {
+    background: var(--rs-error);
+    color: #07111f;
+}
+
+/* ---------------------------------------------------------------------------
+   Dimension availability cards (Overall tab)
+   --------------------------------------------------------------------------- */
+
+.rs-dim-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.rs-dim-status::before {
+    content: "";
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: currentColor;
+}
+
+.rs-dim-ok { color: var(--rs-ok-text); }
+.rs-dim-unavailable { color: var(--rs-unavailable); }
+
+/* ---------------------------------------------------------------------------
+   L0 model groups (collapsible drill-down primitive)
+   --------------------------------------------------------------------------- */
+
+.rs-model-group {
+    background: var(--rs-surface);
+    border: 1px solid var(--rs-border);
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+}
+
+.rs-model-group > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    font-weight: 700;
+    color: var(--rs-text);
+    font-size: 1rem;
+}
+
+.rs-model-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.rs-model-group > summary::before {
+    content: "\25B6";
+    font-size: 0.7rem;
+    color: var(--rs-text-faint);
+    transition: transform 0.15s ease;
+    line-height: 1;
+}
+
+.rs-model-group[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.rs-model-group > summary:hover {
+    background: var(--rs-surface-2);
+}
+
+/* Explicit keyboard focus indicator for disclosure controls. Matches the shared
+   tab focus pattern so <summary> is not reliant on the user-agent default ring.
+   Native <details>/<summary> already provide Tab reachability, Enter/Space
+   activation, semantic role and exposed expanded state; this only makes the
+   visible-focus requirement explicit and consistent with the rest of the shell. */
+.rs-model-group > summary:focus-visible {
+    outline: 2px solid var(--rs-accent);
+    outline-offset: -2px;
+}
+
+.rs-model-name { flex: 1 1 auto; min-width: 160px; }
+
+.rs-model-meta {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Configurations (L1) shown inside an expanded model group */
+.rs-configs {
+    border-top: 1px solid var(--rs-border);
+    padding: 0.75rem 1.1rem 1rem;
+}
+
+.rs-config-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-config-row:last-child {
+    border-bottom: none;
+}
+
+.rs-config-fp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--rs-text-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   Badges (reusable metadata chips)
+   --------------------------------------------------------------------------- */
+
+.rs-badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.rs-badge-accent { background: rgba(147,196,245,0.15); color: var(--rs-accent); border-color: var(--rs-border-soft); }
+.rs-badge-ok { background: rgba(52,211,153,0.15); color: var(--rs-ok-text); border-color: rgba(52,211,153,0.4); }
+.rs-badge-unavailable { background: rgba(107,127,153,0.15); color: var(--rs-unavailable); border-color: var(--rs-border); }
+.rs-badge-warn { background: rgba(251,191,36,0.15); color: var(--rs-warn-text); border-color: rgba(251,191,36,0.4); }
+
+/* ---------------------------------------------------------------------------
+   States: loading / no-results / unavailable placeholder
+   (semantically distinct; each carries a text label, not colour alone)
+   --------------------------------------------------------------------------- */
+
+.rs-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--rs-text-muted);
+    font-size: 0.95rem;
+}
+
+.rs-state-spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--rs-border-soft);
+    border-top-color: var(--rs-accent);
+    border-radius: 50%;
+    animation: rs-spin 0.7s linear infinite;
+}
+
+@keyframes rs-spin {
+    to { transform: rotate(360deg); }
+}
+
+.rs-state-noresults {
+    background: var(--rs-surface);
+    border: 1px dashed var(--rs-border-soft);
+    border-radius: 12px;
+    color: var(--rs-text-muted);
+}
+
+/* Placeholder for a planned / research family — never fakes data. */
+.rs-placeholder {
+    background: var(--rs-surface);
+    border: 1px dashed var(--rs-border);
+    border-radius: 12px;
+    padding: 2.5rem 1.25rem;
+    text-align: center;
+    color: var(--rs-text-muted);
+}
+
+.rs-placeholder-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--rs-text);
+    margin-bottom: 0.4rem;
+}
+
+.rs-placeholder-note {
+    font-size: 0.9rem;
+    max-width: 42ch;
+    margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Tables (shared)
+   --------------------------------------------------------------------------- */
+
+.rs-table-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--rs-border);
+}
+
+.rs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.rs-table th {
+    text-align: left;
+    padding: 0.65rem 0.9rem;
+    background: var(--rs-surface-2);
+    color: var(--rs-text-faint);
+    font-weight: 700;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-table td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--rs-border);
+    color: var(--rs-text);
+    vertical-align: top;
+}
+
+.rs-table tr:last-child td {
+    border-bottom: none;
+}
+
+.rs-table code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.82em;
+    background: var(--rs-bg);
+    color: var(--rs-text-muted);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared state value tokens (missing / N/A renders as em-dash, never zero)
+   --------------------------------------------------------------------------- */
+
+.rs-na {
+    color: var(--rs-unavailable);
+    font-style: italic;
+}
+
+.rs-ok-value { color: var(--rs-ok-text); font-weight: 700; }
+.rs-warn-value { color: var(--rs-warn-text); font-weight: 700; }
+.rs-error-value { color: var(--rs-error-text); font-weight: 700; }
+
+/* ---------------------------------------------------------------------------
+   Responsive — Results shell
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+    .rs-shell-wrap { padding: 1.25rem 0.75rem 2.5rem; }
+    .rs-tab { padding: 0.55rem 0.9rem; font-size: 0.9rem; }
+    .rs-card-grid { grid-template-columns: 1fr; }
+    .rs-model-name { min-width: 0; }
+}

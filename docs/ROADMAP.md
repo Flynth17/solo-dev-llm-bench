@@ -8,15 +8,6 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
-### RM-26-AA-0016 — Unified Results UI foundation
-
-Common Results experience rather than independent disconnected result pages. Provides the shared shell consumed by every benchmark-family results surface: unified Results navigation with benchmark-specific tabs/views, shared cards/modules and collapsible sections, L0→L1→L2 drill-down conventions (model family/version → configuration/quantization → individual run evidence), and a single loading/error/N/A/invalid-state contract. Consumes authoritative backend/read models only (`build_ranking`, `load_speed_run_by_id`, `load_v2_result`); the frontend performs no benchmark scoring or dimension recomputation, and N/A is never treated as zero. Applies the agreed dark visual system (dark mode or nothing — no light/dark toggle unless a future item explicitly adds one). Extensible with slots for later benchmark families (Context, Intelligence) without restructuring the shell.
-
-- Category: product
-- Depends on: RM-26-AA-0015, RM-26-AA-0008
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: unified-results-ui-foundation
-
 ### RM-26-AA-0017 — Speed & Workflow Results experience
 
 Integrate the two delivered benchmark families into the unified Results foundation as one cohesive results experience (not disconnected pages).
@@ -94,6 +85,26 @@ Results UI for the AI Intelligence benchmark family. Purely downstream: cannot b
 - Legacy ID: intelligence-results-integration
 
 ## DONE
+
+### RM-26-AA-0016 — Unified Results UI foundation
+
+Delivered. A unified Results experience rather than independent disconnected result pages. Provides the shared shell consumed by every benchmark-family results surface: unified Results navigation with benchmark-specific tabs/views, shared cards/modules and collapsible sections, L0→L1→L2 drill-down conventions (model family/version → configuration/quantization → individual run evidence), and a single loading/error/N/A/invalid-state contract. Consumes authoritative backend/read models only (`build_ranking`, `load_speed_run_by_id`, `load_v2_result`); the frontend performs no benchmark scoring or dimension recomputation, and N/A is never treated as zero. Applies the agreed dark visual system (dark mode or nothing — no light/dark toggle). Extensible with slots for later benchmark families (Context, Intelligence) without restructuring the shell.
+
+- Category: product
+- Depends on: RM-26-AA-0015, RM-26-AA-0008
+- Updated: 2026-09-18T16:36:40Z
+- Legacy ID: unified-results-ui-foundation
+
+#### Evidence
+
+- `bench_llm/static/results.html` — unified Results shell page (shared nav with benchmark-specific tabs/views; Overall / Speed / Workflow tabs; Context & Intelligence placeholders)
+- `bench_llm/static/results-shell.js` — shared shell: tab navigation, L0→L1→L2 model drill-down via native `<details>/<summary>`, loading/error/N/A fragments; formats and drills down only from `/api/ranking`, performs no client-side scoring or composite
+- `bench_llm/static/results-shell.css` — dark visual system ("dark mode or nothing", no light/dark toggle), shared cards/modules, collapsible-section styling, explicit `:focus-visible` on disclosure controls and tabs
+- `bench_llm/src/ranking_read_model.py` + `bench_llm/src/routes/ranking.py` — authoritative read-only L0/L1/L2 projection; composite stays explicitly unavailable; N/A distinct from 0
+- `bench_llm/tests/test_results_shell_route.py` — Results-shell route tests (dark theme, five areas, composite unavailable, unimplemented dimensions unavailable-with-reason-not-scored, shell formats-only, collapsible L0/L1 primitive present, distinct state fragments)
+- `docs/architecture.md` §9 updated to reflect the delivered unified Results shell
+- browser acceptance: `/results` renders; tab navigation verified, dark system (shell bg rgb(7,17,31), text rgb(232,238,246)), collapsible L0→L1→L2 present, no console errors during interaction
+- measured: fast gate 603 passed / 40 deselected; targeted routes 74 passed; full suite 643 passed (all exit 0)
 
 ### RM-26-AA-0011 — Test architecture and fast gate
 
