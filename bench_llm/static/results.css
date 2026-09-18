@@ -351,3 +351,53 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Standard Speed history — gap / repeatability (RM-26-AA-0017)
+   Unsupported / failed / invalid points render as explicit gaps, never zeros.
+   --------------------------------------------------------------------------- */
+
+.ss-points-line {
+    color: #64748b;
+}
+
+.ss-point-gap {
+    margin-top: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #9a3412;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 5px;
+}
+
+.ss-point-completed {
+    color: #065f46;
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+
+.ss-point-failed,
+.ss-point-invalid,
+.ss-point-unknown {
+    color: #991b1b;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+/* Repeatability (cold + warm_a + warm_b) section within a point cell. */
+.ss-repeat {
+    margin-top: 0.5rem;
+    padding-top: 0.45rem;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.ss-repeat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}

@@ -567,6 +567,126 @@
 .rs-error-value { color: var(--rs-error-text); font-weight: 700; }
 
 /* ---------------------------------------------------------------------------
+   Workflow / Agentic results (RM-26-AA-0017)
+   Failure-first run list with authoritative suite breakdown and per-run drill-down.
+   Status is always communicated by text label, never colour alone.
+   --------------------------------------------------------------------------- */
+
+.rs-wf-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.rs-wf-run {
+    border: 1px solid var(--rs-border);
+    border-radius: 8px;
+    background: var(--rs-surface);
+    margin: 0;
+    padding: 0.5rem 0.9rem;
+}
+
+.rs-wf-run > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    cursor: pointer;
+    list-style: none;
+    padding: 0.35rem 0;
+}
+
+.rs-wf-run > summary::-webkit-details-marker { display: none; }
+
+.rs-wf-run > summary .rs-wf-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.rs-wf-run > summary .rs-wf-head .rs-badge {
+    font-size: 0.68rem;
+}
+
+.rs-wf-fp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.72rem;
+    color: var(--rs-text-muted);
+    background: var(--rs-bg);
+    padding: 0.05rem 0.35em;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+.rs-wf-score {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rs-wf-checks {
+    font-weight: 700;
+    color: var(--rs-text);
+    font-size: 0.9rem;
+}
+
+.rs-wf-score-pct {
+    color: var(--rs-text-muted);
+    font-weight: 600;
+}
+
+.rs-wf-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.5rem 0 0.4rem;
+}
+
+.rs-wf-meta {
+    font-size: 0.8rem;
+    color: var(--rs-text-muted);
+}
+
+.rs-wf-meta code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.78rem;
+}
+
+.rs-wf-suites {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* Drill-down link to the dedicated /v2/results/{run_id} evidence page. */
+.rs-view-link {
+    display: inline-block;
+    color: var(--rs-accent);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+.rs-view-link:hover { text-decoration: none; opacity: 0.85; }
+
+.rs-view-link:focus-visible {
+    outline: 2px solid var(--rs-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+@media (max-width: 560px) {
+    .rs-wf-run > summary {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.4rem;
+    }
+}
+
+/* ---------------------------------------------------------------------------
    Responsive — Results shell
    --------------------------------------------------------------------------- */
 
@@ -575,4 +695,5 @@
     .rs-tab { padding: 0.55rem 0.9rem; font-size: 0.9rem; }
     .rs-card-grid { grid-template-columns: 1fr; }
     .rs-model-name { min-width: 0; }
+    .rs-wf-checks { font-size: 0.85rem; }
 }

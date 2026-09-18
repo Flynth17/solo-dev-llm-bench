@@ -7,7 +7,7 @@
     <!-- shared.css: base resets + form/table/panel tokens (shared with dashboard) -->
     <link rel="stylesheet" href="/static/shared.css?v=1701">
     <!-- results-shell.css: dark visual system + shared Results shell primitives (RM-26-AA-0016) -->
-    <link rel="stylesheet" href="/static/results-shell.css?v=1">
+    <link rel="stylesheet" href="/static/results-shell.css?v=2">
     <link rel="stylesheet" href="/static/results.css?v=1920">
 </head>
 <body class="results-shell">
@@ -88,8 +88,37 @@
             </section>
         </section>
 
-        <!-- Workflow / Agentic view: delivered; consumes authoritative ranking read model. -->
+        <!-- Workflow / Agentic view: delivered; consumes authoritative ranking read model.
+             0017 adds a failure-first, filterable run list with suite breakdown and
+             per-run drill-down to the dedicated /v2/results/{run_id} evidence page. -->
         <section id="view-workflow" class="rs-view" role="tabpanel" aria-labelledby="tab-workflow">
+            <div id="workflow-filter-bar" class="panel filter-panel" hidden>
+                <h2>Filter Workflow Results</h2>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label for="wf-filter-model">Model</label>
+                        <input type="text" id="wf-filter-model" placeholder="Filter by model name...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="wf-filter-status">Run state</label>
+                        <select id="wf-filter-status">
+                            <option value="">All states</option>
+                            <option value="completed">Completed (all checks passed)</option>
+                            <option value="partial">Has failures</option>
+                            <option value="unknown">Invalid / unknown</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-check">
+                            <input type="checkbox" id="wf-filter-failures" /> Show failures only
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <button id="wf-clear-filters" class="btn-secondary">Clear Filters</button>
+                    </div>
+                </div>
+            </div>
+            <div id="workflow-count" class="results-count"></div>
             <div id="workflow-container"></div>
         </section>
 
@@ -107,7 +136,7 @@
 
     <script src="/static/results-utils.js?v=1701"></script>
     <script src="/static/results-filters.js?v=1701"></script>
-    <script src="/static/results-shell.js?v=1"></script>
+    <script src="/static/results-shell.js?v=2"></script>
     <script src="/static/results.js?v=1920"></script>
 </body>
 </html>

@@ -41,6 +41,16 @@
         });
     }
 
+    // debounce helper for the text filter (avoids re-filtering on every keystroke).
+    function debounce(fn, wait) {
+        var t;
+        return function () {
+            var args = arguments, ctx = this;
+            clearTimeout(t);
+            t = setTimeout(function () { fn.apply(ctx, args); }, wait);
+        };
+    }
+
     tabs.forEach(function (tab) {
         tab.addEventListener("click", function () {
             var viewId = tab.getAttribute("aria-controls");
@@ -224,65 +234,220 @@
     // Workflow / Agentic view (delivered; consumes authoritative ranking).
     // Distinct states: no workflow runs yet (family delivered) vs unavailable.
     // -----------------------------------------------------------------------
+    // Workflow run entries (authoritative grouping from /api/ranking). Built once, then
+    // filtered client-side. The frontend formats/sorts/filters only -- it never recomputes
+    // the score; failed-check counts are arithmetic over already-exposed per-suite
+    // passed/total values, not a re-derivation of the benchmark result.
+    var __wfEntries = [];
+    var __wfFiltered = [];
+
     function loadWorkflow() {
         var container = document.getElementById("workflow-container");
         if (!container) { return; }
         container.innerHTML = stateLoading();
+        // Reset filters on (re)load so a stale filter never hides data.
+        __wfEntries = [];
+        __wfFiltered = [];
+        resetWorkflowFilters();
 
         fetch("/api/ranking")
             .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
-            .then(function (data) { renderWorkflow(container, data); })
+            .then(function (data) {
+                __wfEntries = buildWorkflowEntries(data);
+                renderWorkflow(container, __wfEntries);
+            })
             .catch(function () {
                 container.innerHTML = banner("error", "Unable to load workflow results",
                     "The ranking read model could not be loaded. Try refreshing the page.");
             });
     }
 
-    function renderWorkflow(container, ranking) {
-        // Collect agentic configurations across all models (authoritative grouping).
-        var rows = [];
+    // Aggregate agentic evidence from the authoritative ranking into per-run entries.
+    // One entry per persisted run id, carrying the headline result + suite breakdown that
+    // the failure-first view needs. No scoring is done here.
+    function buildWorkflowEntries(ranking) {
+        var entries = [];
         (ranking.models || []).forEach(function (m) {
             (m.configurations || []).forEach(function (c) {
-                if (c.benchmark_family === "agentic") {
-                    rows.push({ model: m, config: c });
-                }
+                if (c.benchmark_family !== "agentic") { return; }
+                var ag = (c.component_score && c.component_score.agentic) || {};
+                var suites = (ag.per_suite || []).map(function (s) {
+                    return {
+                        suite: s.suite,
+                        passed: _asInt(s.checks_passed),
+                        total: _asInt(s.checks_total)
+                    };
+                });
+                // Failed checks = sum of (total - passed) per suite. Pure presentation
+                // arithmetic over backend-exposed numbers; the authoritative fraction is
+                // taken verbatim from the read model below and never recomputed.
+                var failedCount = 0;
+                suites.forEach(function (s) {
+                    if (s.total != null && s.passed != null && s.total > s.passed) {
+                        failedCount += s.total - s.passed;
+                    }
+                });
+                (c.run_ids || []).forEach(function (runId) {
+                    entries.push({
+                        model_version: m.model_version,
+                        model_family: m.model_family || m.model_version || "unknown",
+                        architecture: m.architecture || "unknown",
+                        configuration_fingerprint: c.configuration_fingerprint || "\u2014",
+                        run_id: runId,
+                        status: c.status || "incomplete",
+                        passed: ag.checks_passed,
+                        total: ag.checks_total,
+                        fraction: ag.fraction, // authoritative; rendered verbatim
+                        suites: suites,
+                        failedCount: failedCount
+                    });
+                });
             });
         });
+        // Failure-first ordering: runs with more failing checks surface at the top so the
+        // correctness signal is never buried under perfect runs.
+        entries.sort(function (a, b) { return b.failedCount - a.failedCount; });
+        return entries;
+    }
 
-        if (rows.length === 0) {
+    function renderWorkflow(container, entries) {
+        var bar = document.getElementById("workflow-filter-bar");
+        if (bar) { bar.hidden = entries.length === 0; }
+        var countEl = document.getElementById("workflow-count");
+
+        if (entries.length === 0) {
             // Workflow family is delivered; zero runs yet -> no-results (not unavailable).
+            if (bar) { bar.hidden = true; }
             container.innerHTML = stateNoResults(
                 "No workflow results yet. Run a Workflow suite from the benchmark page to see its deterministic correctness result here.");
             return;
         }
 
+        __wfFiltered = entries;
+        applyWorkflowFilters();
+    }
+
+    // Apply the three filter controls (model text / run state / failures-only) and re-render.
+    function applyWorkflowFilters() {
+        var modelFilter = (document.getElementById("wf-filter-model") || {}).value || "";
+        var statusFilter = (document.getElementById("wf-filter-status") || {}).value || "";
+        var failuresOnly = (document.getElementById("wf-filter-failures") || {}).checked;
+
+        var filtered = __wfEntries.filter(function (e) {
+            if (statusFilter && e.status !== statusFilter) { return false; }
+            if (failuresOnly && e.failedCount <= 0) { return false; }
+            if (modelFilter) {
+                var hay = ((e.model_family || "") + " " + (e.model_version || "")).toLowerCase();
+                if (hay.indexOf(modelFilter.toLowerCase()) === -1) { return false; }
+            }
+            return true;
+        });
+
+        var countEl = document.getElementById("workflow-count");
+        if (countEl) {
+            countEl.textContent = filtered.length + " workflow run" + (filtered.length !== 1 ? "s" : "") +
+                (__wfEntries.length > filtered.length ? " (of " + __wfEntries.length + ")" : "");
+        }
+
+        var container = document.getElementById("workflow-container");
+        if (!container) { return; }
+        if (filtered.length === 0) {
+            container.innerHTML = stateNoResults("No workflow runs match the current filters.");
+            return;
+        }
+        container.innerHTML = renderWorkflowRuns(filtered);
+        wireWorkflowDrillDown();
+    }
+
+    function renderWorkflowRuns(entries) {
         var html = '<div class="rs-panel">';
         html += '<div class="rs-panel-title">Workflow / Agentic results</div>';
-        html += "<p class='rs-placeholder-note' style='margin:0 0 1rem'>Authoritative Workflow scores come from the backend read model; this view only formats and drills down.</p>";
-        html += '<div class="rs-table-wrap"><table class="rs-table">';
-        html += "<thead><tr>";
-        html += "<th>Model</th>";
-        html += "<th>Configuration</th>";
-        html += "<th>Status</th>";
-        html += "<th>Checks passed / total</th>";
-        html += "<th>Score</th>";
-        html += "</tr></thead><tbody>";
-        rows.forEach(function (row) {
-            var comp = row.config.component_score || {};
-            var frac = comp.fraction;
-            var passed = na(comp.checks_passed);
-            var total = na(comp.checks_total);
-            var scorePct = (frac !== "\u2014") ? Math.round(frac * 100) : "\u2014";
-            html += "<tr>";
-            html += "<td>" + esc(row.model.model_family || row.model.model_version || "unknown") + "</td>";
-            html += "<td><code>" + esc((row.config.configuration_fingerprint || "\u2014").slice(0, 12)) + "</code></td>";
-            html += "<td>" + esc(row.config.status || "incomplete") + "</td>";
-            html += "<td>" + esc(passed) + " / " + esc(total) + "</td>";
-            html += "<td>" + (scorePct === "\u2014" ? "<span class='rs-na'>\u2014</span>" : scorePct + "%") + "</td>";
-            html += "</tr>";
+        html += "<p class='rs-placeholder-note' style='margin:0 0 1rem'>Authoritative Workflow scores come from the backend read model; this view only formats, filters and drills down -- it never recomputes a score.</p>";
+        html += "<div class='rs-wf-list'>";
+        entries.forEach(function (e) { html += renderWorkflowRunRow(e); });
+        html += "</div></div>";
+        return html;
+    }
+
+    function renderWorkflowRunRow(e) {
+        var scorePct = (typeof e.fraction === "number" && !isNaN(e.fraction)) ? Math.round(e.fraction * 100) : null;
+        var passedTxt = (e.passed != null) ? String(e.passed) : "\u2014";
+        var totalTxt = (e.total != null) ? String(e.total) : "\u2014";
+
+        // Status chip: colour is never the sole signal -- the word is always shown too.
+        var statusCls = e.status === "completed" ? "rs-badge-ok" :
+            (e.status === "unknown" ? "rs-badge-unavailable" : "rs-badge-warn");
+
+        // Suite breakdown chips (authoritative per-suite passed/total).
+        var suiteChips = "";
+        (e.suites || []).forEach(function (s) {
+            var label = s.suite ? esc(s.suite.replace(/_/g, " ")) : "suite";
+            var val = (s.passed != null && s.total != null) ? (s.passed + "/" + s.total) : "\u2014";
+            suiteChips += "<span class='rs-badge rs-badge-accent' title='" + label + "'>" + label + " " + esc(val) + "</span>";
         });
-        html += "</tbody></table></div></div>";
-        container.innerHTML = html;
+
+        // A perfect run (all checks passed) reads as a success; any failing check is flagged.
+        // When the total is unknown (null), never claim "all passed" -- show an em-dash so
+        // N/A stays distinct from a real pass (N/A is never coerced to a success).
+        var failedChip;
+        if (e.total == null) {
+            failedChip = "<span class='rs-na'>\u2014</span>";
+        } else if (e.failedCount > 0) {
+            failedChip = "<span class='rs-badge rs-badge-unavailable' title='Failing checks'>" + e.failedCount + " failing</span>";
+        } else {
+            failedChip = "<span class='rs-badge rs-badge-ok'>All checks passed</span>";
+        }
+
+        var scoreTxt = (scorePct === null) ? "<span class='rs-na'>\u2014</span>" : scorePct + "%";
+
+        return '<details class="rs-wf-run" open>' +
+            '<summary>' +
+                '<span class="rs-wf-head">' +
+                    "<span class='rs-badge rs-badge-accent'>" + esc(e.model_family) + "</span>" +
+                    "<code class='rs-wf-fp' title='Configuration fingerprint'>" + esc(String(e.configuration_fingerprint).slice(0, 12)) + "</code>" +
+                    failedChip +
+                    "<span class='rs-badge " + statusCls + "'>" + esc(String(e.status)) + "</span>" +
+                "</span>" +
+                '<span class="rs-wf-score">' +
+                    "<span class='rs-wf-checks'>" + esc(passedTxt) + " / " + esc(totalTxt) + " checks<span class='rs-wf-score-pct'> · " + scoreTxt + "</span></span>" +
+                "</span></summary>" +
+            '<div class="rs-wf-body">' +
+                "<div class='rs-wf-meta'><span>Run <code>" + esc(e.run_id) + "</code></span></div>" +
+                (suiteChips ? "<div class='rs-wf-suites'>" + suiteChips + "</div>" : "") +
+                "<a class='rs-view-link rs-wf-evidence' href='/v2/results/" + encodeURIComponent(e.run_id) + "' data-run-id='" + esc(e.run_id) + "'>View suite/case evidence \u2192</a>" +
+            "</div></details>";
+    }
+
+    // Wire the filter controls (debounced model filter + change events) and clear button.
+    function wireWorkflowFilters() {
+        var modelInput = document.getElementById("wf-filter-model");
+        if (modelInput) { modelInput.addEventListener("input", debounce(applyWorkflowFilters, 150)); }
+        var statusSelect = document.getElementById("wf-filter-status");
+        if (statusSelect) { statusSelect.addEventListener("change", applyWorkflowFilters); }
+        var failuresBox = document.getElementById("wf-filter-failures");
+        if (failuresBox) { failuresBox.addEventListener("change", applyWorkflowFilters); }
+        var clearBtn = document.getElementById("wf-clear-filters");
+        if (clearBtn) { clearBtn.addEventListener("click", resetWorkflowFilters); }
+    }
+
+    function resetWorkflowFilters() {
+        var modelInput = document.getElementById("wf-filter-model");
+        if (modelInput) { modelInput.value = ""; }
+        var statusSelect = document.getElementById("wf-filter-status");
+        if (statusSelect) { statusSelect.value = ""; }
+        var failuresBox = document.getElementById("wf-filter-failures");
+        if (failuresBox) { failuresBox.checked = false; }
+        wireWorkflowFilters();
+    }
+
+    function wireWorkflowDrillDown() {
+        // Nothing extra needed: drill-down links are native <a href> deep links to the
+        // dedicated /v2/results/{run_id} evidence page (stable, bookmarkable).
+    }
+
+    function _asInt(v) {
+        var n = Number(v);
+        return typeof n === "number" && !isNaN(n) ? n : null;
     }
 
     // -----------------------------------------------------------------------

@@ -4,22 +4,7 @@ Focused local-LLM benchmark with four benchmark families: **Standard Speed**, **
 
 Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derived from `TODO` in document order and is never stored. Identifiers `RM-26-AA-NNNN` are immutable identities only; they do not encode status, priority, hierarchy, or execution order. Legacy Acts/slugs are preserved as metadata, not as canonical keys.
 
-## ACTIVE
-
 ## TODO
-
-### RM-26-AA-0017 — Speed & Workflow Results experience
-
-Integrate the two delivered benchmark families into the unified Results foundation as one cohesive results experience (not disconnected pages).
-
-Standard Speed telemetry exposed where available: TTFT, prompt/prefill processing throughput, generation/decode throughput, cold + warm repeatability runs, per-run/config evidence, config/quantization transparency, unsupported/gap points (never converted to zero), and validity/failure state — drill-down rather than only headline metrics. Prompt/prefill processing is a visible dimension of the Speed results experience, not a separate benchmark.
-
-Workflow presented against its authoritative backend/read-model output: overall Workflow result/score, suite-level breakdown, test/case/request evidence where available, failure-first presentation with collapsible successful evidence, filters, model/config transparency, validity/failure state, and deep-link/run evidence where appropriate. The frontend does not independently recompute Workflow scoring; Workflow remains a deterministic correctness benchmark, never an LLM-judge quality measure.
-
-- Category: product
-- Depends on: RM-26-AA-0016, RM-26-AA-0015
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: speed-workflow-results-experience
 
 ### RM-26-AA-0018 — Context degradation Results UI
 
@@ -85,6 +70,27 @@ Results UI for the AI Intelligence benchmark family. Purely downstream: cannot b
 - Legacy ID: intelligence-results-integration
 
 ## DONE
+
+### RM-26-AA-0017 — Speed & Workflow Results experience
+
+Delivered. Integrated the two delivered benchmark families (Standard Speed and Workflow) into the unified Results foundation as one cohesive results experience rather than disconnected pages. Standard Speed telemetry exposed where available: TTFT, prompt/prefill processing throughput, generation/decode throughput, cold + warm repeatability runs (independent per-stage provenance), per-run/config evidence, config/quantization transparency, unsupported/gap points rendered as gaps and never converted to zero, and validity/failure state — drill-down rather than only headline metrics. Prompt/prefill processing is a visible dimension of the Speed results experience. Workflow is presented against its authoritative backend/read-model output: overall Workflow result/score, suite-level breakdown, test/case/request evidence where available, failure-first presentation with collapsible successful evidence, filters, model/config transparency, validity/failure state, and deep-link/run evidence where appropriate. The frontend does not independently recompute Workflow scoring; Workflow remains a deterministic correctness benchmark, never an LLM-judge quality measure.
+
+- Category: product
+- Depends on: RM-26-AA-0016, RM-26-AA-0015
+- Updated: 2026-09-19T09:30:00Z
+- Legacy ID: speed-workflow-results-experience
+
+#### Evidence
+
+- `bench_llm/static/results.html` — unified Results shell with the Workflow filter bar (model / run-state / show-failures) and Speed + Workflow views; config/quantization transparency chips
+- `bench_llm/static/results-shell.js` — shared shell formats only from `/api/ranking`, no client-side scoring or composite; Workflow failure-first run list, suite breakdown, per-run drill-down links, filter application (model text / run state / failures-only) with live counts and empty state
+- `bench_llm/static/results-shell.css` — dark visual system ("dark mode or nothing", no light/dark toggle), shared cards/modules, collapsible-section styling, Workflow list + Speed gap styling, explicit `:focus-visible` on disclosure controls and tabs
+- `bench_llm/static/results.js` — Speed cards expose TTFT / prefill / generation metrics, config/environment chips, per-point gap status rendered as "Not supported" (never coerced to zero)
+- `bench_llm/src/v2_speed_read_model.py` — repeatability/stage provenance: independent cold + warm runs, N/A distinct from 0, eligibility preserves partial/failed/interrupted/unsupported evidence without numeric coercion
+- `bench_llm/src/ranking_read_model.py` + `bench_llm/src/routes/ranking.py` — authoritative read-only L0/L1/L2 projection; composite stays explicitly unavailable; N/A distinct from 0
+- `bench_llm/tests/test_results_0017.py` — acceptance suite covering Speed telemetry exposure, gap-not-zero, Workflow failure-first ordering, filters, frontend-formats-only, config/quantization transparency, validity/failure state, deep-link evidence
+- browser acceptance: `/results` renders Overall / Speed / Workflow; tab navigation verified; filter bar applies (Has failures → "0 workflow runs (of 3)" + empty state); gap points render as explicit gaps; no console errors during interaction
+- measured: fast gate 622 passed / 40 deselected; targeted speed 83 passed, targeted workflow 196 passed; full suite 662 passed (all exit 0)
 
 ### RM-26-AA-0016 — Unified Results UI foundation
 

@@ -158,6 +158,24 @@ function renderStandardSpeedCard(run) {
         card.appendChild(ptsLine);
     }
 
+    // ---- Configuration / environment transparency (authoritative from the payload). --
+    // Shows which configuration produced this run. Missing fields are omitted, never
+    // fabricated; full quantization/architecture detail is on the dedicated page.
+    var cfgChips = [];
+    function chip(label, value) {
+        if (value == null || String(value).trim() === "") { return; }
+        cfgChips.push("<code>" + escapeHtml(String(label)) + ": " + escapeHtml(String(value)) + "</code>");
+    }
+    chip("Hardware", run.hardware_label);
+    chip("Environment", run.execution_environment);
+    chip("Connection", run.connection_type);
+    if (cfgChips.length > 0) {
+        var cfgLine = document.createElement("div");
+        cfgLine.className = "ss-points-line";
+        cfgLine.innerHTML = "Configuration: " + cfgChips.join("  ");
+        card.appendChild(cfgLine);
+    }
+
     // ---- Point summary grid (canonical order preserved by the read model).
     if (Array.isArray(run.points) && run.points.length > 0) {
         var grid = document.createElement("div");
@@ -203,6 +221,24 @@ function renderSpeedPointCell(point) {
     }
     cell.appendChild(top);
 
+    // Preserve gap / state semantics: an unsupported point is a GAP, never a zero.
+    // A failed/invalid point shows its status verbatim instead of fabricated metrics.
+    var st = String((point.status || "").toLowerCase());
+    if (st === "unsupported" || st === "unavailable") {
+        cell.appendChild(Object.assign(document.createElement("div"), {
+            className: "ss-point-gap",
+            textContent: "Not supported \u2014 this context point is a gap, not a zero-performance result."
+        }));
+        return cell;
+    }
+    if (st && st !== "completed") {
+        cell.appendChild(Object.assign(document.createElement("div"), {
+            className: "ss-point-gap ss-point-" + st,
+            textContent: (point.status || "status") + " \u2014 no metrics recorded."
+        }));
+        return cell;
+    }
+
     function metricRow(lbl, rawValueHtml) {
         var r = document.createElement("div");
         r.className = "ss-metric-row";
@@ -227,7 +263,35 @@ function renderSpeedPointCell(point) {
         cell.appendChild(metricRow("Details", escapeHtml(extras.join("\u00b7 "))));
     }
 
+    // Repeatability evidence (cold + warm_a + warm_b): rendered only when the backend
+    // exposes per-stage runs. Absent at legacy single-row data, so this never fabricates.
+    if (Array.isArray(point.runs) && point.runs.length > 1) {
+        cell.appendChild(renderSpeedRunRepeatability(point.runs));
+    }
+
     return cell;
+}
+
+// Repeatability rows: show each persisted stage's generation throughput so the cold vs
+// warm distinction is inspectable. The backend owns these values; this never averages them.
+function renderSpeedRunRepeatability(runs) {
+    var wrap = document.createElement("div");
+    wrap.className = "ss-repeat";
+    wrap.appendChild(Object.assign(document.createElement("div"), {
+        className: "ss-repeat-label",
+        textContent: "Repeatability runs"
+    }));
+    runs.forEach(function (r) {
+        var stage = String((r.speed_run_stage || "run").toLowerCase());
+        var tps = r.generation_tokens_per_second;
+        var val = (tps == null || isNaN(Number(tps))) ? "\u2014" : fmtDec(tps, 1) + " tok/s";
+        var row = document.createElement("div");
+        row.className = "ss-metric-row";
+        row.innerHTML = '<span class="ss-metric-label">' + escapeHtml(stage) + '</span>' +
+            '<span class="ss-metric-value">' + escapeHtml(val) + '</span>';
+        wrap.appendChild(row);
+    });
+    return wrap;
 }
 
 // ---------------------------------------------------------------------------
