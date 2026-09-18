@@ -8,15 +8,6 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
-### RM-26-AA-0011 — Test architecture and fast gate
-
-Establish a clean test architecture plus a FAST local test gate (unit/source-contract tests GPU-free and in-memory; ordered fast gate) so refactors across retirement can be validated quickly. Complements dead-code cleanup (M3); does not require production modules to be restructured first.
-
-- Category: testing
-- Depends on: RM-26-AA-0005
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: test-architecture-and-fast-gate; D4
-
 ### RM-26-AA-0016 — Unified Results UI foundation
 
 Common Results experience rather than independent disconnected result pages. Provides the shared shell consumed by every benchmark-family results surface: unified Results navigation with benchmark-specific tabs/views, shared cards/modules and collapsible sections, L0→L1→L2 drill-down conventions (model family/version → configuration/quantization → individual run evidence), and a single loading/error/N/A/invalid-state contract. Consumes authoritative backend/read models only (`build_ranking`, `load_speed_run_by_id`, `load_v2_result`); the frontend performs no benchmark scoring or dimension recomputation, and N/A is never treated as zero. Applies the agreed dark visual system (dark mode or nothing — no light/dark toggle unless a future item explicitly adds one). Extensible with slots for later benchmark families (Context, Intelligence) without restructuring the shell.
@@ -103,6 +94,25 @@ Results UI for the AI Intelligence benchmark family. Purely downstream: cannot b
 - Legacy ID: intelligence-results-integration
 
 ## DONE
+
+### RM-26-AA-0011 — Test architecture and fast gate
+
+Establish a clean three-tier test taxonomy plus a FAST local gate so refactors can be validated quickly without the multi-minute full-suite cost. Fast gate = offline/deterministic tests only (`python test_gate.py`, ~56s, 587 tests); full suite unchanged as the authoritative regression gate (`python test_gate.py full`, 627 tests). Markers `slow`/`integration`/`live` tag the deliberately heavy/toolchain-dependent/live tiers; the fast gate excludes them via `-m "not slow and not integration and not live"`. Exit-code discipline enforced through a subprocess wrapper with no masking (see `tests/test_test_gate.py`). Full suite: 627 passed.
+
+- Category: testing
+- Depends on: RM-26-AA-0005
+- Updated: 2026-09-19T09:00:00Z
+- Legacy ID: test-architecture-and-fast-gate; D4
+
+#### Evidence
+
+- `bench_llm/test_gate.py` — canonical tiered entry point (`fast` default, `full`, `targeted <family>`); runs pytest as a subprocess and propagates the real exit code verbatim (no false greens)
+- `bench_llm/pytest.ini` — registered markers `slow`, `integration`, `live`
+- `tests/test_test_gate.py` — exit-code discipline tests (passing→0, failing→non-zero, empty selection→non-zero, unknown family→visible error)
+- `tests/test_v2_quality_store.py`, `tests/test_v2_quality_executor.py` tagged `slow`; `tests/test_java_execution_isolation.py` tagged `integration`
+- `docs/architecture.md` §Testing rewritten with the tiered taxonomy + canonical commands
+- `README.md` Development/testing section updated with fast/full commands
+- measured: full suite 627 passed in ~253s; fast gate 587 passed in ~56s (~4.6x faster); no regressions
 
 ### RM-26-AA-0009 — Context benchmark family
 

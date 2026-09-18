@@ -16,6 +16,10 @@ from pathlib import Path
 import httpx
 import pytest
 
+# Offline but heavy (real async retry backoff, ~7-8s each). Excluded from the
+# fast gate via `-m "not slow"`; retained in the full regression suite.
+pytestmark = pytest.mark.slow
+
 _ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_ROOT))
 

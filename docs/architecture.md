@@ -114,20 +114,49 @@ backend allow-list before it is ever used or persisted (see §6).
 
 ### Testing
 
-Tests live under `bench_llm/tests/` (41 files) governed by `bench_llm/pytest.ini`
+Tests live under `bench_llm/tests/` governed by `bench_llm/pytest.ini`
 (`testpaths = tests`, `python_files = test_*.py`). They run **GPU-free and in-memory** where
 possible; a subset exercises the model-backed runners against a local LM Studio endpoint.
-Run from `bench_llm`:
+The suite is read-only with respect to benchmark mechanics — it validates existing behaviour
+rather than driving production modules. Workflow suite fixtures (the deterministic
+denominators exercised by the runner) live under `bench_llm/tasks/`.
+
+The test architecture (RM-26-AA-0011) is organised into three tiers so nobody has to guess
+which subset to run. The canonical entry point is `bench_llm/test_gate.py`:
 
 ```bash
-python -m pytest
+# Fast local gate — offline / deterministic tests only (~56s). Run on every commit /
+# inside an agent loop. Excludes the deliberately tagged-heavy tiers below.
+cd bench_llm && python test_gate.py
+
+# Authoritative full regression suite (~4-5 min, 627 tests). Run before push/merge.
+cd bench_llm && python test_gate.py full
+
+# Focused per-family runs (subsets of the full suite).
+cd bench_llm && python test_gate.py targeted <family>   # family: speed|workflow|context|
+ranking|security|persistence|routes
 ```
 
+Equivalently, `python -m pytest` runs the full suite and `-m "not slow and not integration
+and not live"` selects the fast gate directly. The three markers define the taxonomy:
+
+- `slow` — offline but heavy V2-quality persistence/executor tests (real async retry backoff,
+  ~8-15s each). Excluded from the fast gate; retained in the full suite.
+- `integration` — tests that execute real external toolchains via subprocess (Java `javac`
+  /`java`). Excluded from the fast gate to stay JDK/toolchain-free and deterministic.
+- `live` — requires a loaded model / live LM Studio endpoint. Reserved for future model-backed
+  runs; excluded from the fast gate.
+
+The fast gate is broad by design (imports + read models + benchmark contracts + persistence
+round-trips + ownership/isolation + routing + security policy across all families) yet bounded,
+so it catches architectural regressions without the multi-minute cost of the full suite. Exit
+code discipline is enforced: `test_gate.py` invokes pytest as a subprocess and propagates its
+real return code verbatim (a failing test or an empty selection both yield non-zero — never a
+silent green). See `tests/test_test_gate.py`.
+
 Coverage spans isolation, fail-closed execution-boundary behaviour, timeouts, backend-URL
-policy, LAN boundary, and result-compatibility contracts. Workflow suite fixtures (the
-deterministic denominators exercised by the runner) live under `bench_llm/tasks/`. The test
-suite is read-only with respect to benchmark mechanics — it validates existing behaviour rather
-than driving production modules.
+policy, LAN boundary, and result-compatibility contracts. The full suite remains the
+authoritative broad regression gate; the fast gate supplements it and does not replace it.
 
 ---
 

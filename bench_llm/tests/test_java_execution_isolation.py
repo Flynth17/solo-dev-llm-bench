@@ -6,8 +6,14 @@ credentials.
 """
 
 import os
+import pytest
 import sys
 import tempfile
+
+# Executes real external toolchains via subprocess (javac/java). Excluded from
+# the fast gate via `-m "not integration"` to stay JDK/toolchain-free and
+# deterministic; retained in the full regression suite.
+pytestmark = pytest.mark.integration
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

@@ -188,8 +188,14 @@ Three distinct result surfaces, each owned by one benchmark family (there is no 
 Tests run **GPU-free and in-memory** where possible; a subset exercises the model-backed runners against a local LM Studio endpoint. Run from `bench_llm`:
 
 ```bash
-python -m pytest
+# Fast local gate (~56s): offline / deterministic tests only — run on every commit.
+cd bench_llm && python test_gate.py
+
+# Full regression suite (~4-5 min, 627 tests): run before push/merge.
+cd bench_llm && python test_gate.py full
 ```
+
+Equivalently `python -m pytest` runs the full suite and `-m "not slow and not integration and not live"` selects the fast gate. The fast gate is broad (imports, read models, benchmark contracts, persistence round-trips, ownership/isolation, routing, security policy across all families) yet bounded; it supplements — never replaces — the authoritative full suite. See [`docs/architecture.md`](docs/architecture.md) (§Testing) for the tiered taxonomy and targeted per-family runs.
 
 The full suite validates isolation, fail-closed behaviour, timeouts, backend-URL policy, LAN boundary, and result-compatibility contracts. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the canonical roadmap of delivered, planned, and research items.
 
