@@ -8,15 +8,6 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
-### RM-26-AA-0008 — Author architecture documentation
-
-Concise architecture document covering: launcher, four benchmark families, active routes, LM Studio lifecycle, heavyweight-run guard, persistence, read models, result pages, test organisation. Conceptual layout preserved in this roadmap.
-
-- Category: documentation
-- Depends on: RM-26-AA-0007
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: author-architecture-documentation; D3
-
 ### RM-26-AA-0009 — Context benchmark family
 
 Measure how model quality and performance change as usable context grows. Planned points 15K/30K/60K/120K/180K/240K where supported: quality retention, workflow degradation, TTFT/prefill/degradation growth, context-capacity limits, unsupported-point handling (shown as gaps; scores must not be rescaled to hide unsupported sizes).
@@ -64,6 +55,22 @@ Side-by-side degradation / comparison across MULTIPLE models at IDENTICAL contex
 - Legacy ID: multi-model-comparison-view
 
 ## DONE
+
+### RM-26-AA-0008 — Author architecture documentation
+
+Concise architecture document covering: launcher, four benchmark families, active routes, LM Studio lifecycle, heavyweight-run guard, persistence, read models, result pages, test organisation. Conceptual layout preserved in this roadmap.
+
+- Category: documentation
+- Depends on: RM-26-AA-0007
+- Updated: 2026-09-18T13:32:08Z
+- Legacy ID: author-architecture-documentation; D3
+
+#### Evidence
+
+- file `docs/architecture.md` — Solo Dev BenchLLM Architecture (implementation-grounded)
+- all 19 route decorators verified against source; cited read-model symbols resolve
+- DELIVERED/PLANNED/RESEARCH labels cross-checked vs README and current source
+- covers launcher, four families, active routes, LM Studio lifecycle, concurrency guard, persistence, read models, result pages, test organisation
 
 ### RM-26-AA-0007 — Rewrite README
 
