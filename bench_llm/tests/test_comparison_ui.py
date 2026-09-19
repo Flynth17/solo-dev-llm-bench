@@ -221,19 +221,93 @@ def test_stale_responses_cannot_mutate_state():
 # 5. Scope: identity only -- no metric comparison leaked into ST-003
 # ---------------------------------------------------------------------------
 
-_FORBIDDEN_METRIC_TOKENS = [
-    "tok/s",          # throughput values
-    "ttft",           # time-to-first-token figures (case-insensitive)
+# ST-004 scope: Speed metrics are now rendered (tok/s / TTFT), but overall-verdict
+# language and other-dimension numeric comparison remain out of scope for this view.
+_FORBIDDEN_VERDICT_TOKENS = [
     "winner",         # no winner indicators
     "leader",         # no leader/winner framing
     "composite",      # no composite score
+    "better model",   # no implied quality verdict
+    "faster model",
 ]
 
 
-def test_compare_view_contains_no_metric_tokens():
+def test_compare_view_contains_no_verdict_language():
     lowered = COMPARE_JS.lower()
-    for token in _FORBIDDEN_METRIC_TOKENS:
-        assert token not in lowered, f"ST-003 must not reference metric/winner language: {token!r}"
+    for token in _FORBIDDEN_VERDICT_TOKENS:
+        assert token not in lowered, f"ST-004 must not reference verdict language: {token!r}"
+
+
+def test_speed_section_reads_only_the_speed_dimension():
+    """The ST-004 rendering block reads ONLY dimensions.speed -- no other-dimension
+    metric values are joined or rendered here (Workflow/Context belong to later subtasks)."""
+    start = COMPARE_JS.index("var SPEED_CANONICAL_POINTS")
+    end = COMPARE_JS.index("// Controls: two labelled selectors")
+    block = COMPARE_JS[start:end]
+    assert "dims.speed.subject_a" in block and "dims.speed.subject_b" in block
+    assert "dimensions.workflow" not in block
+    assert "dimensions.context" not in block
+
+
+def test_speed_points_aligned_by_canonical_label_not_index():
+    """8K<->8K, 16K<->16K, 32K<->32K alignment is by label; a point absent from one
+    subject stays a gap on that side only (never shifted into another slot)."""
+    assert 'var SPEED_CANONICAL_POINTS = ["8K", "16K", "32K"]' in COMPARE_JS
+    # Lookup is an explicit label match over the projection's points array.
+    block = COMPARE_JS[COMPARE_JS.index("function speedPoint"):COMPARE_JS.index("/** Resolve one metric cell")]
+    assert 'String(dim.points[i].label) === label' in block
+
+
+def test_speed_primary_metric_groups_rendered():
+    """Generation (8K/16K/32K + average), TTFT and prefill throughput at canonical points."""
+    for token in (
+        'metrics: [["8K", "generation"], ["16K", "generation"], ["32K", "generation"], ["avg", "average"]]',
+        '["8K", "ttft"], ["16K", "ttft"], ["32K", "ttft"]',
+        '["8K", "prefill"], ["16K", "prefill"], ["32K", "prefill"]',
+    ):
+        assert token in COMPARE_JS, f"missing metric group: {token!r}"
+
+
+def test_speed_states_rendered_as_text_not_colour_only():
+    """Every non-available state renders a text chip + explanation; legacy is explicit."""
+    for st in ("failed", "unsupported", "missing", "in_progress", "ambiguous", "legacy", "unavailable"):
+        assert re.search(rf'\b{st}\s*:', COMPARE_JS), f"state vocabulary missing: {st}"
+    # The legacy state carries its own explanation (never an empty numeric column).
+    assert "not comparable with current-metric evidence" in COMPARE_JS
+
+
+def test_speed_legacy_state_never_renders_numeric_values():
+    """A non-available side renders a spanning state cell, not numbers: the value-cell
+    path is only reachable when dim.state === 'available'."""
+    block = COMPARE_JS[COMPARE_JS.index("function speedMetricValue"):COMPARE_JS.index("function fmtRate")]
+    assert 'dim.state !== "available"' in block  # non-available -> {kind: "state"}, no value
+
+
+def test_speed_average_is_presentation_only():
+    """The average is read verbatim from the read-model aggregate (never recomputed or
+    labelled a score); its contract is disclosed next to the table."""
+    block = COMPARE_JS[COMPARE_JS.index("function speedMetricValue"):COMPARE_JS.index("function fmtRate")]
+    assert "dim.average_generation_tps" in block  # authoritative projection value
+    assert "presentation-only aggregate" in COMPARE_JS
+    assert "not a benchmark score" in COMPARE_JS
+
+
+def test_speed_evidence_links_use_existing_route():
+    """Evidence links point at the existing persistent-shell Speed detail page -- no new
+    detail routes are introduced by this view."""
+    # The deep link comes verbatim from the projection and is rendered as an href.
+    assert "esc(dim.deep_link)" in COMPARE_JS
+    idx = COMPARE_JS.index("View Speed evidence")
+    assert 'href="' in COMPARE_JS[max(0, idx - 200):idx], "deep link must be rendered as a real href"
+    assert "View Speed evidence" in COMPARE_JS
+
+
+def test_speed_comparison_is_responsive():
+    """Narrow viewports reflow the speed table into stacked metric blocks (label, then A,
+    then B) -- no page-level horizontal scrolling for the primary comparison."""
+    narrow = SHELL_CSS.split("@media (max-width: 820px)")[-1]
+    assert ".cmp-speed-table" in narrow
+    assert "flex-direction: column" in narrow
 
 
 def test_compare_view_fetches_only_comparison_endpoints():

@@ -39,6 +39,17 @@ report):
   deterministic ``run_id`` tie-break). A newer *failed* terminal run is **not**
   silently replaced by an older successful one.
 
+* **Metric-version compatibility (Speed, ST-004).** Only corrected-baseline evidence
+  (metric version 2 or 3) is presented as comparable values. Current-metric runs are
+  preferred during selection; a legacy (pre-v2) run is surfaced -- and reported as
+  :data:`LEGACY` -- only when no corrected evidence exists for the subject, never
+  silently compared against current values. A current-metric run whose shape the
+  single-run read model cannot normalize reports :data:`UNAVAILABLE`. Available Speed
+  projections additionally carry the normalized canonical points (8K/16K/32K), the run's
+  metric version and a presentation-only average generation aggregate (mean of present,
+  valid canonical-point values; missing / unsupported excluded, never zeroed) -- not a
+  score and never a winner input.
+
 The public surface is intentionally small:
 
 * :func:`build_subject_catalogue` -- distinct comparison subjects from committed
@@ -63,9 +74,21 @@ MISSING = "missing"
 FAILED = "failed"
 UNSUPPORTED = "unsupported"
 UNAVAILABLE = "unavailable"
+# Speed evidence measured before the corrected metric baseline (pre-metric-v2, i.e. a
+# cached-TTFT artifact). It is real persisted evidence -- but its values are NOT
+# comparable with current-metric values and are never rendered as numbers alongside them.
+LEGACY = "legacy"
 
 # Families in canonical comparison order.
 FAMILIES = ("speed", "workflow", "context")
+
+# Canonical Standard Speed context points. Comparison aligns by these labels -- never by
+# array index, and a point absent from one subject stays a gap on that side only.
+CANONICAL_SPEED_POINTS = ("8K", "16K", "32K")
+
+# Metric versions carrying the corrected measurement baseline: 2 = corrected prefill
+# semantics, 3 = calibrated targets. Missing/None or < 2 is a legacy cached-TTFT artifact.
+CURRENT_METRIC_VERSIONS = frozenset({2, 3})
 
 # A run is *terminal* (a finished, selectable result) unless its status is one of
 # these non-finished states. Everything else -- completed, failed, unsupported,
@@ -188,6 +211,20 @@ def _short_signature(signature: tuple[Any, ...]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+def _is_comparable_speed(candidate: dict[str, Any]) -> bool:
+    """True when a Speed candidate carries presentable current-metric evidence.
+
+    Both conditions are required: the route attached normalized canonical points AND the
+    run's metric version sits on the corrected baseline (2 or 3). A legacy run is never
+    silently substituted for corrected evidence, and a run whose shape the single-run read
+    model cannot normalize has no values to present -- it is reported as an honest state,
+    not compared.
+    """
+    if not candidate.get("points"):
+        return False
+    return candidate.get("metric_version") in CURRENT_METRIC_VERSIONS
+
+
 def _select_authoritative(
     candidates: list[dict[str, Any]], family: str
 ) -> Optional[dict[str, Any]]:
@@ -197,6 +234,10 @@ def _select_authoritative(
       terminal run wins.
     * Speed has no ordering field, so it falls back to a deterministic
       ``run_id`` lexicographic tie-break (neutral -- never score-based).
+    * Speed metric-version compatibility: current-metric evidence is preferred; a legacy
+      run is only surfaced when NO corrected evidence exists for the subject (it then
+      reports as LEGACY, never silently compared). Within whichever pool is chosen the
+      neutral deterministic rule applies unchanged.
 
     Returns the chosen candidate, or ``None`` when only non-terminal runs exist.
     """
@@ -207,8 +248,61 @@ def _select_authoritative(
     if family in ("workflow", "context"):
         ordered = sorted(pool, key=lambda c: (c.get("generated_at") or ""), reverse=True)
         return ordered[0]
-    # Speed: deterministic run_id fallback (no timestamp exists anywhere).
-    return sorted(pool, key=lambda c: (c.get("run_id") or ""))[0]
+    # Speed: prefer current-metric evidence; deterministic run_id tie-break within the
+    # chosen pool (no timestamp exists anywhere -- never a score-based pick).
+    comparable = [c for c in pool if _is_comparable_speed(c)]
+    chosen = comparable if comparable else list(pool)
+    return sorted(chosen, key=lambda c: (c.get("run_id") or ""))[0]
+
+
+_SPEED_POINT_FIELDS = (
+    "label",
+    "target_context_tokens",
+    "actual_prompt_tokens",
+    "ttft_seconds",
+    "prefill_tokens_per_second",
+    "generation_tokens_per_second",
+    "completion_tokens",
+    "wall_time_seconds",
+    "status",
+)
+
+
+def project_speed_point(point: dict[str, Any]) -> dict[str, Any]:
+    """Project one normalized Speed point verbatim (authoritative read-model values).
+
+    Values are preserved as-is -- missing telemetry stays None so the UI renders an honest
+    gap; nothing is coerced to zero. Shared by the route layer and the projection so both
+    surfaces expose the identical point shape.
+    """
+    return {k: point.get(k) for k in _SPEED_POINT_FIELDS}
+
+
+def average_generation_tps(points: Optional[list[dict[str, Any]]]) -> Optional[float]:
+    """Presentation aggregate only -- NOT a benchmark score and never a winner input.
+
+    Arithmetic mean of PRESENT + VALID canonical-point (8K/16K/32K) generation values,
+    mirroring the accepted compact Speed Results table contract: missing / unsupported /
+    invalid points are excluded (never zeroed); no valid value -> None (rendered N/A).
+    Alignment is by canonical label, never array index.
+    """
+    values: list[float] = []
+    for point in points or []:
+        if str(point.get("label")) not in CANONICAL_SPEED_POINTS:
+            continue
+        # Only completed points are valid measurements; unsupported / failed / other
+        # non-completed statuses are excluded (never zeroed, never blended).
+        status = str(point.get("status") or "").strip().lower()
+        if status and status != "completed":
+            continue
+        gen = point.get("generation_tokens_per_second")
+        if isinstance(gen, bool) or not isinstance(gen, (int, float)):
+            continue
+        g = float(gen)
+        if g != g or g in (float("inf"), float("-inf")) or g <= 0:
+            continue
+        values.append(g)
+    return sum(values) / len(values) if values else None
 
 
 def _state_for_run(candidate: dict[str, Any], family: str) -> dict[str, Any]:
@@ -230,7 +324,7 @@ def _state_for_run(candidate: dict[str, Any], family: str) -> dict[str, Any]:
     else:
         is_failed = "fail" in classification or candidate.get("status") == "failed"
         state = FAILED if is_failed else AVAILABLE
-    return {
+    projection: dict[str, Any] = {
         "state": state,
         "run_id": run_id,
         "deep_link": deep_link,
@@ -242,6 +336,26 @@ def _state_for_run(candidate: dict[str, Any], family: str) -> dict[str, Any]:
         # copying another family's value.
         "config": _config_for(candidate, family),
     }
+    if family == "speed" and state == AVAILABLE:
+        # Metric-version compatibility (ST-004): only corrected-baseline evidence is
+        # presented as comparable values. A legacy run is never silently compared -- it
+        # reports LEGACY with its traceability so the evidence stays inspectable; a
+        # current-metric run whose shape the single-run read model cannot normalize has
+        # no representable values and reports UNAVAILABLE (never fabricated numbers).
+        if _is_comparable_speed(candidate):
+            points = [project_speed_point(p) for p in candidate.get("points") or []]
+            projection["metric_version"] = candidate.get("metric_version")
+            projection["points"] = points
+            # Presentation aggregate only (mean of present valid canonical points);
+            # None -> N/A. Never a score, never a winner input.
+            projection["average_generation_tps"] = average_generation_tps(points)
+        elif (candidate.get("metric_version") or 0) < 2:
+            projection["state"] = LEGACY
+            projection["metric_version"] = candidate.get("metric_version")
+        else:
+            projection["state"] = UNAVAILABLE
+            projection["metric_version"] = candidate.get("metric_version")
+    return projection
 
 
 def _config_for(candidate: dict[str, Any], family: str) -> dict[str, Any]:
@@ -252,6 +366,10 @@ def _config_for(candidate: dict[str, Any], family: str) -> dict[str, Any]:
             "quantization": row.get("model_quantization") or None,
             "loaded_context_tokens": row.get("loaded_context"),
             "hardware_label": row.get("hardware_label") or None,
+            # Speed-specific evidence identity (ST-004): environment provenance, never
+            # copied from another family.
+            "execution_environment": row.get("execution_environment") or None,
+            "connection_type": row.get("connection_type") or None,
         }
     view = _as_view(candidate)
     if family == "context":

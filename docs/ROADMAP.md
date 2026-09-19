@@ -49,7 +49,27 @@ Side-by-side comparison of exactly two selectable model/configurations across ev
     keys fail gracefully with an inline notice. An accessible Swap A/B button reorders columns and
     refetches. Dark shell language throughout; the two-column grid stacks on narrow viewports.
     Tests: `tests/test_comparison_ui.py` (29 passing) + browser acceptance.
-- [ ] ST-004 — Implement Speed side-by-side comparison
+- [x] ST-004 — Implement Speed side-by-side comparison
+  - Implemented: the Compare pane renders a **Speed** section beneath the identity header, sourced
+    exclusively from the authoritative `/api/comparison` projection (no independent Speed API
+    joins). Read-model extension (`src/comparison_read_model.py`): per-subject `points`
+    normalised to canonical labels 8K/16K/32K with generation / prefill throughput, TTFT and
+    actual measured input tokens; a presentation-only `average_generation_tps` (arithmetic mean of
+    present valid points -- never recomputed client-side, never zero-filled); explicit states
+    including new **LEGACY** for pre-metric-v2 evidence. Selection prefers the corrected
+    current-metric run when both legacy and current runs exist; a legacy-only subject reports
+    LEGACY with its run traceable via `deep_link` -- never silently compared against
+    current-metric values. Frontend (`static/results-compare.js`): per-subject evidence line
+    (metric version badge, quantization, loaded context, run id, "View Speed evidence" link to the
+    existing persistent-shell detail page), canonical-point table aligned by label (never array
+    index) with generation / TTFT / prefill groups and an average row carrying a
+    presentation-only footnote, neutral same-colour magnitude bars only where both sides carry
+    numbers, per-point states rendered as text chips + explanations (failed / unsupported /
+    missing / in_progress / ambiguous / legacy / unavailable -- never colour-only), actual-measured
+    input disclosure, and no winner/leader/composite language anywhere. Responsive: the table
+    reflows into stacked metric blocks at narrow viewports without page-level horizontal scroll.
+    Tests: `tests/test_comparison_read_model.py` (28 passing) + `tests/test_comparison_ui.py`
+    (37 passing) + browser acceptance (agent-browser).
 - [ ] ST-005 — Implement Workflow side-by-side comparison
 - [ ] ST-006 — Implement Context side-by-side comparison
 - [ ] ST-007 — Preserve N/A, validity, failures and unsuccessful-run controls

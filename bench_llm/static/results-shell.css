@@ -1088,7 +1088,217 @@
     color: var(--rs-text-muted);
 }
 
+/* Speed side-by-side comparison (ST-004): one clear surface beneath the identity
+   header -- aligned numbers, neutral magnitude bars (same colour on both sides),
+   honest per-point / per-run states. No verdict colours, no winner language. */
+.cmp-speed {
+    margin-top: 1.25rem;
+}
+
+/* Per-side evidence identity line: metric version badge + config chips + run ID + link. */
+.cmp-speed-evidence {
+    display: flex;
+    gap: 0.75rem 2rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+}
+
+.cmp-speed-side {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.84rem;
+    color: var(--rs-text-muted);
+}
+
+.cmp-speed-slot {
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    color: var(--rs-accent);
+}
+
+.cmp-speed-chip,
+.cmp-speed-runid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    background: var(--rs-surface-2);
+    border: 1px solid var(--rs-border);
+    border-radius: 4px;
+    padding: 0.05rem 0.4rem;
+}
+
+.cmp-speed-sub {
+    color: var(--rs-text-faint);
+    font-size: 0.78rem;
+}
+
+/* Neutral legacy-metric badge -- distinct from warn (ambiguous) and unavailable. */
+.rs-badge-legacy {
+    background: rgba(148, 163, 184, 0.12);
+    color: #9aa7bd;
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+/* The comparison table itself. */
+.cmp-speed-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.cmp-speed-table th,
+.cmp-speed-table td {
+    padding: 0.45rem 0.6rem;
+    border-top: 1px solid var(--rs-border-soft);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.cmp-speed-table thead th {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--rs-text-muted);
+}
+
+/* Group header row (Generation / TTFT / Prefill). */
+.cmp-speed-group th {
+    color: var(--rs-text-faint);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* Metric label column (middle). */
+.cmp-speed-metric-cell {
+    color: var(--rs-text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Aligned numbers + unit. */
+.cmp-speed-num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.cmp-speed-unit {
+    color: var(--rs-text-faint);
+    font-size: 0.78rem;
+    margin-left: 0.3rem;
+}
+
+/* Neutral magnitude bar -- visual aid only; the number is always the information.
+   One colour for both sides (no verdict implied by hue). */
+.cmp-speed-bar {
+    display: block;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--rs-surface-2);
+    margin-top: 0.35rem;
+    max-width: 160px;
+    overflow: hidden;
+}
+
+.cmp-speed-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--rs-accent);
+    opacity: 0.5;
+}
+
+/* Honest gap / state text inside a metric cell -- never a fabricated zero. */
+.cmp-speed-state {
+    color: var(--rs-text-faint);
+    font-size: 0.84rem;
+}
+
+/* Spanning state cell for a non-available side (failed / legacy / missing / ...). */
+.cmp-speed-statecell .cmp-speed-note {
+    margin: 0.5rem 0;
+}
+
+.cmp-speed-note {
+    color: var(--rs-text-muted);
+    font-size: 0.84rem;
+    line-height: 1.45;
+    margin: 0.35rem 0 0.5rem;
+}
+
+/* Secondary context disclosure (actual measured inputs). */
+.cmp-speed-details {
+    margin-top: 0.75rem;
+}
+
+.cmp-speed-details summary {
+    cursor: pointer;
+    color: var(--rs-text-muted);
+    font-size: 0.84rem;
+    padding: 0.3rem 0;
+}
+
+.cmp-speed-actual td,
+.cmp-speed-actual th {
+    padding: 0.3rem 0.6rem;
+}
+
+/* Presentation-aggregate contract note (never a score). */
+.cmp-speed-footnote {
+    color: var(--rs-text-faint);
+    font-size: 0.76rem;
+    line-height: 1.4;
+    margin-top: 0.75rem;
+}
+
 @media (max-width: 820px) {
     /* Narrow viewport: stack Subject A above B instead of squeezing both columns. */
     .cmp-grid { grid-template-columns: 1fr; }
+
+    /* Speed table reflows into stacked metric blocks: label first, then A value,
+       then B value -- no page-level horizontal scrolling. */
+    .cmp-speed-table {
+        display: block;
+    }
+
+    .cmp-speed-table thead {
+        position: absolute;
+        left: -9999px;
+    }
+
+    .cmp-speed-table tbody tr {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        padding: 0.55rem 0;
+    }
+
+    .cmp-speed-table td,
+    .cmp-speed-table th.cmp-speed-metric-cell {
+        display: block;
+        width: auto;
+        border-top: none;
+        padding: 0;
+    }
+
+    /* Metric label moves above the two values; each value is prefixed with its side. */
+    .cmp-speed-row > th.cmp-speed-metric-cell {
+        order: -1;
+    }
+
+    .cmp-speed-row > td[data-side]::before,
+    .cmp-speed-actual td[data-side]::before {
+        content: attr(data-side) " \00b7 ";
+        color: var(--rs-text-faint);
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+    }
+
+    /* Group header rows stay full-width labels. */
+    .cmp-speed-group th {
+        border-top: none;
+    }
 }

@@ -4,16 +4,20 @@
  * the authoritative comparison subject catalogue (`/api/comparison/subjects`) and a
  * model/config identity header projected by `/api/comparison?a=&b=`.
  *
- * Scope discipline (ST-003 = identity only):
- *  - This view renders identities, family-specific configuration truth and per-family
- *    dimension availability. It displays NO benchmark metrics: no throughput values,
- *    no time-to-first-token figures, no Workflow correctness results, no Context
- *    degradation curves, no deltas or percentages. Metric comparison begins at ST-004
- *    onward.
+ * Scope discipline (ST-003 = identity header, ST-004 = Speed metrics):
+ *  - The view renders identities, family-specific configuration truth and per-family
+ *    dimension availability. Metric comparison is limited to the SPEED dimension:
+ *    generation / TTFT / prefill throughput at canonical points plus a presentation-only
+ *    average -- no other-dimension metric values (Workflow / Context belong to later
+ *    subtasks), no deltas or percentages, and no overall-verdict language of any kind.
  *  - No frontend reconstruction of backend identity: subject keys come verbatim from
  *    the catalogue; run selection and state semantics come verbatim from the resolved
  *    comparison projection. This script formats only -- it never joins Speed /
  *    Workflow / Context APIs independently or re-derives any identity.
+ *  - Metric-version compatibility (ST-004): only corrected-baseline evidence (metric v2/v3)
+ *    renders numeric values. LEGACY evidence is shown as an explicit not-comparable state
+ *    with its run traceability -- never silently compared against current values; N/A stays
+ *    N/A, missing/unsupported points stay gaps and are never zeroed.
  *  - Family-specific configuration truth is preserved: each family section renders
  *    ONLY that family's authoritative fields. Workflow does not record quantization,
  *    so its section says "Not recorded" -- it never copies another family's value.
@@ -41,7 +45,8 @@
         in_progress: "In progress",
         failed: "Failed",
         unsupported: "Unsupported",
-        unavailable: "Unavailable"
+        unavailable: "Unavailable",
+        legacy: "Legacy metric"
     };
     var STATE_BADGE = {
         available: "rs-badge-ok",
@@ -50,7 +55,8 @@
         in_progress: "rs-badge-accent",
         failed: "rs-badge-error",
         unsupported: "rs-badge-unavailable",
-        unavailable: "rs-badge-unavailable"
+        unavailable: "rs-badge-unavailable",
+        legacy: "rs-badge-legacy"
     };
 
     // AMBIGUOUS is an evidence limitation, not an error. Per-family explanation of WHY
@@ -59,6 +65,18 @@
         workflow: "Workflow configuration identity omits quantization, so runs of the same base model cannot be attributed to a specific configuration.",
         context: "Context evidence for this subject pair cannot be attributed to one specific configuration with authority.",
         speed: "Speed evidence for this subject pair cannot be attributed to one specific configuration with authority."
+    };
+
+    // Speed-specific state explanations (ST-004). Every non-available state renders its
+    // own text -- never an empty numeric column, never a fabricated zero.
+    var SPEED_STATE_NOTES = {
+        failed: "The selected run failed; no comparable values are shown.",
+        unsupported: "Speed is not supported for this configuration.",
+        missing: "No Speed evidence recorded for this subject.",
+        in_progress: "The Speed benchmark is still running.",
+        ambiguous: AMBIGUOUS_NOTES.speed,
+        legacy: "Pre-metric-v2 measurement \u2014 not comparable with current-metric evidence. Values are withheld rather than silently compared.",
+        unavailable: "Speed evidence exists but cannot be represented on this surface; open the run for details."
     };
 
     var state = {
@@ -215,12 +233,13 @@
 
     function fetchComparison() {
         var container = document.getElementById("compare-identity");
-        if (!state.a || !state.b) { renderIdentity(null); return; }
+        if (!state.a || !state.b) { renderIdentity(null); clearSpeed(); return; }
         if (state.a === state.b) {
             // Defense in depth: the selectors already mirror-disable identical keys,
             // and the backend rejects this with 400 -- but never fetch a self-comparison.
             setNotice("A subject cannot be compared with itself; select two distinct subjects.");
             renderIdentity(null);
+            clearSpeed();
             return;
         }
         var seq = ++fetchSeq;
@@ -236,9 +255,11 @@
                 if (seq !== fetchSeq) { return; } // stale response: a newer selection won
                 setNotice("");
                 renderIdentity(data);
+                renderSpeed(data && data.comparison); // ST-004: Speed metrics beneath the identity header
             })
             .catch(function (err) {
                 if (seq !== fetchSeq) { return; }
+                clearSpeed();
                 renderError(err && err.message ? err.message : "The comparison could not be loaded. Try refreshing the page.");
             });
     }
@@ -408,6 +429,240 @@
     }
 
     // -----------------------------------------------------------------------
+    // Speed side-by-side comparison (ST-004).
+    //
+    // Renders ONLY the authoritative speed dimension projection: canonical points
+    // aligned by label (never array index), a presentation-only average, and honest
+    // per-point / per-run states. Only the speed dimension is read from the projection;
+    // no overall-verdict language exists anywhere in this view.
+    // -----------------------------------------------------------------------
+
+    var SPEED_CANONICAL_POINTS = ["8K", "16K", "32K"];
+
+    // Metric rows per group. ``kind`` selects the point field; "average" reads the
+    // read-model presentation aggregate (never recomputed here).
+    var SPEED_GROUPS = [
+        { title: "Generation throughput (tok/s)", unit: "tok/s", fmt: "rate",
+          metrics: [["8K", "generation"], ["16K", "generation"], ["32K", "generation"], ["avg", "average"]] },
+        { title: "Time to first token (TTFT)", unit: "", fmt: "ttft",
+          metrics: [["8K", "ttft"], ["16K", "ttft"], ["32K", "ttft"]] },
+        { title: "Prefill throughput (tok/s)", unit: "tok/s", fmt: "rate",
+          metrics: [["8K", "prefill"], ["16K", "prefill"], ["32K", "prefill"]] }
+    ];
+
+    function speedPoint(dim, label) {
+        // Canonical-point alignment is by LABEL -- never array index; a point absent
+        // from one subject stays a gap on that side only.
+        if (!dim || !Array.isArray(dim.points)) { return null; }
+        for (var i = 0; i < dim.points.length; i++) {
+            if (String(dim.points[i].label) === label) { return dim.points[i]; }
+        }
+        return null;
+    }
+
+    /** Resolve one metric cell: value | missing point | unsupported point | not recorded. */
+    function speedMetricValue(dim, pointLabel, kind) {
+        if (!dim || dim.state !== "available") { return { kind: "state" }; }
+        if (kind === "average") {
+            var avg = dim.average_generation_tps;
+            return (typeof avg === "number" && !isNaN(avg)) ? { kind: "value", value: avg } : { kind: "not_recorded" };
+        }
+        var p = speedPoint(dim, pointLabel);
+        if (!p) { return { kind: "missing" }; }
+        var status = String(p.status || "").toLowerCase();
+        if (status && status !== "completed") { return { kind: "point_state", status: status }; }
+        var v = kind === "generation" ? p.generation_tokens_per_second
+              : kind === "prefill" ? p.prefill_tokens_per_second
+              : p.ttft_seconds;
+        if (typeof v !== "number" || isNaN(v)) { return { kind: "not_recorded" }; }
+        return { kind: "value", value: v };
+    }
+
+    function fmtRate(value) {
+        var n = Number(value);
+        return (value === null || value === undefined || isNaN(n)) ? "\u2014" : n.toFixed(1);
+    }
+
+    /** One numeric cell: aligned number + unit, optional neutral magnitude bar.
+     *  The bar is a visual aid only -- the number is always the information. */
+    function speedValueCell(slot, dim, pointLabel, kind, groupFmt, otherDim) {
+        var res = speedMetricValue(dim, pointLabel, kind);
+        var label = (kind === "average" ? "Average generation" : pointLabel + " " + kind);
+        if (res.kind !== "value") {
+            var text;
+            if (res.kind === "missing") { text = "Missing"; }
+            else if (res.kind === "point_state") { text = res.status === "unsupported" ? "Not supported" : esc(res.status); }
+            else { text = "\u2014"; }  // not recorded: honest gap, never a zero
+            return '<td class="cmp-speed-cell cmp-speed-cell-' + slot + '" data-side="' + slot.toUpperCase() +
+                '" aria-label="Subject ' + slot.toUpperCase() + ', ' + esc(label) + ': ' + esc(text) + '">'
+                + '<span class="cmp-speed-state">' + text + "</span></td>";
+        }
+        var unit = groupFmt === "ttft" ? "" : " tok/s";
+        var display = groupFmt === "ttft" ? formatTtft(res.value) : fmtRate(res.value);
+        // Neutral magnitude bar: scaled against the OTHER side's value for this row only
+        // when both sides carry numbers. Same colour on both sides -- no verdict.
+        var otherRes = speedMetricValue(otherDim, pointLabel, kind);
+        var barHtml = "";
+        if (otherRes.kind === "value") {
+            var maxV = Math.max(res.value, otherRes.value);
+            if (maxV > 0) {
+                var pct = Math.round(Math.max(8, (res.value / maxV) * 100));
+                barHtml = '<span class="cmp-speed-bar" aria-hidden="true"><span style="width:' + pct + '%"></span></span>';
+            }
+        }
+        var numericText = groupFmt === "ttft" ? res.value.toFixed(2) + " seconds" : fmtRate(res.value) + " tokens per second";
+        return '<td class="cmp-speed-cell cmp-speed-cell-' + slot + '" data-side="' + slot.toUpperCase() +
+            '" aria-label="Subject ' + slot.toUpperCase() + ', ' + esc(label) + ': ' + numericText + '">'
+            + '<span class="cmp-speed-num">' + display + "</span>"
+            + (unit ? '<span class="cmp-speed-unit">' + unit.trim() + "</span>" : "")
+            + barHtml
+            + "</td>";
+    }
+
+    /** The non-available side renders ONE spanning cell with its state, explanation and
+     *  evidence link -- never an empty numeric column. */
+    function speedStateCell(slot, dim, span) {
+        var st = (dim && STATE_LABELS[dim.state]) ? dim.state : "missing";
+        var html = '<td class="cmp-speed-statecell cmp-speed-cell-' + slot + '" data-side="' + slot.toUpperCase() + '"' +
+            (span > 1 ? ' rowspan="' + span + '"' : "") +
+            ' aria-label="Subject ' + slot.toUpperCase() + ': ' + esc(STATE_LABELS[st]) + '">';
+        html += '<span class="rs-badge ' + (STATE_BADGE[st] || STATE_BADGE.unavailable) + '">' + esc(STATE_LABELS[st]) + "</span>";
+        html += '<p class="cmp-speed-note">' + esc(SPEED_STATE_NOTES[st] || "") + "</p>";
+        if (dim && dim.run_id && dim.deep_link) {
+            html += '<a class="rs-view-link cmp-evidence" href="' + esc(dim.deep_link) + '">View Speed evidence (' + esc(String(dim.run_id)) + ') &rarr;</a>';
+        }
+        return html + "</td>";
+    }
+
+    /** Per-side evidence identity line (ST-004): metric version, configuration chips,
+     *  run ID and the deep link into the existing Speed detail page. */
+    function speedEvidenceLine(slot, dim) {
+        var out = '<div class="cmp-speed-side" aria-label="Subject ' + slot.toUpperCase() + ' Speed evidence">';
+        out += "<span class='cmp-speed-slot'>Subject " + slot.toUpperCase() + "</span>";
+        if (!dim || !STATE_LABELS[dim.state]) { return out + "</div>"; }
+        var v = dim.metric_version;
+        if (v === 2) { out += '<span class="rs-badge rs-badge-accent">Metric v2</span>'; }
+        else if (v === 3) { out += '<span class="rs-badge rs-badge-ok">Metric v3</span>'; }
+        else if (dim.state === "legacy") {
+            out += '<span class="rs-badge rs-badge-legacy">Legacy metric</span>' +
+                '<span class="cmp-speed-sub">' + (v != null ? "metric v" + esc(String(v)) : "no metric version recorded") + "</span>";
+        }
+        var cfg = dim.config || {};
+        if (cfg.quantization) { out += '<code class="cmp-speed-chip">' + esc(String(cfg.quantization)) + "</code>"; }
+        if (cfg.loaded_context_tokens != null) {
+            out += '<code class="cmp-speed-chip">' + Number(cfg.loaded_context_tokens).toLocaleString("en-US") + " ctx</code>";
+        }
+        if (dim.run_id) { out += "<code class='cmp-speed-runid'>" + esc(String(dim.run_id)) + "</code>"; }
+        if (dim.deep_link) {
+            out += '<a class="rs-view-link cmp-evidence" href="' + esc(dim.deep_link) + '">View Speed evidence &rarr;</a>';
+        }
+        return out + "</div>";
+    }
+
+    /** Actual measured inputs (secondary context): canonical point -> actual tokens per side.
+     *  The canonical target and the actually-measured input are not necessarily identical. */
+    function speedActualInputs(dimA, dimB) {
+        var html = '<details class="cmp-speed-details"><summary>Actual measured inputs</summary>';
+        html += '<table class="cmp-speed-table cmp-speed-actual" aria-label="Actual measured input tokens by canonical point">';
+        html += "<thead><tr><th scope='col'>Point</th><th scope='col'>Subject A</th><th scope='col'>Subject B</th></tr></thead><tbody>";
+        SPEED_CANONICAL_POINTS.forEach(function (label) {
+            var pa = speedPoint(dimA, label);
+            var pb = speedPoint(dimB, label);
+            html += "<tr><td class='cmp-speed-metric-cell'>" + label + "</td>"
+                + '<td data-side="A">' + actualInputText(pa) + "</td><td data-side=\"B\">" + actualInputText(pb) + "</td></tr>";
+        });
+        return html + "</tbody></table></details>";
+    }
+
+    function actualInputText(point) {
+        if (!point) { return '<span class="cmp-speed-state">Missing</span>'; }
+        var status = String(point.status || "").toLowerCase();
+        if (status && status !== "completed") { return '<span class="cmp-speed-state">' + esc(status === "unsupported" ? "Not supported" : status) + "</span>"; }
+        if (point.actual_prompt_tokens == null) { return '<span class="cmp-na">&mdash;</span>'; }
+        return Number(point.actual_prompt_tokens).toLocaleString("en-US") + " tokens";
+    }
+
+    function renderSpeed(cmp) {
+        var container = document.getElementById("compare-speed");
+        if (!container) { return; }
+        var dims = (cmp && cmp.dimensions) || {};
+        var dimA = dims.speed ? dims.speed.subject_a : null;
+        var dimB = dims.speed ? dims.speed.subject_b : null;
+
+        // No speed dimension at all -> nothing to render (never fabricated).
+        if (!dimA && !dimB) { container.innerHTML = ""; return; }
+
+        var aAvail = dimA && dimA.state === "available";
+        var bAvail = dimB && dimB.state === "available";
+
+        var html = '<section class="rs-panel cmp-speed" aria-labelledby="cmp-speed-title">';
+        html += '<h3 id="cmp-speed-title" class="cmp-family-title">Speed</h3>';
+        html += '<div class="cmp-speed-evidence">' + speedEvidenceLine("a", dimA) + speedEvidenceLine("b", dimB) + "</div>";
+
+        if (!aAvail && !bAvail) {
+            // Neither side carries comparable Speed evidence: say so plainly.
+            html += '<p class="cmp-speed-note">No comparable Speed values for this subject pair. ' +
+                "Each side\u2019s state and evidence link above remain inspectable.</p>";
+        } else {
+            var both = aAvail && bAvail;
+            html += '<table class="cmp-speed-table" aria-label="Speed comparison: Subject A versus Subject B">';
+            if (both) {
+                html += "<thead><tr><th scope='col'>Subject A</th><th scope='col'>Metric</th><th scope='col'>Subject B</th></tr></thead>";
+            }
+            html += "<tbody>";
+            var totalMetrics = SPEED_GROUPS.reduce(function (n, g) { return n + g.metrics.length; }, 0);
+            // A non-available side emits its spanning state cell exactly ONCE -- in the
+            // first data row overall (never once per group).
+            var aStateEmitted = false;
+            var bStateEmitted = false;
+            SPEED_GROUPS.forEach(function (group) {
+                if (both) {
+                    html += '<tr class="cmp-speed-group"><th colspan="3" scope="colgroup">' + esc(group.title) + "</th></tr>";
+                }
+                group.metrics.forEach(function (metric) {
+                    var pointLabel = metric[0];
+                    var kind = metric[1];
+                    var label = kind === "average"
+                        ? "Average generation"
+                        : (both ? pointLabel : pointLabel + " " + kind);
+                    html += '<tr class="cmp-speed-row">';
+                    if (aAvail) {
+                        html += speedValueCell("a", dimA, pointLabel, kind, group.fmt, dimB);
+                    } else if (!aStateEmitted) {
+                        // A is non-available: its spanning state cell sits in the first row.
+                        html += speedStateCell("a", dimA, totalMetrics);
+                        aStateEmitted = true;
+                    }
+                    html += '<th scope="row" class="cmp-speed-metric-cell">' + esc(label) + "</th>";
+                    if (bAvail) {
+                        html += speedValueCell("b", dimB, pointLabel, kind, group.fmt, dimA);
+                    } else if (!bStateEmitted) {
+                        // B is non-available: its spanning state cell sits in the first row.
+                        html += speedStateCell("b", dimB, totalMetrics);
+                        bStateEmitted = true;
+                    }
+                    html += "</tr>";
+                });
+            });
+            html += "</tbody></table>";
+
+            // Secondary context: what was actually measured at each canonical point.
+            if (aAvail || bAvail) {
+                html += speedActualInputs(aAvail ? dimA : null, bAvail ? dimB : null);
+            }
+            html += '<p class="cmp-speed-footnote">Average generation is a presentation-only aggregate: arithmetic mean of present, valid canonical-point values; missing or unsupported points are excluded, never zeroed. It is not a benchmark score.</p>';
+        }
+
+        html += "</section>";
+        container.innerHTML = html;
+    }
+
+    function clearSpeed() {
+        var container = document.getElementById("compare-speed");
+        if (container) { container.innerHTML = ""; }
+    }
+
+    // -----------------------------------------------------------------------
     // Controls: two labelled selectors + accessible Swap button.
     // -----------------------------------------------------------------------
 
@@ -417,7 +672,7 @@
         container.innerHTML =
             '<div class="rs-panel">' +
             '  <div class="rs-panel-title">Compare</div>' +
-            "  <p class='cmp-hint'>Select two model configurations to compare. Identities, configuration truth and dimension availability are shown first; metric comparison arrives in a later release.</p>" +
+            "  <p class='cmp-hint'>Select two model configurations to compare. Identities, configuration truth and dimension availability are shown first, with Speed metrics side by side beneath the identity header.</p>" +
             "  <div class='cmp-controls'>" +
             "    <div class='cmp-field'>" +
             "      <label for='compare-subject-a'>Subject A</label>" +
@@ -431,7 +686,8 @@
             "  </div>" +
             "  <p id='compare-notice' role='status' aria-live='polite' hidden></p>" +
             "</div>" +
-            '<div id="compare-identity"></div>';
+            '<div id="compare-identity"></div>' +
+            '<div id="compare-speed"></div>';
 
         ["a", "b"].forEach(function (slot) {
             var sel = document.getElementById("compare-subject-" + slot);

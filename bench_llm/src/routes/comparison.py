@@ -25,10 +25,45 @@ import src  # noqa: F401  (ensures app_state is importable)
 from src.comparison_read_model import (
     FAMILIES,
     build_subject_catalogue,
+    project_speed_point,
     resolve_comparison,
+)
+from src.v2_speed_read_model import (
+    SpeedReadModelIntegrityError,
+    SpeedRunNotFoundError,
+    load_speed_run_by_id,
 )
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
+
+
+def _normalize_speed_candidate(
+    run_id: str,
+    all_rows: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+) -> tuple[Optional[list[dict[str, Any]]], Optional[int]]:
+    """Attach the authoritative point-level view for one Speed run (ST-004).
+
+    Reuses :func:`load_speed_run_by_id` so the comparison surfaces the SAME values as the
+    dedicated /speed/results/{run_id} page -- no second normalization path. Runs outside
+    the Standard Speed contract (or in a shape the single-run read model cannot represent)
+    yield no points: the read model then reports an honest non-comparable state instead of
+    fabricating values. The run-level metric version falls back to the first persisted
+    per-row version so legacy evidence is still labelled honestly when normalization is
+    unavailable.
+    """
+    try:
+        view = load_speed_run_by_id(run_id, all_rows)
+        points = [project_speed_point(p) for p in (view.get("points") or [])]
+        return points, view.get("speed_metric_version")
+    except (SpeedRunNotFoundError, SpeedReadModelIntegrityError):
+        version: Optional[int] = None
+        for row in rows:
+            v = row.get("speed_metric_version") if isinstance(row, dict) else None
+            if isinstance(v, int) and not isinstance(v, bool):
+                version = v
+                break
+        return None, version
 
 
 def _build_candidates() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -47,9 +82,10 @@ def _build_candidates() -> tuple[list[dict[str, Any]], list[dict[str, Any]], lis
     from src.v2_quality_read_model import build_read_model as _build_workflow_view
 
     # --- Speed: group persisted point rows back into per-run candidates. --------
+    all_rows = src.app_state.results_store.get_all()
     speed_runs: list[dict[str, Any]] = []
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in src.app_state.results_store.get_all():
+    for row in all_rows:
         run_id = (row or {}).get("run_id")
         if not run_id:
             continue
@@ -57,6 +93,7 @@ def _build_candidates() -> tuple[list[dict[str, Any]], list[dict[str, Any]], lis
     # Deterministic order so the catalogue / selection are reproducible.
     for run_id in sorted(grouped):
         rows = grouped[run_id]
+        points, metric_version = _normalize_speed_candidate(run_id, all_rows, rows)
         speed_runs.append(
             {
                 "family": "speed",
@@ -66,6 +103,11 @@ def _build_candidates() -> tuple[list[dict[str, Any]], list[dict[str, Any]], lis
                 # provenance (canonical/incomplete). Status stays terminal.
                 "classification": classify_run_for_result(rows[0]),
                 "status": "completed",
+                # ST-004: normalized canonical points + run-level metric version from the
+                # authoritative single-run read model. ``points`` is None when the run is
+                # not representable under the Standard Speed contract -- never fabricated.
+                "points": points,
+                "metric_version": metric_version,
             }
         )
 

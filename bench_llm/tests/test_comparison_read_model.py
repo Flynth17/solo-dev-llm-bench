@@ -32,7 +32,30 @@ from src import comparison_read_model as rm
 _SPEED_IDENTITY_KEYS = list(rm.SPEED_IDENTITY_KEYS)
 
 
-def _speed_run(run_id, model_key="Ornith", quant="Q4_K_M", context=32768):
+def _speed_points(generation=195.2):
+    """Normalized canonical points exactly as the route attaches them (ST-004).
+
+    Mirrors the authoritative single-run read model's point view shape; values are
+    present and valid so selection / average contracts can be exercised.
+    """
+    return [
+        {"label": "8K", "target_context_tokens": 8192, "actual_prompt_tokens": 5600,
+         "ttft_seconds": 0.9, "prefill_tokens_per_second": 6200.0,
+         "generation_tokens_per_second": generation, "completion_tokens": 1024,
+         "wall_time_seconds": 5.3, "status": "completed"},
+        {"label": "16K", "target_context_tokens": 16384, "actual_prompt_tokens": 11900,
+         "ttft_seconds": 1.7, "prefill_tokens_per_second": 7000.0,
+         "generation_tokens_per_second": generation - 12.5, "completion_tokens": 1024,
+         "wall_time_seconds": 9.8, "status": "completed"},
+        {"label": "32K", "target_context_tokens": 32768, "actual_prompt_tokens": 24100,
+         "ttft_seconds": 3.4, "prefill_tokens_per_second": 7100.0,
+         "generation_tokens_per_second": generation - 25.0, "completion_tokens": 1024,
+         "wall_time_seconds": 18.6, "status": "completed"},
+    ]
+
+
+def _speed_run(run_id, model_key="Ornith", quant="Q4_K_M", context=32768,
+               metric_version=2, normalizable=True):
     row = {"run_id": run_id, "model_key": model_key}
     for k in _SPEED_IDENTITY_KEYS:
         row[k] = None
@@ -41,6 +64,12 @@ def _speed_run(run_id, model_key="Ornith", quant="Q4_K_M", context=32768):
             "model_key": model_key,
             "model_quantization": quant,
             "loaded_context": context,
+            # Standard Speed point columns so the route's authoritative normalization
+            # (load_speed_run_by_id) succeeds end-to-end in the integration tests.
+            "context_point": "8K",
+            "target_context_tokens": 8192,
+            "speed_metric_version": metric_version,
+            "tokens_per_second": 195.2,
         }
     )
     return {
@@ -49,6 +78,11 @@ def _speed_run(run_id, model_key="Ornith", quant="Q4_K_M", context=32768):
         "rows": [row],
         "classification": "canonical",
         "status": "completed",
+        # ST-004: the route attaches normalized canonical points + run-level metric
+        # version. ``normalizable=False`` models a run whose shape the single-run read
+        # model cannot represent (points stay None -- never fabricated).
+        "points": _speed_points() if normalizable else None,
+        "metric_version": metric_version,
     }
 
 
@@ -247,6 +281,112 @@ def test_unsupported_state_preserved():
 
 
 # ---------------------------------------------------------------------------
+# Speed metric-version compatibility + projection (ST-004).
+# ---------------------------------------------------------------------------
+
+
+def test_speed_prefers_current_metric_run_over_legacy():
+    """A legacy run is never silently substituted when corrected evidence exists."""
+    legacy = _speed_run("speed-aaa", "Ornith", "Q4_K_M", metric_version=None)
+    current = _speed_run("speed-bbb", "Ornith", "Q4_K_M", metric_version=2)
+    state = rm._resolve_single([legacy, current], "speed")
+    assert state["state"] == rm.AVAILABLE
+    assert state["run_id"] == "speed-bbb"  # the corrected run is selected
+    assert state["metric_version"] == 2
+
+
+def test_speed_legacy_only_reports_legacy_state():
+    """No corrected evidence -> honest LEGACY state with traceability, no values."""
+    legacy = _speed_run("speed-legacy", "Ornith", "Q4_K_M", metric_version=None)
+    state = rm._resolve_single([legacy], "speed")
+    assert state["state"] == rm.LEGACY
+    assert state["run_id"] == "speed-legacy"
+    assert state["deep_link"] == "/speed/results/speed-legacy"
+    assert "points" not in state  # legacy values are never projected as comparable
+    assert state["metric_version"] is None
+
+
+def test_speed_legacy_v1_reports_legacy_state():
+    v1 = _speed_run("speed-v1", "Ornith", metric_version=1)
+    state = rm._resolve_single([v1], "speed")
+    assert state["state"] == rm.LEGACY
+    assert state["metric_version"] == 1
+
+
+def test_speed_non_normalizable_current_run_reports_unavailable():
+    """Current-metric evidence whose shape the read model cannot represent is not
+    fabricated into values -- it reports UNAVAILABLE with traceability."""
+    run = _speed_run("speed-multistage", "Ornith", metric_version=3, normalizable=False)
+    state = rm._resolve_single([run], "speed")
+    assert state["state"] == rm.UNAVAILABLE
+    assert state["metric_version"] == 3
+    assert state["run_id"] == "speed-multistage"
+
+
+def test_speed_available_projects_points_and_average():
+    state = rm._resolve_single([_speed_run("s-or", "Ornith")], "speed")
+    assert state["state"] == rm.AVAILABLE
+    labels = [p["label"] for p in state["points"]]
+    assert labels == ["8K", "16K", "32K"]  # canonical order preserved
+    by_label = {p["label"]: p for p in state["points"]}
+    assert by_label["8K"]["generation_tokens_per_second"] == 195.2
+    assert by_label["8K"]["actual_prompt_tokens"] == 5600
+    assert by_label["8K"]["status"] == "completed"
+    # Presentation aggregate: mean of present valid canonical points (never a score).
+    expected = (195.2 + 182.7 + 170.2) / 3
+    assert state["average_generation_tps"] is not None
+    assert abs(state["average_generation_tps"] - expected) < 1e-9
+
+
+def test_speed_average_excludes_missing_and_unsupported_points():
+    points = _speed_points()
+    points[0]["generation_tokens_per_second"] = None      # missing -> excluded, never zero
+    points[1]["status"] = "unsupported"                   # unsupported -> excluded
+    points[1]["generation_tokens_per_second"] = 999.0    # ...even when a value is stored
+    avg = rm.average_generation_tps(points)
+    assert abs(avg - (points[2]["generation_tokens_per_second"])) < 1e-9
+
+
+def test_speed_average_is_none_when_no_valid_points():
+    points = _speed_points()
+    for p in points:
+        p["generation_tokens_per_second"] = None
+    assert rm.average_generation_tps(points) is None
+    assert rm.average_generation_tps([]) is None
+    assert rm.average_generation_tps(None) is None
+
+
+def test_speed_average_ignores_non_canonical_labels():
+    points = _speed_points() + [{"label": "64K", "generation_tokens_per_second": 999.0}]
+    expected = (195.2 + 182.7 + 170.2) / 3
+    assert abs(rm.average_generation_tps(points) - expected) < 1e-9
+
+
+def test_speed_failed_run_still_surfaces_as_failed():
+    failed = _speed_run("s-fail", "Ornith")
+    failed["classification"] = "failed"
+    failed["status"] = "failed"
+    state = rm._resolve_single([failed], "speed")
+    assert state["state"] == rm.FAILED
+
+
+def test_same_model_diffconfig_speed_pins_distinct_runs_with_metrics():
+    """Same base model, different configs: each side pins its own run and projects its
+    own values -- never collapsed because the base model matches."""
+    q4 = _speed_run("speed-q4", "Ornith", "Q4_K_M")
+    q5 = _speed_run("speed-q5", "Ornith", "Q5_K_M")
+    keys = _catalogue_keys([q4, q5], [], [])
+    assert len(keys) == 2
+    result = rm.resolve_comparison(keys[0], keys[1], [q4, q5], [], [])
+    dims = result["comparison"]["dimensions"]["speed"]
+    assert dims["subject_a"]["state"] == rm.AVAILABLE
+    assert dims["subject_b"]["state"] == rm.AVAILABLE
+    assert {dims["subject_a"]["run_id"], dims["subject_b"]["run_id"]} == {"speed-q4", "speed-q5"}
+    # Each side carries its own values -- no shared run duplicated into both columns.
+    assert dims["subject_a"]["points"] is not None and dims["subject_b"]["points"] is not None
+
+
+# ---------------------------------------------------------------------------
 # Two-subject validation (Phase 7).
 # ---------------------------------------------------------------------------
 
@@ -345,3 +485,37 @@ def test_comparison_route_composes_from_isolated_evidence():
     assert dims["speed"]["subject_a"]["state"] == rm.AVAILABLE
     assert dims["workflow"]["subject_a"]["state"] == rm.AMBIGUOUS
     assert dims["workflow"]["subject_b"]["state"] == rm.AMBIGUOUS
+
+
+def test_route_prefers_current_metric_evidence_end_to_end():
+    """Phase 2 contract through the real route: a subject with BOTH legacy and current
+    runs resolves to the corrected run; a legacy-only subject reports LEGACY (never
+    silently compared)."""
+    client = TestClient(src.main.app)
+
+    # Ornith Q4: one legacy run + one current-metric run of the SAME configuration.
+    src.app_state.results_store.add_run(_speed_run("speed-ornith-legacy", "Ornith", "Q4_K_M", metric_version=None)["rows"][0])
+    src.app_state.results_store.add_run(_speed_run("speed-ornith-current", "Ornith", "Q4_K_M", metric_version=2)["rows"][0])
+    # Llama: legacy-only evidence.
+    src.app_state.results_store.add_run(_speed_run("speed-llama-legacy", "Llama", "Q8_0", metric_version=None)["rows"][0])
+
+    subjects = client.get("/api/comparison/subjects").json()["subjects"]
+    ornith_key = next(s["subject_key"] for s in subjects if s["model_version"] == "Ornith")
+    llama_key = next(s["subject_key"] for s in subjects if s["model_version"] == "Llama")
+
+    resolved = client.get("/api/comparison", params={"a": ornith_key, "b": llama_key}).json()
+    dims = resolved["comparison"]["dimensions"]["speed"]
+
+    # Ornith: the corrected run is selected -- legacy never silently substituted.
+    assert dims["subject_a"]["state"] == rm.AVAILABLE
+    assert dims["subject_a"]["run_id"] == "speed-ornith-current"
+    assert dims["subject_a"]["metric_version"] == 2
+    # The fixture row persists a single canonical point; normalization surfaces exactly it.
+    points = dims["subject_a"]["points"]
+    assert [p["label"] for p in points] == ["8K"]
+
+    # Llama: legacy-only evidence -> explicit LEGACY state with traceability, no values.
+    assert dims["subject_b"]["state"] == rm.LEGACY
+    assert dims["subject_b"]["run_id"] == "speed-llama-legacy"
+    assert dims["subject_b"]["deep_link"] == "/speed/results/speed-llama-legacy"
+    assert "points" not in dims["subject_b"]
