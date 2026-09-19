@@ -36,11 +36,12 @@
             <div id="overall-container"></div>
         </section>
 
-        <!-- Speed view (delivered). Preserves the existing point-based history surface;
-             filter bar + results panel + empty state are owned by results.js. -->
+        <!-- Speed view (delivered). Compact benchmark summary table with per-run detail
+             behind an accessible modal; filter bar + sort control owned by results.js.
+             Legacy metric runs are excluded from this surface. -->
         <section id="view-speed" class="rs-view" role="tabpanel" aria-labelledby="tab-speed">
-            <div id="filter-bar" class="panel filter-panel">
-                <h2>Filter Results</h2>
+            <div id="filter-bar" class="rs-panel">
+                <div class="rs-panel-title">Filter Results</div>
                 <div class="filter-row">
                     <div class="filter-group">
                         <label for="filter-model">Model</label>
@@ -67,14 +68,39 @@
 
             <div id="results-count" class="results-count"></div>
 
-            <section id="results-panel" class="panel">
-                <h2>Past Runs</h2>
-                <div id="results-container"></div>
+            <!-- Benchmark summary: one row per model/config. Rich telemetry lives in an
+                 accessible modal (Details), never inline. -->
+            <section id="benchmark-panel" class="rs-panel">
+                <div class="rs-panel-title rs-bench-head">
+                    <span>Standard Speed &middot; generation throughput</span>
+                    <label class="rs-sort" for="speed-sort">Sort by
+                        <select id="speed-sort" aria-label="Sort benchmark table">
+                            <option value="model">Model (A&ndash;Z)</option>
+                            <option value="avg">Avg gen tok/s (high&ndash;low)</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="rs-table-wrap">
+                    <table class="rs-table" id="benchmark-table" aria-label="Standard Speed generation throughput by model and configuration">
+                        <thead>
+                            <tr>
+                                <th scope="col">Model / config</th>
+                                <th scope="col" class="rs-num">8K gen (tok/s)</th>
+                                <th scope="col" class="rs-num">16K gen (tok/s)</th>
+                                <th scope="col" class="rs-num">32K gen (tok/s)</th>
+                                <th scope="col" class="rs-num">Avg gen tok/s</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="benchmark-body"></tbody>
+                    </table>
+                </div>
             </section>
 
-            <section id="empty-state" class="panel hidden">
-                <h2>No Results Found</h2>
-                <p>There are no Standard Speed benchmark results to display. Run a benchmark from the main page to get started.</p>
+            <!-- Empty / no-current-metric state. Hidden until needed. -->
+            <section id="empty-state" class="rs-panel hidden">
+                <div class="rs-panel-title">No results</div>
+                <p id="empty-state-msg">There are no Standard Speed benchmark results to display. Run a benchmark from the main page to get started.</p>
                 <a href="/" class="btn-primary">Run Benchmark</a>
             </section>
         </section>
@@ -125,6 +151,19 @@
         </section>
 
         </main><!-- /.rs-main -->
+
+        <!-- Accessible Details modal (native dialog). Populated by results.js from the
+             authoritative single-run read model; emptied on close. Placed at body level so
+             it never lives inside a display:none view subtree. -->
+        <dialog id="speed-detail-dialog" aria-labelledby="speed-detail-title">
+            <div class="rs-modal" id="speed-detail-body">
+                <div class="rs-modal-head">
+                    <h2 id="speed-detail-title" class="rs-modal-title">Speed result</h2>
+                    <button type="button" id="speed-detail-close" class="rs-modal-close btn-secondary">Close</button>
+                </div>
+                <div id="speed-detail-content" class="rs-modal-body"></div>
+            </div>
+        </dialog>
 
     </div>
 

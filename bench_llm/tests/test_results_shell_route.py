@@ -115,7 +115,9 @@ def test_results_page_uses_left_sidebar_not_top_tabs():
         # Old top-level tab semantics are gone everywhere (no duplicate navigation).
         assert "role=\"tablist\"" not in body, f"{path} still has a tablist"
         assert "role=\"tab\"" not in body, f"{path} still has tab roles"
-        assert "rs-tab" not in body, f"{path} still references rs-tab"
+        # \brs-tab\b uses a word boundary so the shared .rs-table primitive (used by
+        # the Speed benchmark table) does not false-match this old top-nav guard.
+        assert not re.search(r"\brs-tab\b", body), f"{path} still references the old rs-tab nav class"
 
 
 def test_redundant_back_to_benchmarks_removed():

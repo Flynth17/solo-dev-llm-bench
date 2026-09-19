@@ -88,316 +88,260 @@
     overflow-x: auto;
 }
 
+
 /* ---------------------------------------------------------------------------
-   History run group (results page variant)
+   Speed benchmark table (compact summary) -- one row per model/config.
+   Reuses the dark shell primitives (.rs-table / .rs-panel); this only adds the
+   table-specific layout, config chips, validity chip and the presentation-only
+   average-throughput bar. No light card styles remain on this page.
    --------------------------------------------------------------------------- */
 
-.history-run {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1rem 1.25rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+/* Numeric columns align right for scanability. */
+.rs-num {
+    text-align: right;
+    white-space: nowrap;
 }
 
-.history-run-header {
+/* Model / config cell. */
+.rs-bench-model {
+    font-weight: 700;
+    color: var(--rs-text);
+    font-size: 0.92rem;
+    line-height: 1.3;
+}
+
+.rs-bench-config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+    align-items: center;
+}
+
+.rs-bench-config code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.74rem;
+    background: var(--rs-bg);
+    color: var(--rs-text-muted);
+    padding: 0.05rem 0.35em;
+    border-radius: 4px;
+}
+
+.rs-bench-valid {
+    margin-top: 0.4rem;
+}
+
+/* Panel title row: label left, sort control right. */
+.rs-bench-head {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.5rem;
-}
-
-.history-run-header .timestamp {
-    color: #64748b;
-    font-size: 0.85rem;
-    font-weight: 400;
-}
-
-.task-detail-row {
-    display: flex;
+    justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
-    margin-bottom: 0.4rem;
 }
 
-.task-detail-label {
+.rs-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--rs-text-muted);
     font-weight: 600;
-    color: #475569;
-    min-width: 100px;
 }
 
-.task-detail-value {
-    color: #1e293b;
+.rs-sort select {
+    font: inherit;
+    color: var(--rs-text);
+    background: var(--rs-surface-2);
+    border: 1px solid var(--rs-border);
+    border-radius: 6px;
+    padding: 0.25rem 0.55rem;
 }
 
-/* ---------------------------------------------------------------------------
-   Responsive — Results
-   --------------------------------------------------------------------------- */
-
-@media (max-width: 768px) {
-    .page-container-wide {
-        width: 98vw;
-        padding: 0 0.5rem;
-    }
-
-    .filter-row {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .filter-group {
-        min-width: 100%;
-    }
-
-
-
-
-}
-
-@media (max-width: 480px) {
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .page-actions {
-        width: 100%;
-    }
-
-    .tab-bar {
-        overflow-x: auto;
-    }
-
-    .tab-btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
-    }
-}
-
-/* ---------------------------------------------------------------------------
-   Standard Speed history cards (Act 22) -- run-grouped, point-based.
-   Distinct from legacy/custom history runs so the two never look like one table.
-   --------------------------------------------------------------------------- */
-
-.ss-run {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-left: 4px solid #2563eb;
-    border-radius: 8px;
-    padding: 1rem 1.25rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-/* Slightly wider so the point grid breathes */
-.ss-run.history-run {
-    max-width: 100%;
-}
-
-.ss-header {
-    align-items: flex-start;
+/* Average generation tok/s bar -- relative visual aid only, never a score or winner. */
+.rs-avg {
+    display: flex;
+    align-items: center;
     gap: 0.6rem;
-    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
-.ss-title {
+.rs-avg-val {
     font-weight: 700;
-    color: #1e293b;
-    font-size: 1.05rem;
-    letter-spacing: 0.02em;
+    color: var(--rs-text);
+    font-variant-numeric: tabular-nums;
 }
 
-/* Metric version + legacy badges */
-.badge-metric {
-    display: inline-block;
-    padding: 0.12rem 0.55rem;
-    border-radius: 10px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+.rs-avg-track {
+    position: relative;
+    width: 120px;
+    height: 6px;
+    background: var(--rs-surface-2);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.rs-avg-fill {
+    position: absolute;
+    inset-left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--rs-accent);
+    border-radius: 999px;
+}
+
+/* Details button in the last column. */
+.rs-detail-btn {
     white-space: nowrap;
 }
 
-.badge-metric.metric-v2 {
-    background: #dbeafe;
-    color: #1e40af;
-    border: 1px solid #bfdbfe;
+/* ---------------------------------------------------------------------------
+   Details modal (native <dialog>) -- dark, labelled, focus-managed. The dialog box
+   itself is the rounded container; .rs-modal is a borderless flex filler inside it.
+   --------------------------------------------------------------------------- */
+
+#speed-detail-dialog {
+    padding: 0;
+    border: 1px solid var(--rs-border);
+    border-radius: 14px;
+    background: var(--rs-surface);
+    color: var(--rs-text);
+    width: min(92vw, 820px);
+    max-height: 88vh;
+    overflow: hidden;
 }
 
-.badge-metric.metric-v3 {
-    background: #d1fae5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
+#speed-detail-dialog::backdrop {
+    background: rgba(3, 9, 18, 0.62);
 }
 
-.badge-metric.metric-legacy {
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
-}
-
-/* Legacy prefill-semantics banner -- visually obvious, never hides old values. */
-.ss-legacy-banner {
-    margin: 0.6rem 0 0.75rem;
-    padding: 0.5rem 0.75rem;
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: 6px;
-    color: #9a3412;
-    font-size: 0.85rem;
-    font-weight: 500;
-}
-
-.ss-points-line {
-    font-size: 0.82rem;
-    color: #64748b;
-    font-weight: 600;
-    margin-bottom: 0.6rem;
-}
-
-/* Point summary grid -- canonical order (8K/16K/32K) preserved by the read model. */
-.ss-points-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 0.75rem;
-    margin-top: 0.6rem;
-}
-
-.ss-point {
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 0.6rem 0.75rem;
-    background: #fafbfc;
-}
-
-.ss-point-top {
+.rs-modal {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid #eef1f4;
+    flex-direction: column;
+    height: 100%;
 }
 
-.ss-point-label {
+.rs-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--rs-border);
+    background: var(--rs-surface-2);
+}
+
+.rs-modal-title {
+    margin: 0;
+    font-size: 1.1rem;
     font-weight: 700;
-    color: #1d4ed8;
-    font-size: 0.95rem;
+    color: #f4f8ff;
 }
 
-.ss-point-target {
-    font-size: 0.72rem;
-    color: #64748b;
-    white-space: nowrap;
+.rs-modal-body {
+    padding: 1.25rem 1.25rem 1.4rem;
+    overflow-y: auto;
 }
 
-.ss-metric-row {
+.rs-modal-section {
+    margin-bottom: 1.5rem;
+}
+
+.rs-modal-section:last-child {
+    margin-bottom: 0;
+}
+
+.rs-modal-row {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.15rem 0;
-    font-size: 0.82rem;
+    gap: 1rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--rs-border);
 }
 
-.ss-metric-label {
-    color: #64748b;
+.rs-modal-row:last-child {
+    border-bottom: none;
+}
+
+.rs-modal-k {
+    font-size: 0.82rem;
+    color: var(--rs-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.03em;
     font-weight: 600;
-    min-width: 78px;
+    flex: 1 1 auto;
+    min-width: 130px;
 }
 
-.ss-metric-value {
-    color: #1e293b;
-    font-weight: 600;
-    font-family: monospace;
+.rs-modal-v {
     text-align: right;
+    color: var(--rs-text);
+    font-weight: 600;
     word-break: break-word;
 }
 
-.ss-metric-row.ss-metric-extras .ss-metric-value {
-    font-family: inherit;
-    font-size: 0.78rem;
-    color: #475569;
+.rs-modal-sub {
+    color: var(--rs-text-faint);
+    font-weight: 400;
+    font-size: 0.85em;
 }
 
-/* Dedicated result link */
-.ss-footer {
-    margin-top: 0.85rem;
-    padding-top: 0.6rem;
-    border-top: 1px solid #eef1f4;
+.rs-modal-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.6rem 1.25rem;
 }
 
-.ss-view-link {
-    display: inline-block;
-    color: #2563eb;
-    font-weight: 600;
-    font-size: 0.88rem;
-    text-decoration: underline;
-}
-
-.ss-view-link:hover {
-    color: #1d4ed8;
-}
-
-/* Compact the point grid on small screens */
-@media (max-width: 520px) {
-    .ss-points-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* ---------------------------------------------------------------------------
-   Standard Speed history — gap / repeatability (RM-26-AA-0017)
-   Unsupported / failed / invalid points render as explicit gaps, never zeros.
-   --------------------------------------------------------------------------- */
-
-.ss-points-line {
-    color: #64748b;
-}
-
-.ss-point-gap {
-    margin-top: 0.4rem;
-    padding: 0.35rem 0.5rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #9a3412;
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: 5px;
-}
-
-.ss-point-completed {
-    color: #065f46;
-    background: #ecfdf5;
-    border-color: #a7f3d0;
-}
-
-.ss-point-failed,
-.ss-point-invalid,
-.ss-point-unknown {
-    color: #991b1b;
-    background: #fef2f2;
-    border-color: #fecaca;
-}
-
-/* Repeatability (cold + warm_a + warm_b) section within a point cell. */
-.ss-repeat {
-    margin-top: 0.5rem;
-    padding-top: 0.45rem;
-    border-top: 1px dashed #e2e8f0;
-}
-
-.ss-repeat-label {
-    font-size: 0.72rem;
+.rs-modal-meta dt {
+    font-size: 0.74rem;
+    color: var(--rs-text-faint);
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #64748b;
     font-weight: 700;
-    margin-bottom: 0.25rem;
+}
+
+.rs-modal-meta dd {
+    margin-top: 0.15rem;
+    color: var(--rs-text);
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.rs-modal-muted {
+    color: var(--rs-text-muted);
+    font-size: 0.88rem;
+    margin: 0;
+}
+
+.rs-modal-loading {
+    color: var(--rs-text-muted);
+    font-size: 0.88rem;
+    padding: 1rem 0;
+}
+
+/* Per-point telemetry table inside the modal reuses .rs-table (dark). */
+.rs-modal-tel td,
+.rs-modal-tel th {
+    font-size: 0.82rem;
+}
+
+.rs-modal-footer {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rs-border);
+    text-align: right;
+}
+
+/* Visible focus for every interactive control inside the modal. */
+#speed-detail-dialog :focus-visible {
+    outline: 2px solid var(--rs-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+    .rs-num { white-space: normal; }
+    .rs-modal-k { min-width: 0; }
+    .rs-modal-meta { grid-template-columns: 1fr; }
 }

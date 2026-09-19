@@ -278,19 +278,22 @@ def test_frontend_links_to_dedicated_speed_page_not_v2():
     assert "/v2/results/" not in text
 
 
-def test_frontend_renders_point_based_speed_cards_not_blended():
-    """The history page builds Standard Speed cards (point-based), never a blended aggregate."""
+def test_frontend_renders_benchmark_table_not_point_cards():
+    """The /results Speed view builds a compact benchmark summary table, never legacy cards.
+
+    The expandable per-run point cards (renderSpeedRuns / renderSpeedPointCell) were replaced by
+    one row per model/config with an average generation throughput aggregate; rich per-point
+    telemetry lives behind the accessible Details modal rather than inline blended timelines.
+    """
     static_js = Path(__file__).parent.parent / "static" / "results.js"
     text = static_js.read_text(encoding="utf-8")
-    # Dedicated point-cell renderer exists => per-point (not blended) Standard Speed cards.
-    assert "renderSpeedRuns(" in text
-    assert "renderSpeedPointCell(" in text  # per-point cell => point-based identity, not model/position
-    # Metric-version badges + legacy banner text are rendered per SS card (v2 / v3 / legacy).
-    for needle in ('Metric v2', 'Metric v3', 'Legacy metric', "Legacy prefill semantics"):
-        assert needle in text
-    # Point metrics are shown individually, with the canonical label distinct from actual input.
-    for needle in ("Input", "TTFT", "Prefill", "Generation", "target "):
-        assert needle in text
+    # New compact surface primitives exist: main renderer + table builder + Details modal.
+    assert "renderResults(" in text
+    assert "buildBenchmarkRuns(" in text
+    assert "renderModal(" in text
+    # Old point-card rendering is gone (superseded by the benchmark summary table).
+    assert "renderSpeedRuns(" not in text
+    assert "renderSpeedPointCell(" not in text
 
 
 # ---------------------------------------------------------------------------

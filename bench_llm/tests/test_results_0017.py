@@ -170,20 +170,21 @@ SHELL_JS = (STATIC_DIR / "results-shell.js").read_text(encoding="utf-8")
 
 
 def test_speed_frontend_renders_config_and_gap_semantics():
-    # Configuration transparency chips are rendered from the authoritative payload.
+    # Configuration transparency is rendered from the authoritative read model.
     assert "hardware_label" in RESULTS_JS or "Configuration:" in RESULTS_JS
-    # Unsupported / failed points render as an explicit gap, never a metric row of zeros.
-    assert "ss-point-gap" in RESULTS_JS
-    # Point metrics remain individually visible (TTFT / prefill / decode).
+    # Unsupported / failed points render as an explicit gap (em-dash), never a metric row of zeros.
+    assert "\u2014" in RESULTS_JS and "N/A" in RESULTS_JS
+    # Per-point metrics remain individually visible inside the Details modal (TTFT / prefill / decode).
     for needle in ("TTFT", "Prefill", "Generation"):
         assert needle in RESULTS_JS
 
 
-def test_speed_frontend_repeatability_rendered_only_when_backend_provides_runs():
-    # Repeatability (cold + warm_a + warm_b) is rendered only when the backend exposes
-    # per-stage runs -- this never fabricates repeatability for legacy single-row data.
-    assert "renderSpeedRunRepeatability" in RESULTS_JS
-    assert "speed_run_stage" in RESULTS_JS
+def test_speed_frontend_never_fabricates_repeatability_on_benchmark_table():
+    # The compact benchmark summary shows one row per model/config with an average
+    # generation throughput aggregate; it never fabricates repeatability/stage breakdown.
+    # (Stage repeatability is a Workflow/suite concern, tested there -- not on this surface.)
+    assert "renderSpeedRunRepeatability" not in RESULTS_JS
+    assert "speed_run_stage" not in RESULTS_JS
 
 
 def test_speed_frontend_never_fabricates_zero():
