@@ -351,3 +351,117 @@
     .rs-modal-k { min-width: 0; }
     .rs-modal-meta { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------------------
+   Average Generation Throughput summary (horizontal bar chart).
+   Fixed 0-500 tok/s scale -- presentation only, same authoritative values as
+   the benchmark table below. No quality verdict language on this surface.
+--------------------------------------------------------------------------- */
+.rs-bench-chart { margin: 1rem 0 0.25rem; }
+
+.rs-avg-chart-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--rs-text);
+    margin: 0 0 0.1rem;
+}
+
+.rs-avg-chart-sub {
+    font-size: 0.78rem;
+    color: var(--rs-text-faint);
+    margin: 0 0 0.6rem;
+}
+
+/* Axis header and every bar row share one grid: label | track | value, so the
+   tick labels stay aligned with the fixed-scale tracks below them. */
+.rs-avg-chart-axis,
+.rs-avg-chart-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 240px) 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+/* Axis header: tick labels positioned at fixed-scale steps of the track column. */
+.rs-avg-chart-axis { margin-bottom: 0.3rem; }
+.rs-avg-chart-axis-track { position: relative; height: 1em; }
+.rs-avg-chart-axis-track span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-size: 0.72rem;
+    color: var(--rs-text-faint);
+    font-variant-numeric: tabular-nums;
+}
+/* Edge ticks align to the track edges without overflowing the panel. */
+.rs-avg-chart-axis-track span:first-child { transform: none; }
+.rs-avg-chart-axis-track span:last-child { transform: translateX(-100%); }
+
+/* Bar row: a real button so it is keyboard-operable and focus-visible. */
+.rs-avg-chart-row {
+    width: 100%;
+    padding: 0.3rem 0;
+    background: none;
+    border: 0;
+    font: inherit;
+    color: var(--rs-text);
+    text-align: left;
+    cursor: pointer;
+}
+.rs-avg-chart-row:hover { background: rgba(147, 196, 245, 0.06); }
+.rs-avg-chart-row:focus-visible { outline: 2px solid var(--rs-accent); outline-offset: 2px; border-radius: 4px; }
+
+.rs-avg-chart-label {
+    font-size: 0.85rem;
+    color: var(--rs-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rs-avg-chart-label code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.74rem;
+    color: var(--rs-text-faint);
+}
+
+/* Fixed-scale track: gridlines at every 25% step (100 tok/s) of the 0-500 range. */
+.rs-avg-chart-track {
+    position: relative;
+    height: 14px;
+    background-color: var(--rs-surface-2);
+    border-right: 1px solid var(--rs-border-soft);
+    border-radius: 4px;
+    overflow: hidden;
+    background-image: linear-gradient(to right, var(--rs-border-soft) 1px, transparent 1px);
+    background-size: 25% 100%;
+}
+.rs-avg-chart-fill {
+    position: absolute;
+    inset-left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--rs-accent);
+    border-radius: 4px 0 0 4px;
+}
+
+.rs-avg-chart-value {
+    min-width: 4.2rem;
+    text-align: right;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--rs-text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Click-to-row highlight flash (class added/removed by results.js). */
+@keyframes rs-bench-row-flash {
+    0% { background-color: var(--rs-accent-hover); }
+    100% { background-color: transparent; }
+}
+tr.rs-bench-row-highlight > td { animation: rs-bench-row-flash 1.6s ease-out; }
+
+/* Narrow viewports: shrink the label column -- no page-level horizontal scroll. */
+@media (max-width: 640px) {
+    .rs-avg-chart-axis,
+    .rs-avg-chart-row { grid-template-columns: minmax(90px, 130px) 1fr auto; gap: 0.5rem; }
+}

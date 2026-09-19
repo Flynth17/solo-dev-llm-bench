@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/static/shared.css?v=1701">
     <!-- results-shell.css: dark visual system + shared Results shell primitives (RM-26-AA-0016) -->
     <link rel="stylesheet" href="/static/results-shell.css?v=5">
-    <link rel="stylesheet" href="/static/results.css?v=1921">
+    <link rel="stylesheet" href="/static/results.css?v=1922">
 </head>
 <body class="results-shell">
     <div class="rs-shell-wrap results-shell">
@@ -80,6 +80,12 @@
                         </select>
                     </label>
                 </div>
+                <!-- Average Generation Throughput summary: one horizontal bar per visible
+                     model/config on a fixed 0-500 tok/s scale. Same authoritative values as
+                     the table below; presentation only, no quality verdict language.
+                     Rendered by results.js (renderAvgChart). -->
+                <section id="speed-avg-chart" class="rs-bench-chart" aria-label="Average generation throughput summary"></section>
+
                 <div class="rs-table-wrap">
                     <table class="rs-table" id="benchmark-table" aria-label="Standard Speed generation throughput by model and configuration">
                         <thead>
@@ -185,6 +191,6 @@
     <!-- Compare view (RM-26-AA-0013 ST-003): must load after results-shell.js so the
          sidebar click handler's lazy-load bridge can reach its init hook. -->
     <script src="/static/results-compare.js?v=5"></script>
-    <script src="/static/results.js?v=1920"></script>
+    <script src="/static/results.js?v=1921"></script>
 </body>
 </html>

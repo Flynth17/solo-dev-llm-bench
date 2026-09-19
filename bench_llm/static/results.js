@@ -26,6 +26,7 @@ var emptyStateMsg = document.getElementById("empty-state-msg");
 var resultsCountEl = document.getElementById("results-count");
 var benchmarkPanel = document.getElementById("benchmark-panel");
 var benchmarkBody = document.getElementById("benchmark-body");
+var speedAvgChart = document.getElementById("speed-avg-chart");
 var speedSort = document.getElementById("speed-sort");
 
 // ---------------------------------------------------------------------------
@@ -247,6 +248,86 @@ function sortRows(rows, mode) {
 }
 
 // ---------------------------------------------------------------------------
+// Average Generation Throughput summary (horizontal bars, fixed 0-500 tok/s scale).
+// Presentation only: one bar per visible model/config row, using the exact same
+// authoritative average value as the benchmark table. Rows without a valid average
+// show an explicit gap -- never zero. No quality verdict language on this surface.
+// ---------------------------------------------------------------------------
+var AVG_CHART_MAX = 500; // fixed X-axis range (tok/s) -- stable across filters/sorts
+var AVG_CHART_TICKS = [0, 100, 200, 300, 400, 500];
+
+function renderAvgChart(rows) {
+    if (!speedAvgChart) { return; }
+    var withValues = [];
+    for (var i = 0; i < rows.length; i++) { if (rows[i].avg != null) { withValues.push(rows[i]); } }
+
+    // Nothing to summarise: hide the section entirely (never an empty axis of zeros).
+    if (rows.length === 0 || withValues.length === 0) {
+        speedAvgChart.hidden = true;
+        speedAvgChart.innerHTML = "";
+        return;
+    }
+
+    var html = "<h3 class='rs-avg-chart-title'>Average Generation Throughput</h3>" +
+        "<p class='rs-avg-chart-sub'>tok/s &middot; fixed 0&ndash;500 scale &middot; same values as the table below</p>";
+
+    // Axis header: tick labels aligned to the track column (25% steps of the fixed range).
+    html += "<div class='rs-avg-chart-axis' aria-hidden='true'><span></span><span class='rs-avg-chart-axis-track'>" +
+        AVG_CHART_TICKS.map(function (t) {
+            return "<span style='left:" + (t / AVG_CHART_MAX * 100) + "%'>" + t + "</span>";
+        }).join("") +
+        "</span><span></span></div>";
+
+    // One row per visible model/config: label | fixed-scale track | value.
+    for (var j = 0; j < rows.length; j++) {
+        var r = rows[j];
+        var labelHtml = escapeHtml(r.modelLabel) +
+            (r.hardware ? " <code>" + escapeHtml(r.hardware) + "</code>" : "");
+        var trackInner, valueText, ariaValue;
+        if (r.avg == null) {
+            // Explicit gap: a missing / unsupported / invalid average is never rendered as zero.
+            trackInner = "";
+            valueText = "<span class='rs-na'>\u2014</span>";
+            ariaValue = "no valid average";
+        } else {
+            // Fixed 0-500 scale: width is a direct fraction of the axis, stable across
+            // filters and sorts. Values above the range clamp to full width (value still shown).
+            var pct = Math.min(100, (r.avg / AVG_CHART_MAX) * 100);
+            trackInner = "<span class='rs-avg-chart-fill' style='width:" + pct.toFixed(1) + "%'></span>";
+            valueText = fmtDec(r.avg, 1);
+            ariaValue = fmtDec(r.avg, 1) + " tokens per second";
+        }
+        html += "<button type='button' class='rs-avg-chart-row' data-run-id=\"" + escapeHtml(String(r.runId)) + "\"" +
+            " aria-label=\"Average generation throughput for " + escapeHtml(r.modelLabel) + ": " + ariaValue + "\">" +
+            "<span class='rs-avg-chart-label'>" + labelHtml + "</span>" +
+            "<span class='rs-avg-chart-track' role='img' aria-hidden='true'>" + trackInner + "</span>" +
+            "<span class='rs-avg-chart-value'>" + valueText + "</span>" +
+            "</button>";
+    }
+
+    speedAvgChart.hidden = false;
+    speedAvgChart.innerHTML = html;
+
+    // Optional interaction: clicking a bar scrolls to and briefly highlights the matching table row.
+    var chartRows = speedAvgChart.querySelectorAll(".rs-avg-chart-row");
+    Array.prototype.forEach.call(chartRows, function (el) {
+        el.addEventListener("click", function () {
+            if (!benchmarkBody) { return; }
+            var trs = benchmarkBody.querySelectorAll("tr[data-run-id]");
+            for (var k = 0; k < trs.length; k++) {
+                if (trs[k].getAttribute("data-run-id") === el.getAttribute("data-run-id")) {
+                    var targetRow = trs[k]; // capture the element -- loop index is stale in the timer
+                    targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+                    targetRow.classList.add("rs-bench-row-highlight");
+                    setTimeout(function () { targetRow.classList.remove("rs-bench-row-highlight"); }, 1600);
+                    break;
+                }
+            }
+        });
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Table rendering
 // ---------------------------------------------------------------------------
 function renderTable(rows) {
@@ -263,6 +344,10 @@ function renderTable(rows) {
         html += renderRow(rows[j], maxAvg);
     }
     benchmarkBody.innerHTML = html;
+
+    // Average Generation Throughput summary above the table: same rows, same values,
+    // fixed 0-500 tok/s scale -- rendered after the table so both stay in lockstep.
+    renderAvgChart(rows);
 
     // Wire Details buttons.
     var btns = benchmarkBody.querySelectorAll(".rs-detail-btn");
@@ -299,7 +384,7 @@ function renderRow(r, maxAvg) {
         ? "<span class='rs-badge rs-badge-unavailable rs-bench-valid' title='Valid canonical points'>" + r.validCount + "/3 points</span>"
         : "";
 
-    return "<tr>" +
+    return "<tr data-run-id=\"" + escapeHtml(String(r.runId)) + "\">" +
         "<td>" +
         "<div class='rs-bench-model'>" + escapeHtml(r.modelLabel) + "</div>" +
         configChips(r) +
