@@ -97,8 +97,8 @@ def test_navigation_status_chips_reflect_reality():
     assert 'data-view="workflow"' in js
     # Overall must NOT claim a composite score.
     assert "No composite" in js
-    # Context is pending (0018); Intelligence is research.
-    assert "Coming soon" in js
+    # Context (RM-26-AA-0018) is now delivered; Intelligence is research.
+    assert "Delivered" in js
     assert "Research" in js
 
 
@@ -143,17 +143,17 @@ def test_sidebar_live_dimensions_are_interactive_buttons():
             assert "rs-nav-item-disabled" not in item
 
 
-def test_sidebar_context_is_disabled_and_planned():
-    """Context is shown but marked not-yet-delivered and non-interactive."""
+def test_sidebar_context_is_delivered_and_enabled():
+    """Context is delivered: shown, marked delivered, and interactive."""
     item = next(i for i in _nav_items(APP_JS) if 'data-view="context"' in i)
     assert item is not None
-    # Disabled: out of tab order / no activation (native disabled + status class).
-    assert 'disabled' in item
-    assert "rs-nav-item-disabled" in item
-    assert "aria-disabled=\"true\"" in item
-    # Honest planned state, never implying delivered UI.
-    assert "Coming soon" in item
-    assert "Delivered" not in item
+    # Delivered status chip (RM-26-AA-0018).
+    assert "Delivered" in item
+    assert "rs-chip-delivered" in item
+    # Enabled: a real, interactive button — no disabled state.
+    assert 'disabled' not in item
+    assert "rs-nav-item-disabled" not in item
+    assert "aria-disabled=\"true\"" not in item
 
 
 def test_sidebar_intelligence_is_disabled_and_research():

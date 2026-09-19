@@ -95,15 +95,19 @@ def test_active_location_logic_covers_all_routes():
 
 
 # ---------------------------------------------------------------------------
-# 3. Context / Intelligence remain honest (Coming soon / Research)
+# 3. Context is delivered (RM-26-AA-0018); Intelligence remains research
 # ---------------------------------------------------------------------------
 
-def test_context_is_coming_soon_and_disabled():
+def test_context_is_delivered_and_enabled():
     js = (STATIC_DIR / "app-shell.js").read_text(encoding="utf-8")
     item = _button(js, "context")
-    assert "Coming soon" in item
-    assert "disabled" in item
-    assert "rs-nav-item-disabled" in item
+    assert item is not None
+    # Context Results UI (RM-26-AA-0018) is delivered and enabled.
+    assert "Delivered" in item
+    assert "rs-chip-delivered" in item
+    # Enabled: a real, interactive button — no disabled state.
+    assert "disabled" not in item
+    assert "rs-nav-item-disabled" not in item
 
 
 def test_intelligence_is_research_and_disabled():
