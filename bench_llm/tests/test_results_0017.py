@@ -361,9 +361,13 @@ def test_v2_result_route_responds_and_404s_for_unknown(test_client):
 
 
 def test_results_shell_page_still_wires_speed_and_workflow(test_client):
+    # The delivered dimension nav now lives in the shared app-shell.js (injected into
+    # every page) rather than being duplicated inline in results.html. Both areas are
+    # still defined there with their chips.
+    app_js = (STATIC_DIR / "app-shell.js").read_text(encoding="utf-8")
+    assert 'data-view="speed"' in app_js
+    assert 'data-view="workflow"' in app_js
+    # The delivered view containers + the new Workflow filter bar are static content.
     body = test_client.get("/results").text
-    # Both delivered areas present with their containers + the new Workflow filter bar.
-    assert 'data-view="speed"' in body
-    assert 'data-view="workflow"' in body
     assert "workflow-filter-bar" in body
     assert "wf-clear-filters" in body

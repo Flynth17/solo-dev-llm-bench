@@ -6,10 +6,17 @@
     <title>V2 Result — Solo Dev LLM Bench</title>
     <link rel="stylesheet" href="/static/shared.css">
     <link rel="stylesheet" href="/static/v2-result.css">
+    <!-- results-shell.css: dark visual system for the persistent application shell sidebar -->
+    <link rel="stylesheet" href="/static/results-shell.css?v=1">
 </head>
 <body>
-    <!-- Sticky run summary. Hidden until data loads so we never show placeholder scores. -->
-    <header id="v2-sticky" class="v2-sticky hidden" aria-label="V2 result summary">
+    <!-- Persistent application shell: one shared left sidebar (injected by app-shell.js)
+         + a fluid right content pane (.rs-main) holding this run's evidence. -->
+    <div class="rs-shell-wrap results-shell">
+        <div id="app-sidebar-mount"></div>
+        <div class="rs-main">
+        <!-- Sticky run summary. Hidden until data loads so we never show placeholder scores. -->
+        <header id="v2-sticky" class="v2-sticky hidden" aria-label="V2 result summary">
         <div class="v2-sticky-top">
             <span class="v2-brand">V2 QUALITY</span>
             <span class="v2-sep" aria-hidden="true">·</span>
@@ -178,8 +185,12 @@
                 </table>
             </div>
         </section>
-    </main>
+        </div><!-- /.rs-main -->
+    </div><!-- /.rs-shell-wrap -->
 
+    <!-- app-shell.js: single source of truth for the persistent sidebar; must load
+         before page-specific scripts so the nav exists and active state is set. -->
+    <script src="/static/app-shell.js?v=3"></script>
     <script src="/static/v2-result.js"></script>
 </body>
 </html>

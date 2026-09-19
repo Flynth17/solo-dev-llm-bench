@@ -28,10 +28,15 @@
         if (id) { views["view-" + id] = document.getElementById("view-" + id); }
     });
 
-    function activateView(viewId) {
+    function activateView(bareId) {
+        // bareId is the raw data-view value ("speed"). The view containers are keyed
+        // as "view-<id>" in the views map above, so reconstruct the key here. The
+        // previous code compared data-view against the prefixed viewId, which never
+        // matched and therefore cleared aria-current without ever setting it.
+        var viewKey = "view-" + bareId;
         // Mark the active live nav item: aria-current="page" + emphasis class.
         items.forEach(function (item) {
-            var on = item.getAttribute("data-view") === viewId;
+            var on = item.getAttribute("data-view") === bareId;
             if (on) {
                 item.setAttribute("aria-current", "page");
                 item.classList.add("rs-nav-item-active");
@@ -44,7 +49,7 @@
         Object.keys(views).forEach(function (key) {
             var el = views[key];
             if (!el) { return; }
-            if (key === viewId) { el.classList.add("rs-active"); }
+            if (key === viewKey) { el.classList.add("rs-active"); }
             else { el.classList.remove("rs-active"); }
         });
     }
@@ -67,7 +72,7 @@
             }
             var viewId = item.getAttribute("data-view");
             if (viewId) {
-                activateView("view-" + viewId);
+                activateView(viewId); // bare id; activateView reconstructs the "view-" key
                 // Lazily load a view's data the first time it is opened.
                 ensureLoaded(viewId);
             }
@@ -512,8 +517,17 @@
     );
 
     // -----------------------------------------------------------------------
-    // Initial state: Overall view is active and loaded.
+    // Initial state: Overall view is active and loaded. A #view hash (e.g. the
+    // sidebar navigated here from another page as /results#speed) selects that
+    // dimension instead of the default Overall. Reuses the click handler above,
+    // which activates the view AND lazily loads its data.
     // -----------------------------------------------------------------------
+    var hashView = location.hash.replace(/^#/, "");
+    if (hashView === "speed" || hashView === "workflow") {
+        var hashBtn = document.getElementById("nav-" + hashView);
+        if (hashBtn) { hashBtn.click(); }
+    }
+
     loaded["view-overall"] = true;
     loadOverall();
 })();

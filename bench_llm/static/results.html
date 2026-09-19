@@ -7,7 +7,7 @@
     <!-- shared.css: base resets + form/table/panel tokens (shared with dashboard) -->
     <link rel="stylesheet" href="/static/shared.css?v=1701">
     <!-- results-shell.css: dark visual system + shared Results shell primitives (RM-26-AA-0016) -->
-    <link rel="stylesheet" href="/static/results-shell.css?v=2">
+    <link rel="stylesheet" href="/static/results-shell.css?v=3">
     <link rel="stylesheet" href="/static/results.css?v=1920">
 </head>
 <body class="results-shell">
@@ -21,38 +21,11 @@
          switch the active view. Future / not-yet-delivered dimensions (Context, Intelligence)
          are disabled: they carry a status chip, are out of tab order and never navigate,
          so the nav reflects actual delivered state instead of implying shipped UI. -->
-        <aside class="rs-sidebar">
-            <div class="rs-brand">
-                <span class="rs-brand-name">Solo Dev LLM Bench</span>
-                <span class="rs-brand-sub">Results</span>
-            </div>
-
-            <!-- Results dimension navigation. aria-current marks the live, active view.
-                 Context/Intelligence buttons are disabled (no click, no keyboard activation). -->
-            <nav class="rs-nav" aria-label="Results">
-                <button type="button" class="rs-nav-item rs-nav-item-active" data-view="overall" id="nav-overall" aria-current="page">
-                    Overall<span class="rs-nav-chip rs-chip-planned">No composite</span>
-                </button>
-                <button type="button" class="rs-nav-item" data-view="speed" id="nav-speed">
-                    Speed<span class="rs-nav-chip rs-chip-delivered">Delivered</span>
-                </button>
-                <button type="button" class="rs-nav-item" data-view="workflow" id="nav-workflow">
-                    Workflow<span class="rs-nav-chip rs-chip-delivered">Delivered</span>
-                </button>
-                <!-- Context backend exists (0009) but its Results UI is RM-26-AA-0018. -->
-                <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="context" id="nav-context" aria-disabled="true" disabled>
-                    Context<span class="rs-nav-chip rs-chip-planned">Coming soon</span>
-                </button>
-                <!-- Intelligence is a research item (RM-26-AA-0010). -->
-                <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="intelligence" id="nav-intelligence" aria-disabled="true" disabled>
-                    Intelligence<span class="rs-nav-chip rs-chip-research">Research</span>
-                </button>
-            </nav>
-
-            <div class="rs-sidebar-foot">
-                <a href="/" class="rs-back">&#8592; Back to benchmarks</a>
-            </div>
-        </aside>
+        <!-- Persistent application shell sidebar. The markup is injected here by the
+             shared app-shell.js (single source of truth) so this page does not duplicate
+             the sidebar. It carries both the BENCHMARKS home entry and the RESULTS
+             dimension navigation; active state is derived from the URL client-side. -->
+        <div id="app-sidebar-mount"></div>
 
         <!-- Results content area. Gains the horizontal space previously used by the tab bar.
              Benchmark-specific filters/controls live inside each view panel below. -->
@@ -155,9 +128,13 @@
 
     </div>
 
+    <!-- app-shell.js MUST load first: it injects the persistent sidebar (single
+         source of truth) and sets active state before results-shell.js wires the
+         in-page Results view switching against the injected nav. -->
+    <script src="/static/app-shell.js?v=3"></script>
     <script src="/static/results-utils.js?v=1701"></script>
     <script src="/static/results-filters.js?v=1701"></script>
-    <script src="/static/results-shell.js?v=2"></script>
+    <script src="/static/results-shell.js?v=3"></script>
     <script src="/static/results.js?v=1920"></script>
 </body>
 </html>

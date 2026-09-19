@@ -10,15 +10,17 @@
     <link rel="stylesheet" href="/static/shared.css?v=1701">
     <link rel="stylesheet" href="/static/dashboard.css?v=1800">
     <link rel="stylesheet" href="/static/speed-result.css?v=1910">
+    <!-- results-shell.css: dark visual system for the persistent application shell sidebar -->
+    <link rel="stylesheet" href="/static/results-shell.css?v=1">
 </head>
 <body class="dapp-dark">
+    <!-- Persistent application shell: one shared left sidebar (injected by app-shell.js)
+         + a fluid right content pane (.rs-main). The page's own inline back nav is
+         intentionally removed — the persistent sidebar is the single navigation. -->
+    <div class="rs-shell-wrap results-shell">
+        <div id="app-sidebar-mount"></div>
+        <main class="rs-main">
     <div class="container">
-        <!-- Back navigation: primary is to the launcher; historical /results optional. -->
-        <nav class="srb-nav" aria-label="Speed result navigation">
-            <a href="/" class="btn-primary srb-back">&#8592; Benchmarks</a>
-            <a href="/results" class="btn-ghost srb-history">View all historical results</a>
-        </nav>
-
         <!-- Title -->
         <header class="srb-header">
             <span class="dapp-section-label">SPEED RESULT</span>
@@ -78,7 +80,12 @@
             </div>
         </section>
     </div>
+        </main><!-- /.rs-main -->
+    </div><!-- /.rs-shell-wrap -->
 
+    <!-- app-shell.js: single source of truth for the persistent sidebar; must load
+         before page-specific scripts so the nav exists and active state is set. -->
+    <script src="/static/app-shell.js?v=3"></script>
     <script src="/static/speed-result.js"></script>
 </body>
 </html>

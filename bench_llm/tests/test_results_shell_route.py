@@ -8,6 +8,11 @@ Frontend behaviour is asserted statically against the shipped JS/CSS (mirroring
 test_smoke.py's approach for static assets) rather than via a browser: the shell
 performs no benchmark scoring, invents no composite, renders missing values as an
 em-dash (never zero), and keeps N/A / unsupported / failure distinct.
+
+The persistent application-shell sidebar is defined ONCE in app-shell.js (the single
+source of truth) and injected client-side into every page's #app-sidebar-mount; the
+assertions below therefore check that shared definition rather than duplicated markup
+in each served HTML file.
 """
 
 from __future__ import annotations
@@ -26,6 +31,19 @@ STATIC_DIR = _PROJECT_ROOT / "static"
 
 client = TestClient(src.main.app)
 
+# The single source of truth for the persistent sidebar.
+APP_JS = (STATIC_DIR / "app-shell.js").read_text(encoding="utf-8")
+
+
+def _served(path):
+    return client.get(path).text
+
+
+def _nav_items(js):
+    """Return every <button>...</button> nav item in a JS source string."""
+    pattern = re.compile(r'<button[^>]*data-view=".*?".*?</button>', re.DOTALL)
+    return pattern.findall(js)
+
 
 # ---------------------------------------------------------------------------
 # 1. Results shell page loads and exposes the unified navigation
@@ -40,79 +58,94 @@ def test_results_shell_page_loads():
     assert "rs-shell-wrap" in body
     # New shell stylesheet is loaded; the light-only results.css variant is too.
     assert "/static/results-shell.css" in body
+    # The shared sidebar is injected by app-shell.js (single source of truth).
+    assert "/static/app-shell.js" in body
+    assert "app-sidebar-mount" in body
 
 
-def test_results_shell_has_all_five_areas():
+def test_all_pages_mount_the_shared_sidebar():
+    """Every user-facing page mounts the same single sidebar and loads app-shell.js."""
+    for path in ("/", "/results", "/speed/results/any-run-id", "/v2/results/any-run-id"):
+        body = _served(path)
+        assert body.count("app-sidebar-mount") == 1, f"{path} missing/dupe mount"
+        assert "/static/app-shell.js" in body, f"{path} does not load app-shell.js"
+
+
+def test_results_shell_has_all_five_view_containers():
+    """The five view containers are static content on the Results page."""
     body = client.get("/results").text
     for view in ("overall", "speed", "workflow", "context", "intelligence"):
-        assert f'data-view="{view}"' in body, f"missing nav tab: {view}"
         assert f"id=\"view-{view}\"" in body, f"missing view container: {view}"
+
+
+# ---------------------------------------------------------------------------
+# 1b. Persistent left sidebar navigation (single source of truth = app-shell.js)
+# ---------------------------------------------------------------------------
+
+def test_sidebar_source_defines_all_five_dimensions():
+    js = APP_JS
+    for view in ("overall", "speed", "workflow", "context", "intelligence"):
+        assert f'data-view="{view}"' in js, f"missing nav item: {view}"
+        assert f"id=\"nav-{view}\"" in js, f"missing nav id: {view}"
 
 
 def test_navigation_status_chips_reflect_reality():
     """Delivered areas are marked delivered; planned/research are not functional."""
-    body = client.get("/results").text
+    js = APP_JS
     # Speed + Workflow are delivered.
-    assert 'data-view="speed"' in body
-    assert 'data-view="workflow"' in body
+    assert 'data-view="speed"' in js
+    assert 'data-view="workflow"' in js
     # Overall must NOT claim a composite score.
-    assert "No composite" in body
+    assert "No composite" in js
     # Context is pending (0018); Intelligence is research.
-    assert "Coming soon" in body
-    assert "Research" in body
+    assert "Coming soon" in js
+    assert "Research" in js
 
-
-# ---------------------------------------------------------------------------
-# 1b. Persistent left sidebar navigation (RM-26-AA sidebar Act)
-# ---------------------------------------------------------------------------
 
 def test_results_page_uses_left_sidebar_not_top_tabs():
-    """Primary dimension nav is a persistent left sidebar, not a top tab bar."""
-    body = client.get("/results").text
-    # Sidebar surface present.
-    assert "rs-sidebar" in body
-    # Old top-level tab semantics are gone (no duplicate navigation).
-    assert "role=\"tablist\"" not in body
-    assert "role=\"tab\"" not in body
-    assert "rs-tab" not in body
-    # Brand + escape hatch live in the sidebar.
-    assert "Solo Dev LLM Bench" in body
-    assert "Back to benchmarks" in body
-    assert "rs-sidebar-foot" in body
+    """Primary dimension nav is a persistent left sidebar, not a top tab bar.
+
+    The sidebar markup lives only in app-shell.js (injected), so no served HTML
+    contains duplicated sidebar markup or the old tab semantics.
+    """
+    for path in ("/", "/results", "/speed/results/any-run-id", "/v2/results/any-run-id"):
+        body = _served(path)
+        # No duplicated inline sidebar in any page (it is injected once).
+        assert 'class="rs-sidebar"' not in body, f"{path} duplicates the sidebar"
+        # Old top-level tab semantics are gone everywhere (no duplicate navigation).
+        assert "role=\"tablist\"" not in body, f"{path} still has a tablist"
+        assert "role=\"tab\"" not in body, f"{path} still has tab roles"
+        assert "rs-tab" not in body, f"{path} still references rs-tab"
 
 
-def test_sidebar_has_all_five_dimensions():
-    body = client.get("/results").text
-    for view in ("overall", "speed", "workflow", "context", "intelligence"):
-        assert f'data-view="{view}"' in body, f"missing nav item: {view}"
-        assert f"id=\"nav-{view}\"" in body, f"missing nav id: {view}"
-        assert f"id=\"view-{view}\"" in body, f"missing view container: {view}"
+def test_redundant_back_to_benchmarks_removed():
+    """The standalone escape hatch is gone; the sidebar Benchmarks entry is home."""
+    for path in ("/", "/results", "/speed/results/any-run-id", "/v2/results/any-run-id"):
+        assert "Back to benchmarks" not in _served(path), f"{path} still has back link"
+    assert "Back to benchmarks" not in APP_JS
 
 
 def test_sidebar_nav_is_semantic_landmarked():
-    body = client.get("/results").text
+    js = APP_JS
     # Semantic <nav> with an accessible label (not a bare list of buttons).
-    assert '<nav class="rs-nav" aria-label="Results">' in body
+    assert '<nav class="rs-nav" aria-label="Results">' in js
     # Live items are real buttons, not fake links.
-    assert 'class="rs-nav-item' in body
-    assert 'href="#"' not in body
+    assert 'class="rs-nav-item' in js
+    assert 'href="#"' not in js
 
 
 def test_sidebar_live_dimensions_are_interactive_buttons():
     """Overall / Speed / Workflow are keyboard-reachable, enabled buttons."""
-    body = client.get("/results").text
-    for view in ("overall", "speed", "workflow"):
-        item = _extract_nav_item(body, view)
-        assert item is not None, f"missing nav item {view}"
-        # Enabled <button>, out of the disabled set.
-        assert "disabled" not in item.split(">")[0], f"{view} should be enabled"
-        assert "rs-nav-item-disabled" not in item
+    for item in _nav_items(APP_JS):
+        view = re.search(r'data-view="([^"]+)"', item).group(1)
+        if view in ("overall", "speed", "workflow"):
+            assert "disabled" not in item.split(">")[0], f"{view} should be enabled"
+            assert "rs-nav-item-disabled" not in item
 
 
 def test_sidebar_context_is_disabled_and_planned():
     """Context is shown but marked not-yet-delivered and non-interactive."""
-    body = client.get("/results").text
-    item = _extract_nav_item(body, "context")
+    item = next(i for i in _nav_items(APP_JS) if 'data-view="context"' in i)
     assert item is not None
     # Disabled: out of tab order / no activation (native disabled + status class).
     assert 'disabled' in item
@@ -125,8 +158,7 @@ def test_sidebar_context_is_disabled_and_planned():
 
 def test_sidebar_intelligence_is_disabled_and_research():
     """Intelligence is research: shown, disabled, non-clickable."""
-    body = client.get("/results").text
-    item = _extract_nav_item(body, "intelligence")
+    item = next(i for i in _nav_items(APP_JS) if 'data-view="intelligence"' in i)
     assert item is not None
     assert 'disabled' in item
     assert "rs-nav-item-disabled" in item
@@ -135,13 +167,19 @@ def test_sidebar_intelligence_is_disabled_and_research():
 
 def test_sidebar_active_state_uses_semantic_current():
     """The canonical default (Overall) exposes active state via aria-current."""
-    body = client.get("/results").text
-    overall = _extract_nav_item(body, "overall")
+    overall = next(i for i in _nav_items(APP_JS) if 'data-view="overall"' in i)
     assert overall is not None
     assert 'aria-current="page"' in overall
     assert "rs-nav-item-active" in overall
-    # Only one live item may carry the active marker.
-    assert body.count('aria-current="page"') == 1
+    # Only one live item may carry the active marker by default.
+    items = _nav_items(APP_JS)
+    assert sum(i.count('aria-current="page"') for i in items) == 1
+
+
+def test_sidebar_has_a_benchmarks_home_entry():
+    """The persistent sidebar gains a Benchmarks / Run home entry (single nav)."""
+    assert 'href="/"' in APP_JS
+    assert "Benchmarks / Run" in APP_JS
 
 
 def test_sidebar_disabled_items_have_no_hover_implication():
@@ -165,16 +203,6 @@ def test_sidebar_narrow_viewport_has_no_horizontal_overflow_rule():
     # Narrow viewport collapses the fixed sidebar to a reachable rail.
     assert re.search(r"@media \(max-width:\s*820px\)", css) is not None
     assert ".rs-nav-item" in css
-
-
-def _extract_nav_item(body, view):
-    """Return the raw <button>...</button> markup for a given data-view item."""
-    pattern = re.compile(
-        r'<button[^>]*data-view="%s".*?</button>' % re.escape(view),
-        re.DOTALL,
-    )
-    m = pattern.search(body)
-    return m.group(0) if m else None
 
 
 def test_shell_uses_dark_theme_and_no_light_toggle():
@@ -269,6 +297,13 @@ def test_shell_js_placeholder_never_fakes_data_for_planned_areas():
     assert "rs-placeholder" in js
 
 
+def test_app_shell_js_performs_no_benchmark_logic():
+    """The shared shell only builds nav + active state; it never touches benchmark/API logic."""
+    assert "/api/ranking" not in APP_JS
+    assert "run_benchmark" not in APP_JS
+    assert "loadModel" not in APP_JS and "unloadModel" not in APP_JS
+
+
 # ---------------------------------------------------------------------------
 # 4. Existing delivered result routes still respond (not regressed)
 # ---------------------------------------------------------------------------
@@ -295,6 +330,13 @@ def test_results_page_still_loads_speed_history_scripts():
     assert "chartsPanel.innerHTML" not in results_js
 
 
+def test_index_page_still_loads_launcher_scripts():
+    """The benchmark launcher (dashboard.js) is still wired on the default page."""
+    body = client.get("/").text
+    assert "/static/dashboard.js" in body
+    assert "/static/dashboard-charts.js" in body
+
+
 # ---------------------------------------------------------------------------
 # 5. Collapsible drill-down primitive exists in the delivered markup/CSS
 # ---------------------------------------------------------------------------
@@ -319,4 +361,3 @@ def test_state_fragments_are_distinct_in_shell_js():
     assert "rs-state" in js
     assert "rs-state-noresults" in js
     assert 'banner("error"' in js
-
