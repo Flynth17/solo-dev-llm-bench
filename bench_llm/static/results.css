@@ -201,6 +201,12 @@
    --------------------------------------------------------------------------- */
 
 #speed-detail-dialog {
+    /* Native <dialog> centering: an open dialog is positioned with inset:0 and the
+       UA's margin:auto centers it on both axes. The global `* { margin: 0 }` reset in
+       shared.css cancels that auto-margin (the box then sits at top-left), so restore
+       it explicitly -- centring stays viewport-relative at any size, no fixed offsets.
+       width/max-height keep the box inside the viewport; .rs-modal-body scrolls. */
+    margin: auto;
     padding: 0;
     border: 1px solid var(--rs-border);
     border-radius: 14px;
