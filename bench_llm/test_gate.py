@@ -94,6 +94,7 @@ _FAMILIES: dict[str, list[str]] = {
         "tests/test_results_index_null_timestamp.py",
         "tests/test_results_speed_history.py",
         "tests/test_results_shell_route.py",  # RM-26-AA-0016 unified Results shell
+        "tests/test_comparison_ui.py",  # RM-26-AA-0013 ST-003 Compare selection + identity header
     ],
 }
 

@@ -82,7 +82,14 @@
     // Which views need on-demand data loading, keyed by view id.
     var loaders = {
         "view-overall": loadOverall,
-        "view-workflow": loadWorkflow
+        "view-workflow": loadWorkflow,
+        // Compare (RM-26-AA-0013 ST-003) is owned by results-compare.js, which loads
+        // AFTER this file. The bridge defers to that script's idempotent init hook once
+        // it has run; when the page opens directly at #compare, results-compare.js
+        // self-initializes instead (this bridge is a no-op until then).
+        "view-compare": function () {
+            if (typeof window.__compareInit === "function") { window.__compareInit(); }
+        }
     };
     var loaded = {};
 
@@ -534,8 +541,10 @@
     // dimension instead of the default Overall. Reuses the click handler above,
     // which activates the view AND lazily loads its data.
     // -----------------------------------------------------------------------
-    var hashView = location.hash.replace(/^#/, "");
-    if (hashView === "speed" || hashView === "workflow" || hashView === "context") {
+    // The compare view may carry selection params in the fragment
+    // (#compare?a=<key>&b=<key>); only the view id before "?" activates the nav item.
+    var hashView = location.hash.replace(/^#/, "").split("?")[0];
+    if (hashView === "speed" || hashView === "workflow" || hashView === "context" || hashView === "compare") {
         var hashBtn = document.getElementById("nav-" + hashView);
         if (hashBtn) { hashBtn.click(); }
     }

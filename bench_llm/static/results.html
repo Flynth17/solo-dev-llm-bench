@@ -144,6 +144,14 @@
             <div id="context-container"></div>
         </section>
 
+        <!-- Compare view (RM-26-AA-0013, ST-003): two-subject selection + model/config
+             identity header. Only identities, family-specific configuration truth and
+             dimension availability are shown here; metric comparison begins at ST-004.
+             Owned by results-compare.js (loads after results-shell.js). -->
+        <section id="view-compare" class="rs-view" aria-labelledby="nav-compare">
+            <div id="compare-container"></div>
+        </section>
+
         <!-- Intelligence view: research / not implemented. Not reachable from the disabled
              sidebar nav; retained as an honest placeholder panel only. -->
         <section id="view-intelligence" class="rs-view" aria-labelledby="nav-intelligence">
@@ -170,10 +178,13 @@
     <!-- app-shell.js MUST load first: it injects the persistent sidebar (single
          source of truth) and sets active state before results-shell.js wires the
          in-page Results view switching against the injected nav. -->
-    <script src="/static/app-shell.js?v=3"></script>
+    <script src="/static/app-shell.js?v=5"></script>
     <script src="/static/results-utils.js?v=1701"></script>
     <script src="/static/results-filters.js?v=1701"></script>
-    <script src="/static/results-shell.js?v=3"></script>
+    <script src="/static/results-shell.js?v=4"></script>
+    <!-- Compare view (RM-26-AA-0013 ST-003): must load after results-shell.js so the
+         sidebar click handler's lazy-load bridge can reach its init hook. -->
+    <script src="/static/results-compare.js?v=3"></script>
     <script src="/static/results.js?v=1920"></script>
 </body>
 </html>

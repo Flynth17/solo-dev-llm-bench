@@ -26,7 +26,29 @@ Side-by-side comparison of exactly two selectable model/configurations across ev
     fallback for Speed (no ordering field); a newer failed terminal run is not replaced by an older
     success. State semantics preserved (missing / unsupported / in_progress). Tests:
     `tests/test_comparison_read_model.py` (17 passing).
-- [ ] ST-003 — Implement model/config identity comparison header
+- [x] ST-003 — Implement model/config identity comparison header
+  - Implemented: live **Compare** item in the persistent application shell (`static/app-shell.js`,
+    between Context and Intelligence; Intelligence stays disabled) with `/results#compare` as its
+    location. The Compare pane (`static/results-compare.js`, view `#view-compare` in
+    `static/results.html`) renders exactly two labelled Subject A/B selectors populated from the
+    authoritative catalogue at `/api/comparison/subjects`; option values are backend subject keys
+    (display labels carry a short config marker, never identity). Identical subjects cannot be
+    selected on both sides (mirror-disabled + client guard; backend 400 remains the backstop);
+    same-model/different-config subjects stay distinct. With two valid distinct selections the view
+    fetches `/api/comparison?a=&b=` and renders a side-by-side identity header: model/version,
+    architecture (honest "Not recorded" when not persisted), configuration identity, available
+    dimensions, then per-family availability using the read model's state vocabulary
+    (available / ambiguous / missing / in_progress / failed / unsupported / unavailable) with
+    family-specific configuration truth -- Speed quantization/loaded-context/hardware, Workflow
+    fingerprint only with quantization explicitly "Not recorded" (never copied across families),
+    Context quantization/capacity/baseline. Same-base-model pairs show an explanatory banner and
+    render non-representative families as AMBIGUOUS on both sides with a readable evidence-
+    limitation note -- never duplicating one shared run into both columns. No metrics of any kind
+    are displayed (identity/configuration only; metric comparison begins at ST-004). Selection is
+    URL-persisted as `#compare?a=<key>&b=<key>` (encoded keys, replaceState); unknown/malformed
+    keys fail gracefully with an inline notice. An accessible Swap A/B button reorders columns and
+    refetches. Dark shell language throughout; the two-column grid stacks on narrow viewports.
+    Tests: `tests/test_comparison_ui.py` (29 passing) + browser acceptance.
 - [ ] ST-004 — Implement Speed side-by-side comparison
 - [ ] ST-005 — Implement Workflow side-by-side comparison
 - [ ] ST-006 — Implement Context side-by-side comparison
@@ -49,7 +71,7 @@ Side-by-side comparison of exactly two selectable model/configurations across ev
 
 - Category: product
 - Depends on: RM-26-AA-0016
-- Updated: 2026-09-21T09:00:00Z
+- Updated: 2026-09-21T10:00:00Z
 - Legacy ID: multi-model-comparison-view; scorecard-export
 
 ## FUTURE

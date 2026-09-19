@@ -49,6 +49,10 @@
         '    <button type="button" class="rs-nav-item" data-view="context" id="nav-context">' +
         '      Context<span class="rs-nav-chip rs-chip-delivered">Delivered</span>' +
         '    </button>' +
+        '    <!-- Compare (RM-26-AA-0013): two-subject selection + identity header are live; metric comparison arrives in later subtasks. -->' +
+        '    <button type="button" class="rs-nav-item" data-view="compare" id="nav-compare">' +
+        '      Compare<span class="rs-nav-chip rs-chip-identity">Identity</span>' +
+        '    </button>' +
         '    <!-- Intelligence is a research item (RM-26-AA-0010). -->' +
         '    <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="intelligence" id="nav-intelligence" aria-disabled="true" disabled>' +
         '      Intelligence<span class="rs-nav-chip rs-chip-research">Research</span>' +
@@ -67,8 +71,10 @@
         var path = location.pathname;
         if (path === "/" || path === "") { return "benchmarks"; }
         if (path === "/results") {
-            var hash = location.hash.replace(/^#/, "");
-            if (hash === "overall" || hash === "speed" || hash === "workflow" || hash === "context") { return hash; }
+            // The compare view may carry selection params in the fragment
+            // (#compare?a=<key>&b=<key>); only the view id before "?" selects the nav item.
+            var hash = location.hash.replace(/^#/, "").split("?")[0];
+            if (hash === "overall" || hash === "speed" || hash === "workflow" || hash === "context" || hash === "compare") { return hash; }
             return "overall"; // canonical default, matches shipped markup
         }
         if (/^\/speed\/results\//.test(path)) { return "speed"; }
