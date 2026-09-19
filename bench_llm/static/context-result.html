@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Result — Solo Dev LLM Bench</title>
+    <!-- shared.css: base resets + .container/.panel/.status tokens -->
+    <!-- dashboard.css: the dark visual language (scoped via .dapp-dark) -->
+    <!-- context-result.css: page-specific identity / table / curve styling, dark-scoped -->
+    <link rel="stylesheet" href="/static/shared.css?v=1701">
+    <link rel="stylesheet" href="/static/dashboard.css?v=1800">
+    <link rel="stylesheet" href="/static/context-result.css?v=1">
+    <!-- results-shell.css: dark visual system for the persistent application shell sidebar -->
+    <link rel="stylesheet" href="/static/results-shell.css?v=1">
+</head>
+<body class="dapp-dark">
+    <!-- Persistent application shell: one shared left sidebar (injected by app-shell.js)
+         + a fluid right content pane (.rs-main). The persistent sidebar is the single
+         navigation; this page's inline back nav is intentionally removed. -->
+    <div class="rs-shell-wrap results-shell">
+        <div id="app-sidebar-mount"></div>
+        <main class="rs-main">
+    <div class="container">
+        <!-- Title -->
+        <header class="srb-header">
+            <span class="dapp-section-label">CONTEXT RESULT</span>
+            <h1>Solo Dev LLM Bench — Context Result</h1>
+        </header>
+
+        <!-- Loading state: no fake data shown before the API responds. -->
+        <p id="cr-loading" class="status cr-status info">Loading context result&hellip;</p>
+
+        <!-- Error / not-found state (readable, no stack traces). Hidden until needed. -->
+        <div id="cr-error" class="hidden" role="alert">
+            <p class="status cr-status error"><strong>Unable to load Context result</strong></p>
+            <p id="cr-error-detail" class="cr-error-msg"></p>
+        </div>
+
+        <!-- Identity / configuration block. Hidden until data loads. -->
+        <section id="cr-identity" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Run identity</span>
+            </div>
+            <dl class="cr-grid">
+                <div><dt>Model</dt><dd id="cr-model">&mdash;</dd></div>
+                <div><dt>Version / architecture</dt><dd><span id="cr-version">&mdash;</span> <span id="cr-architecture" class="cr-arch-sub"></span></dd></div>
+                <div><dt>Quantization</dt><dd id="cr-quantization">&mdash;</dd></div>
+                <div><dt>Classification</dt><dd id="cr-classification">&mdash;</dd></div>
+                <div><dt>Run ID</dt><dd><code id="cr-run-id">&mdash;</code></dd></div>
+                <div class="cr-span"><dt>Configuration fingerprint</dt><dd><code id="cr-fingerprint">&mdash;</code></dd></div>
+                <div><dt>Status / validity</dt><dd><span id="cr-status" class="badge"></span></dd></div>
+                <div><dt>Baseline point</dt><dd id="cr-baseline">&mdash;</dd></div>
+                <div><dt>Effective capacity</dt><dd id="cr-capacity">&mdash;</dd></div>
+                <div class="cr-span"><dt>Supported / gap points</dt><dd><span id="cr-supported">&mdash;</span> / <span id="cr-gap">&mdash;</span></dd></div>
+            </dl>
+        </section>
+
+        <!-- Authoritative per-point table: one row per context point. Establishes the
+             ordered points, baseline and retention/degradation trend from the read API.
+             The visual degradation chart is delivered in a later subtask (ST-004). -->
+        <section id="cr-points" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Context scaling &middot; retention &middot; degradation</span>
+            </div>
+            <p class="cr-note">Authoritative per-point values come from the backend read model; this page only formats and presents them -- it never recomputes a score or degradation.</p>
+            <div class="cr-table-wrap">
+                <table id="cr-table" class="cr-tel-table" aria-label="Context result by context size">
+                    <thead>
+                        <tr>
+                            <th scope="col">Point</th>
+                            <th scope="col" title="Requested context target (tokens)">Requested</th>
+                            <th scope="col" title="Actual prompt tokens issued to the model">Actual input</th>
+                            <th scope="col" title="Exact-match fact recall in [0, 1]; dash when nothing was gradeable">Score</th>
+                            <th scope="col" title="facts_correct / facts_requested">Facts</th>
+                            <th scope="col" title="Retention vs baseline (score / baseline); dash when N/A">Retention</th>
+                            <th scope="col" title="Degradation vs baseline (score - baseline); dash when N/A">Degradation</th>
+                            <th scope="col" title="Point state: success / unsupported / extraction_failure / malformed / failed">State</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cr-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Key metrics (ST-005): headline baseline / retention / degradation
+             figures, presented as authoritative per-point values -- never a
+             recomputed score or composite. Distinct from the visual curve below. -->
+        <section id="cr-metrics" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Key metrics</span>
+            </div>
+            <div id="cr-metrics-body" class="cr-metrics"></div>
+        </section>
+
+        <!-- Degradation / retention curve (ST-004). Populated by context-result.js
+             from the authoritative read model: an honest, dependency-free inline SVG
+             that plots supported points only and never coerces N/A to zero. -->
+        <section id="cr-curve" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Degradation / retention curve</span>
+            </div>
+            <p class="cr-note">Retention vs context size (degradation is the drop from baseline). The chart plots only supported points; N/A/unsupported/gap points are never shown as zero.</p>
+            <div id="cr-curve-inner" class="cr-curve-inner"></div>
+        </section>
+    </div>
+        </main><!-- /.rs-main -->
+    </div><!-- /.rs-shell-wrap -->
+
+    <!-- app-shell.js: single source of truth for the persistent sidebar; must load
+         before page-specific scripts so the nav exists and active state is set. -->
+    <script src="/static/app-shell.js?v=4"></script>
+    <script src="/static/context-result.js?v=4"></script>
+</body>
+</html>

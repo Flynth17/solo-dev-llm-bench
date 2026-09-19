@@ -10,8 +10,8 @@
  * Design rules (shell/navigation refactoring only — no benchmark logic):
  *  - The left sidebar is persistent across the whole app; only the right content
  *    pane (.rs-main) changes when navigating.
- *  - Live dimensions (Overall / Speed / Workflow) are enabled buttons; future /
- *    not-yet-delivered dimensions (Context, Intelligence) carry rs-nav-item-disabled
+ *  - Live dimensions (Overall / Speed / Workflow / Context) are enabled buttons; future /
+ *    not-yet-delivered dimensions (Intelligence) carry rs-nav-item-disabled
  *    plus a native `disabled` attribute so they never receive clicks or focus.
  *  - Active location is exposed semantically via aria-current="page".
  *  - The standalone home escape hatch is intentionally gone: "Benchmarks / Run"
@@ -45,9 +45,9 @@
         '    <button type="button" class="rs-nav-item" data-view="workflow" id="nav-workflow">' +
         '      Workflow<span class="rs-nav-chip rs-chip-delivered">Delivered</span>' +
         '    </button>' +
-        '    <!-- Context backend exists (0009) but its Results UI is RM-26-AA-0018. -->' +
-        '    <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="context" id="nav-context" aria-disabled="true" disabled>' +
-        '      Context<span class="rs-nav-chip rs-chip-planned">Coming soon</span>' +
+        '    <!-- Context backend exists (0009); its degradation Results UI is RM-26-AA-0018. Navigation + single-run detail pane established here; deeper curve/metrics/drill-down in later subtasks. -->' +
+        '    <button type="button" class="rs-nav-item" data-view="context" id="nav-context">' +
+        '      Context<span class="rs-nav-chip rs-chip-delivered">Delivered</span>' +
         '    </button>' +
         '    <!-- Intelligence is a research item (RM-26-AA-0010). -->' +
         '    <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="intelligence" id="nav-intelligence" aria-disabled="true" disabled>' +
@@ -68,7 +68,7 @@
         if (path === "/" || path === "") { return "benchmarks"; }
         if (path === "/results") {
             var hash = location.hash.replace(/^#/, "");
-            if (hash === "overall" || hash === "speed" || hash === "workflow") { return hash; }
+            if (hash === "overall" || hash === "speed" || hash === "workflow" || hash === "context") { return hash; }
             return "overall"; // canonical default, matches shipped markup
         }
         if (/^\/speed\/results\//.test(path)) { return "speed"; }

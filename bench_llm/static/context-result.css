@@ -1,0 +1,136 @@
+/* Solo Dev LLM Bench -- Context result page (RM-26-AA-0018).
+ * Dark-scoped styling for the single-run Context degradation detail. Base resets
+ * + .container / .panel tokens come from shared.css; the Act 17.1 dark palette
+ * (applied via the .dapp-dark body class) comes from dashboard.css. This file
+ * adds only the identity grid, state badges and per-point telemetry table
+ * specific to a single Context run. It intentionally does NOT copy the legacy
+ * /results layout and introduces no frontend framework. */
+
+/* --- Header -------------------------------------------------------------- */
+.srb-header { margin-bottom: 1.25rem; }
+.srb-header h1 {
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #f4f8ff;
+    margin: 0.35rem 0 0;
+}
+
+/* --- Status lines -------------------------------------------------------- */
+.cr-status { font-size: 0.92rem; }
+.cr-status.info { color: #cdd9ea; }
+.cr-status.error { color: #ffb4b4; }
+
+/* --- Identity grid ------------------------------------------------------- */
+.cr-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.5rem;
+}
+.cr-grid dt {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7f93af;
+    margin-bottom: 0.3rem;
+}
+.cr-grid dd { margin: 0; color: #e8eef6; font-size: 0.98rem; word-break: break-word; }
+.cr-grid code { color: #cdd9ea; }
+.cr-span { grid-column: 1 / -1; }
+.cr-arch-sub { color: #7f93af; font-weight: 400; margin-left: 0.4rem; font-size: 0.9rem; }
+
+/* --- Notes --------------------------------------------------------------- */
+.cr-note { color: #7f93af; font-size: 0.85rem; margin: 0.25rem 0 1rem; }
+.cr-placeholder-note { color: #7f93af; font-size: 0.9rem; }
+
+/* --- Per-point telemetry table ------------------------------------------- */
+.cr-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #1e3350; }
+.cr-tel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 720px;
+}
+.cr-tel-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #7f93af;
+    background: #0f1b2d;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid #1e3350;
+}
+.cr-tel-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #16253d;
+    color: #e8eef6;
+    white-space: nowrap;
+}
+.cr-tel-table tr:last-child td { border-bottom: none; }
+.cr-point-row td:nth-child(1) { font-weight: 600; }
+
+/* N/A stays distinct from a real value (never zero). */
+.cr-na { color: #7f93af; }
+.cr-empty { text-align: center; color: #7f93af; padding: 1.25rem !important; }
+
+/* Operational failure reason under the state cell. */
+.cr-reason { font-size: 0.78rem; color: #ffb4b4; margin-top: 0.25rem; word-break: break-word; }
+
+/* --- State badges (colour is never the sole signal; the word is shown) ---- */
+.cr-badge-ok { background: #0e2f1e; color: #8ee0a8; border-color: #1c4a33; }
+.cr-badge-unavailable { background: #2b2310; color: #e6c56b; border-color: #4a3b17; }
+.cr-badge-warn { background: #2b2010; color: #f0d28a; border-color: #4a3b17; }
+.cr-badge-error { background: #3a1414; color: #ff9d9d; border-color: #5a2222; }
+
+/* --- Degradation / retention curve (ST-004) ------------------------------
+     Dependency-free inline SVG. The chart only ever plots authoritative
+     supported points (score + retention present); N/A/unsupported/gap points
+     are never coerced to zero -- they fall outside the effective-capacity
+     boundary and are represented by that boundary, not by a data marker.
+     Colour is never the sole signal: every axis has a numeric label. */
+.cr-curve-inner { border: 1px solid #1e3350; border-radius: 8px; background: #0c1626; padding: 0.75rem; }
+.cr-curve svg { display: block; width: 100%; height: auto; }
+.cr-curve-empty { color: #7f93af; font-size: 0.85rem; padding: 1.25rem; text-align: center; }
+
+/* --- Key metrics (ST-005) ------------------------------------------------
+     Headline baseline / retention / degradation figures, presented as
+     authoritative per-point values -- never a recomputed score or composite.
+     Colour conveys direction only; the signed value is always shown too. */
+.cr-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+.cr-metric {
+    border: 1px solid #1e3350;
+    border-radius: 8px;
+    background: #0c1626;
+    padding: 0.9rem 1rem;
+}
+.cr-metric .cr-metric-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7f93af;
+    margin-bottom: 0.4rem;
+}
+.cr-metric .cr-metric-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #e8eef6;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.cr-metric .cr-metric-sub {
+    font-size: 0.8rem;
+    color: #7f93af;
+    margin-top: 0.3rem;
+}
+.cr-metric .cr-dir-up { color: #8ee0a8; }
+.cr-metric .cr-dir-down { color: #ffb4b4; }
+.cr-metric .cr-dir-flat { color: #e6c56b; }
+@media (max-width: 720px) { .cr-metrics { grid-template-columns: 1fr; } }

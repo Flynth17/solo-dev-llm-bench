@@ -502,14 +502,26 @@
     }
 
     // -----------------------------------------------------------------------
-    // Context (0018) and Intelligence (research) placeholders.
+    // Context (0018) and Intelligence (research) views.
     // Loaded eagerly so the tabs are populated without a round-trip.
     // -----------------------------------------------------------------------
-    renderPlaceholder(
-        document.getElementById("context-container"),
-        "Context degradation results",
-        "The Context benchmark exists, but its degradation Results UI is pending RM-26-AA-0018. This area will surface context-size progression and the degradation/drift curve once delivered."
-    );
+
+    // Context degradation is delivered per run (RM-26-AA-0018). The ranking read
+    // model does not yet project Context runs into an aggregate list, so this pane
+    // shows an honest, grounded state: Context results open from a Context run's
+    // detail page (/context/results/{run_id}). No data is invented; N/A stays N/A.
+    function renderContextAggregate(container) {
+        if (!container) { return; }
+        container.innerHTML =
+            '<div class="rs-panel">' +
+            '<div class="rs-panel-title">Context degradation</div>' +
+            "<p class='rs-placeholder-note'>" +
+            "Context measures how a model\u2019s correctness and retention change as usable context grows (15K\u2013240K). Degradation/drift curves, baseline, retention and per-point evidence are shown on each Context run\u2019s detail page. Run a Context benchmark from the launcher, or open a Context run from its evidence to see the curve." +
+            "</p>" +
+            "</div>";
+    }
+
+    renderContextAggregate(document.getElementById("context-container"));
     renderPlaceholder(
         document.getElementById("intelligence-container"),
         "AI Intelligence benchmark",
@@ -523,7 +535,7 @@
     // which activates the view AND lazily loads its data.
     // -----------------------------------------------------------------------
     var hashView = location.hash.replace(/^#/, "");
-    if (hashView === "speed" || hashView === "workflow") {
+    if (hashView === "speed" || hashView === "workflow" || hashView === "context") {
         var hashBtn = document.getElementById("nav-" + hashView);
         if (hashBtn) { hashBtn.click(); }
     }

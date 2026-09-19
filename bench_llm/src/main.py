@@ -113,23 +113,18 @@ async def speed_result_page(run_id: str):
 
 @app.get("/context/results/{run_id}", response_class=HTMLResponse)
 async def context_result_page(run_id: str):
-    """Temporary shell for a single Context run (RM-26-AA-0009 delivery).
+    """Serve the dedicated Context degradation result page for a single Context run.
 
-    The full Context degradation Results UI is RM-26-AA-0018 and is **not** part of
-    this family's delivery. This minimal placeholder exists only so the launcher's
-    ``result_url`` deep-link resolves; it surfaces no benchmark rendering and simply
-    points consumers at the authoritative read API that future UI will consume.
+    Peer to the Speed / Workflow result pages. The static page derives ``run_id`` from
+    the URL and fetches the authoritative single-run Context read model via the
+    read-only API at ``/api/context/runs/{run_id}`` (see src/routes/context.py). No HTML
+    file is generated per run; all data comes from that validated read model. This is
+    the first delivered slice of RM-26-AA-0018 (Context degradation Results UI): run
+    identity, validity/state and the authoritative per-point retention/degradation
+    signal. Deeper curve / metrics / drill-down enrichment lands in later subtasks.
     """
-    return (
-        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
-        "  <meta charset=\"utf-8\">\n"
-        "  <title>Context Result (shell)</title>\n"
-        "  <p>Context run <code>{run_id}</code>.</p>\n"
-        "  <p>The full Context degradation Results UI is pending RM-26-AA-0018.\n"
-        "     Authoritative evidence is available at\n"
-        "     <a href=\"/api/context/runs/{run_id}\">/api/context/runs/{run_id}</a>.</p>\n"
-        "</head>\n</html>"
-    ).format(run_id=run_id)
+    html_file = STATIC_DIR / "context-result.html"
+    return html_file.read_text(encoding="utf-8")
 
 
 

@@ -4,7 +4,7 @@ Focused local-LLM benchmark with four benchmark families: **Standard Speed**, **
 
 Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derived from `TODO` in document order and is never stored. Identifiers `RM-26-AA-NNNN` are immutable identities only; they do not encode status, priority, hierarchy, or execution order. Legacy Acts/slugs are preserved as metadata, not as canonical keys.
 
-## TODO
+## ACTIVE
 
 ### RM-26-AA-0018 — Context degradation Results UI
 
@@ -12,8 +12,24 @@ Results surface for the Context benchmark family's degradation signal. Distinct 
 
 - Category: product
 - Depends on: RM-26-AA-0016, RM-26-AA-0009
-- Updated: 2026-09-14T20:00:00Z
+- Documentation: required
+- Updated: 2026-09-19T15:03:35Z
 - Legacy ID: context-degradation-results-ui
+
+#### Subtasks
+
+- [x] ST-001 — Verify Context read-model and API contract
+- [x] ST-002 — Enable Context navigation and establish the Context Results pane
+- [x] ST-003 — Render model/config identity and Context benchmark summary
+- [x] ST-004 — Implement the context degradation / retention curve
+- [x] ST-005 — Present baseline, retention and degradation metrics
+- [ ] ST-006 — Implement unsupported, gap, invalid and failure-state presentation
+- [ ] ST-007 — Implement L0 → L1 → L2 Context evidence drill-down
+- [ ] ST-008 — Complete filters, accessibility and responsive behaviour
+- [ ] ST-009 — Add automated tests and direct-CLI browser acceptance
+- [ ] ST-010 — Update documentation, validate acceptance and close RM-26-AA-0018
+
+## TODO
 
 ## FUTURE
 
