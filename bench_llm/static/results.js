@@ -42,16 +42,27 @@ var CANONICAL_POINTS = ["8K", "16K", "32K"];
 // ---------------------------------------------------------------------------
 // Load results from backend
 // ---------------------------------------------------------------------------
+// Monotonic load generation: each call claims a token; only the LATEST call's outcome may
+// mutate state or render. A stale (older) completion -- an earlier request that fails or
+// resolves late after a newer load already populated the table -- must never clear or
+// overwrite newer rendered data.
+var _loadGeneration = 0;
+
 async function loadResults() {
+    var gen = ++_loadGeneration;
     try {
         var resp = await fetch("/api/results");
         if (!resp.ok) return;
         var data = await resp.json();
+        // Stale completion: a newer load is in flight or finished -- never apply older state.
+        if (gen !== _loadGeneration) return;
         // Standard Speed runs arrive normalized (point-based) so the UI never re-implements
         // Speed semantics or invents averages -- it just renders what the read model returns.
         allSpeedRuns = Array.isArray(data.speed_runs) ? data.speed_runs : [];
         applyFilters();
     } catch (e) {
+        // Stale failure: a newer load owns state now -- never clear its rendered data.
+        if (gen !== _loadGeneration) return;
         allSpeedRuns = [];
         applyFilters();
     }

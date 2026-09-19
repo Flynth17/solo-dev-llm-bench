@@ -588,15 +588,24 @@ class ResultsStore:
         return result
 
     def _load_from_db(self) -> None:
-        """Load all runs from SQLite into memory."""
-        self.runs = []
+        """Load all runs from SQLite into memory (thread-safe swap).
+
+        Builds the full list locally and assigns it to ``self.runs`` with a single
+        atomic attribute store. The previous clear-then-refill pattern on the shared
+        singleton was racy: concurrent readers (sync route handlers run in worker
+        threads while async handlers run on the event loop -- e.g. /api/ranking vs
+        /api/results, which the /results page fires simultaneously) could observe a
+        cleared or partially-filled list, and one thread's rebind could orphan the
+        other thread's just-filled list so its caller received an empty snapshot.
+        """
         conn = self._get_connection()
         try:
             cursor = conn.execute("SELECT * FROM runs ORDER BY id ASC")
-            for row in cursor:
-                self.runs.append(self._row_to_dict(row))
+            rows = [self._row_to_dict(row) for row in cursor]
         finally:
             conn.close()
+        # Atomic swap: readers see either the previous complete list or this one.
+        self.runs = rows
 
     def _dict_to_values(self, run: dict) -> tuple:
         """Convert a dict to a tuple matching SQLITE_COLUMNS order."""
@@ -748,10 +757,16 @@ class ResultsStore:
         self.save()
 
     def get_all(self) -> list[dict]:
-        """Return all saved benchmark runs (source of truth)."""
+        """Return all saved benchmark runs (source of truth).
+
+        Returns a snapshot copy so the caller can never observe another thread's
+        concurrent reload mid-flight (the shared attribute is swapped atomically by
+        :meth:`_load_from_db`, but handing back the live list would still let a later
+        swap orphan what this caller iterates).
+        """
         # Reload from SQLite to ensure freshness
         self._load_from_db()
-        return self.runs
+        return list(self.runs)
 
     def clear(self) -> None:
         """Clear all results from memory, SQLite, and CSV."""
