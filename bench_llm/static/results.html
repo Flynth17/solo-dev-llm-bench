@@ -13,35 +13,53 @@
 <body class="results-shell">
     <div class="rs-shell-wrap results-shell">
 
-        <!-- Header -->
-        <header class="rs-header">
-            <h1>Solo Dev LLM Bench — Results</h1>
-            <a href="/" class="rs-back">&#8592; Back to benchmarks</a>
-        </header>
+        <!-- Persistent left sidebar: brand, Results dimension navigation and the escape
+         hatch back to benchmarks. Replaces the previous top-level tab bar so Solo Dev
+         LLM Bench reads as one coherent product rather than five separate pages.
 
-        <!-- Unified Results navigation (shared shell). Each tab maps to a benchmark-area view.
-             Status chips reflect delivered reality: Speed/Workflow delivered, Context pending
-             (0018), Intelligence research/unimplemented, Overall has no approved composite score. -->
-        <nav class="rs-nav" role="tablist" aria-label="Results areas">
-            <button class="rs-tab rs-active" role="tab" data-view="overall" aria-selected="true" id="tab-overall">
-                Overall<span class="rs-tab-chip rs-chip-planned">No composite</span>
-            </button>
-            <button class="rs-tab" role="tab" data-view="speed" aria-selected="false" aria-controls="view-speed" id="tab-speed">
-                Speed<span class="rs-tab-chip rs-chip-delivered">Delivered</span>
-            </button>
-            <button class="rs-tab" role="tab" data-view="workflow" aria-selected="false" aria-controls="view-workflow" id="tab-workflow">
-                Workflow<span class="rs-tab-chip rs-chip-delivered">Delivered</span>
-            </button>
-            <button class="rs-tab" role="tab" data-view="context" aria-selected="false" aria-controls="view-context" id="tab-context">
-                Context<span class="rs-tab-chip rs-chip-planned">Soon</span>
-            </button>
-            <button class="rs-tab" role="tab" data-view="intelligence" aria-selected="false" aria-controls="view-intelligence" id="tab-intelligence">
-                Intelligence<span class="rs-tab-chip rs-chip-research">Research</span>
-            </button>
-        </nav>
+         Live dimensions (Overall / Speed / Workflow) are keyboard-reachable buttons that
+         switch the active view. Future / not-yet-delivered dimensions (Context, Intelligence)
+         are disabled: they carry a status chip, are out of tab order and never navigate,
+         so the nav reflects actual delivered state instead of implying shipped UI. -->
+        <aside class="rs-sidebar">
+            <div class="rs-brand">
+                <span class="rs-brand-name">Solo Dev LLM Bench</span>
+                <span class="rs-brand-sub">Results</span>
+            </div>
+
+            <!-- Results dimension navigation. aria-current marks the live, active view.
+                 Context/Intelligence buttons are disabled (no click, no keyboard activation). -->
+            <nav class="rs-nav" aria-label="Results">
+                <button type="button" class="rs-nav-item rs-nav-item-active" data-view="overall" id="nav-overall" aria-current="page">
+                    Overall<span class="rs-nav-chip rs-chip-planned">No composite</span>
+                </button>
+                <button type="button" class="rs-nav-item" data-view="speed" id="nav-speed">
+                    Speed<span class="rs-nav-chip rs-chip-delivered">Delivered</span>
+                </button>
+                <button type="button" class="rs-nav-item" data-view="workflow" id="nav-workflow">
+                    Workflow<span class="rs-nav-chip rs-chip-delivered">Delivered</span>
+                </button>
+                <!-- Context backend exists (0009) but its Results UI is RM-26-AA-0018. -->
+                <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="context" id="nav-context" aria-disabled="true" disabled>
+                    Context<span class="rs-nav-chip rs-chip-planned">Coming soon</span>
+                </button>
+                <!-- Intelligence is a research item (RM-26-AA-0010). -->
+                <button type="button" class="rs-nav-item rs-nav-item-disabled" data-view="intelligence" id="nav-intelligence" aria-disabled="true" disabled>
+                    Intelligence<span class="rs-nav-chip rs-chip-research">Research</span>
+                </button>
+            </nav>
+
+            <div class="rs-sidebar-foot">
+                <a href="/" class="rs-back">&#8592; Back to benchmarks</a>
+            </div>
+        </aside>
+
+        <!-- Results content area. Gains the horizontal space previously used by the tab bar.
+             Benchmark-specific filters/controls live inside each view panel below. -->
+        <main class="rs-main">
 
         <!-- Overall view: composite status + per-dimension availability + L0 model list. -->
-        <section id="view-overall" class="rs-view rs-active" role="tabpanel" aria-labelledby="tab-overall">
+        <section id="view-overall" class="rs-view rs-active" aria-labelledby="nav-overall">
             <div id="overall-container"></div>
         </section>
 
@@ -127,10 +145,13 @@
             <div id="context-container"></div>
         </section>
 
-        <!-- Intelligence view: research / not implemented. -->
-        <section id="view-intelligence" class="rs-view" role="tabpanel" aria-labelledby="tab-intelligence">
+        <!-- Intelligence view: research / not implemented. Not reachable from the disabled
+             sidebar nav; retained as an honest placeholder panel only. -->
+        <section id="view-intelligence" class="rs-view" aria-labelledby="nav-intelligence">
             <div id="intelligence-container"></div>
         </section>
+
+        </main><!-- /.rs-main -->
 
     </div>
 

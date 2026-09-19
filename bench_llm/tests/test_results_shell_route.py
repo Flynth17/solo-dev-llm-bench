@@ -58,8 +58,123 @@ def test_navigation_status_chips_reflect_reality():
     # Overall must NOT claim a composite score.
     assert "No composite" in body
     # Context is pending (0018); Intelligence is research.
-    assert "Soon" in body
+    assert "Coming soon" in body
     assert "Research" in body
+
+
+# ---------------------------------------------------------------------------
+# 1b. Persistent left sidebar navigation (RM-26-AA sidebar Act)
+# ---------------------------------------------------------------------------
+
+def test_results_page_uses_left_sidebar_not_top_tabs():
+    """Primary dimension nav is a persistent left sidebar, not a top tab bar."""
+    body = client.get("/results").text
+    # Sidebar surface present.
+    assert "rs-sidebar" in body
+    # Old top-level tab semantics are gone (no duplicate navigation).
+    assert "role=\"tablist\"" not in body
+    assert "role=\"tab\"" not in body
+    assert "rs-tab" not in body
+    # Brand + escape hatch live in the sidebar.
+    assert "Solo Dev LLM Bench" in body
+    assert "Back to benchmarks" in body
+    assert "rs-sidebar-foot" in body
+
+
+def test_sidebar_has_all_five_dimensions():
+    body = client.get("/results").text
+    for view in ("overall", "speed", "workflow", "context", "intelligence"):
+        assert f'data-view="{view}"' in body, f"missing nav item: {view}"
+        assert f"id=\"nav-{view}\"" in body, f"missing nav id: {view}"
+        assert f"id=\"view-{view}\"" in body, f"missing view container: {view}"
+
+
+def test_sidebar_nav_is_semantic_landmarked():
+    body = client.get("/results").text
+    # Semantic <nav> with an accessible label (not a bare list of buttons).
+    assert '<nav class="rs-nav" aria-label="Results">' in body
+    # Live items are real buttons, not fake links.
+    assert 'class="rs-nav-item' in body
+    assert 'href="#"' not in body
+
+
+def test_sidebar_live_dimensions_are_interactive_buttons():
+    """Overall / Speed / Workflow are keyboard-reachable, enabled buttons."""
+    body = client.get("/results").text
+    for view in ("overall", "speed", "workflow"):
+        item = _extract_nav_item(body, view)
+        assert item is not None, f"missing nav item {view}"
+        # Enabled <button>, out of the disabled set.
+        assert "disabled" not in item.split(">")[0], f"{view} should be enabled"
+        assert "rs-nav-item-disabled" not in item
+
+
+def test_sidebar_context_is_disabled_and_planned():
+    """Context is shown but marked not-yet-delivered and non-interactive."""
+    body = client.get("/results").text
+    item = _extract_nav_item(body, "context")
+    assert item is not None
+    # Disabled: out of tab order / no activation (native disabled + status class).
+    assert 'disabled' in item
+    assert "rs-nav-item-disabled" in item
+    assert "aria-disabled=\"true\"" in item
+    # Honest planned state, never implying delivered UI.
+    assert "Coming soon" in item
+    assert "Delivered" not in item
+
+
+def test_sidebar_intelligence_is_disabled_and_research():
+    """Intelligence is research: shown, disabled, non-clickable."""
+    body = client.get("/results").text
+    item = _extract_nav_item(body, "intelligence")
+    assert item is not None
+    assert 'disabled' in item
+    assert "rs-nav-item-disabled" in item
+    assert "Research" in item
+
+
+def test_sidebar_active_state_uses_semantic_current():
+    """The canonical default (Overall) exposes active state via aria-current."""
+    body = client.get("/results").text
+    overall = _extract_nav_item(body, "overall")
+    assert overall is not None
+    assert 'aria-current="page"' in overall
+    assert "rs-nav-item-active" in overall
+    # Only one live item may carry the active marker.
+    assert body.count('aria-current="page"') == 1
+
+
+def test_sidebar_disabled_items_have_no_hover_implication():
+    css = (STATIC_DIR / "results-shell.css").read_text(encoding="utf-8")
+    # Disabled treatment must not imply navigation: no pointer-events hover affordance.
+    assert ".rs-nav-item-disabled" in css
+    # Active state is conveyed by more than colour alone (class + aria-current).
+    assert "rs-nav-item-active" in css
+    assert "aria-current" in css
+
+
+def test_sidebar_layout_uses_grid_and_sticky():
+    css = (STATIC_DIR / "results-shell.css").read_text(encoding="utf-8")
+    assert "grid-template-columns" in css
+    assert ".rs-sidebar" in css
+    assert ".rs-main" in css
+
+
+def test_sidebar_narrow_viewport_has_no_horizontal_overflow_rule():
+    css = (STATIC_DIR / "results-shell.css").read_text(encoding="utf-8")
+    # Narrow viewport collapses the fixed sidebar to a reachable rail.
+    assert re.search(r"@media \(max-width:\s*820px\)", css) is not None
+    assert ".rs-nav-item" in css
+
+
+def _extract_nav_item(body, view):
+    """Return the raw <button>...</button> markup for a given data-view item."""
+    pattern = re.compile(
+        r'<button[^>]*data-view="%s".*?</button>' % re.escape(view),
+        re.DOTALL,
+    )
+    m = pattern.search(body)
+    return m.group(0) if m else None
 
 
 def test_shell_uses_dark_theme_and_no_light_toggle():

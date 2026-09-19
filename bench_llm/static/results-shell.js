@@ -14,23 +14,31 @@
     "use strict";
 
     // -----------------------------------------------------------------------
-    // Tab navigation (shared Results nav)
+    // Sidebar navigation (shared Results nav)
+    // Live dimensions are keyboard-reachable buttons; future/not-delivered
+    // dimensions (Context, Intelligence) carry the rs-nav-item-disabled class and a
+    // native `disabled` attribute so they never receive clicks or keyboard focus.
     // -----------------------------------------------------------------------
-    var tabs = Array.prototype.slice.call(
-        document.querySelectorAll(".rs-tab[role='tab']")
+    var items = Array.prototype.slice.call(
+        document.querySelectorAll(".rs-nav-item")
     );
     var views = {};
-    tabs.forEach(function (tab) {
-        var id = tab.getAttribute("aria-controls");
-        if (id) { views[id] = document.getElementById(id); }
+    items.forEach(function (item) {
+        var id = item.getAttribute("data-view");
+        if (id) { views["view-" + id] = document.getElementById("view-" + id); }
     });
 
     function activateView(viewId) {
-        // Toggle tab selected state.
-        tabs.forEach(function (tab) {
-            var on = tab.getAttribute("aria-controls") === viewId;
-            tab.setAttribute("aria-selected", on ? "true" : "false");
-            if (on) { tab.classList.add("rs-active"); } else { tab.classList.remove("rs-active"); }
+        // Mark the active live nav item: aria-current="page" + emphasis class.
+        items.forEach(function (item) {
+            var on = item.getAttribute("data-view") === viewId;
+            if (on) {
+                item.setAttribute("aria-current", "page");
+                item.classList.add("rs-nav-item-active");
+            } else {
+                item.removeAttribute("aria-current");
+                item.classList.remove("rs-nav-item-active");
+            }
         });
         // Toggle view visibility.
         Object.keys(views).forEach(function (key) {
@@ -51,11 +59,15 @@
         };
     }
 
-    tabs.forEach(function (tab) {
-        tab.addEventListener("click", function () {
-            var viewId = tab.getAttribute("aria-controls");
+    items.forEach(function (item) {
+        item.addEventListener("click", function () {
+            // Disabled / not-yet-delivered dimensions never navigate.
+            if (item.classList.contains("rs-nav-item-disabled") || item.hasAttribute("disabled")) {
+                return;
+            }
+            var viewId = item.getAttribute("data-view");
             if (viewId) {
-                activateView(viewId);
+                activateView("view-" + viewId);
                 // Lazily load a view's data the first time it is opened.
                 ensureLoaded(viewId);
             }
