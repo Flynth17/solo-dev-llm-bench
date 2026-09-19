@@ -6,6 +6,42 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
+## ACTIVE
+
+### RM-26-AA-0013 — Multi-model comparison view
+
+Side-by-side comparison of exactly two selectable model/configurations across every available benchmark dimension (Standard Speed, Workflow/Agentic, Context once delivered, Intelligence once delivered), plus config/quantization transparency. Compares only dimensions that are valid for each subject; missing / unsupported / N/A is preserved as a gap and never coerced to zero. Shows/hides unsuccessful runs where useful, keeps validity/failure state visible, and preserves evidence drill-down (L0→L1→L2) into the underlying run. Ships incrementally: supports currently delivered dimensions first and extends once Context and Intelligence are delivered — it does not depend on AI Intelligence to ship Speed/Workflow/Context comparison. Includes exportable scorecards (Markdown, image/JPEG, PDF). The unified Results UI foundation underpins this surface; frontend performs no scoring or dimension recomputation.
+
+#### Subtasks
+
+- [x] ST-001 — Verify comparison read-model/API contract
+- [ ] ST-002 — Establish two-subject comparison selection flow
+- [ ] ST-003 — Implement model/config identity comparison header
+- [ ] ST-004 — Implement Speed side-by-side comparison
+- [ ] ST-005 — Implement Workflow side-by-side comparison
+- [ ] ST-006 — Implement Context side-by-side comparison
+- [ ] ST-007 — Preserve N/A, validity, failures and unsuccessful-run controls
+- [ ] ST-008 — Implement evidence drill-down from comparison
+- [ ] ST-009 — Implement scorecard export (Markdown / JPEG / PDF)
+- [ ] ST-010 — Accessibility, responsive behaviour, tests and browser acceptance
+- [ ] ST-011 — Documentation, acceptance table and roadmap closure
+
+#### Product contract
+
+- Initial subject count: exactly two comparison subjects. A subject is a model/configuration identity, not merely a display-name string.
+- Dimensions: compare only delivered dimensions that are valid for each subject (Speed, Workflow, Context). Intelligence is not required.
+- Missing values: N/A remains N/A; missing data never becomes zero; unsupported stays distinguishable.
+- Validity: show valid / invalid / failed / unsupported / unavailable where authoritative data supports it.
+- Unsuccessful runs: provide show/hide for unsuccessful runs; they are not hidden from evidence entirely.
+- Evidence traceability: comparison summaries must drill down to authoritative underlying evidence (L0→L1→L2).
+- Composite: no composite score, no winner, no arbitrary weights; comparison is dimension-by-dimension.
+- Export: scorecard export remains part of this item — Markdown, JPEG/image, PDF — reflecting the same authoritative displayed data.
+
+- Category: product
+- Depends on: RM-26-AA-0016
+- Updated: 2026-09-19T17:15:00Z
+- Legacy ID: multi-model-comparison-view; scorecard-export
+
 ## FUTURE
 
 ### RM-26-AA-0010 — AI Intelligence benchmark family
@@ -24,15 +60,6 @@ Investigate streaming token-by-token results and live metrics (TTFT / throughput
 - Category: research
 - Updated: 2026-09-14T20:00:00Z
 - Legacy ID: streaming-research
-
-### RM-26-AA-0013 — Multi-model comparison view
-
-Side-by-side comparison of exactly two selectable model/configurations across every available benchmark dimension (Standard Speed, Workflow/Agentic, Context once delivered, Intelligence once delivered), plus config/quantization transparency. Compares only dimensions that are valid for each subject; missing / unsupported / N/A is preserved as a gap and never coerced to zero. Shows/hides unsuccessful runs where useful, keeps validity/failure state visible, and preserves evidence drill-down (L0→L1→L2) into the underlying run. Ships incrementally: supports currently delivered dimensions first and extends once Context and Intelligence are delivered — it does not depend on AI Intelligence to ship Speed/Workflow/Context comparison. Includes exportable scorecards (Markdown, image/JPEG, PDF). The unified Results UI foundation underpins this surface; frontend performs no scoring or dimension recomputation.
-
-- Category: product / research
-- Depends on: RM-26-AA-0016
-- Updated: 2026-09-14T20:00:00Z
-- Legacy ID: multi-model-comparison-view; scorecard-export
 
 ### RM-26-AA-0019 — Composite scoring contract design
 
