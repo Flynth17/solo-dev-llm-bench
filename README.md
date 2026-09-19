@@ -28,7 +28,7 @@ This is **not** a model-quality evaluator, a cloud service, or a universal intel
 |--------|--------|--------------|
 | **Standard Speed** | ✅ DELIVERED | Local-model execution performance at fixed context points (8K / 16K / 32K): TTFT, full-prefill throughput, generation throughput. |
 | **Workflow** | ✅ DELIVERED | Deterministic developer-workflow correctness/reliability — 166 checks across 5 suites, no LLM judge. Not a general-intelligence score. |
-| **Context** | 🧩 PLANNED (not implemented) | How quality and performance degrade as usable context grows (up to ~240K where supported). |
+| **Context** | ✅ DELIVERED | How model capability degrades as usable context grows (15K/30K/60K/120K/180K/240K where supported): quality retention + degradation curve, baseline/reference point, unsupported/gap states and L0→L1→L2 evidence drill-down. Benchmark family (RM-26-AA-0009) plus the degradation Results UI (RM-26-AA-0018). |
 | **AI Intelligence** | 🔬 RESEARCH / PLANNED (not implemented) | A genuinely discriminative capability benchmark for cases where Workflow saturates. Research item only — no design finalized. |
 
 Never treat a *planned* family as available functionality.
@@ -83,13 +83,14 @@ A **deterministic** developer-workflow correctness/reliability benchmark. There 
 
 ---
 
-## Context — PLANNED · not implemented
+## Context — DELIVERED
 
-> ⚠️ **Planned only.** No runner, API, persistence, or result UI exists today. Do not rely on it.
+> ✅ **Delivered.** The benchmark family (RM-26-AA-0009) and the degradation Results UI
+> (RM-26-AA-0018) are implemented. Unsupported points persist as null-scored gaps, never rescaled.
 
 Roadmap intent: measure how model quality and performance change as usable context grows, at points **15K / 30K / 60K / 120K / 180K / 240K where supported**. The focus is **quality retention and performance degradation** as context increases (TTFT/prefill/degradation growth, context-capacity limits).
 
-Unsupported context points would be shown as gaps — scores are never rescaled to hide them. This family underpins a future multi-model side-by-side comparison view.
+Unsupported context points are shown as gaps — scores are never rescaled to hide them. The Results UI surfaces each point's gradeable status, an L0→L1→L2 evidence drill-down, and a supported/unsupported/**missing**/**invalid**/**failed** coverage rollup (N/A is never coerced to zero). This family underpins a future multi-model side-by-side comparison view.
 
 ---
 
@@ -170,7 +171,7 @@ Three distinct result surfaces, each owned by one benchmark family (there is no 
 | `/speed/results/{run_id}` | Standard Speed | Detail for a single run by context point (8K/16K/32K). |
 | `/v2/results/{run_id}` | Workflow | Detail for a single Workflow run by suite and check. |
 
-Delivered now: the unified Results shell, dark visual system, shared navigation/modules, and L0→L1→L2 convention. **Not yet delivered:** Context-degradation Results UI (RM-26-AA-0018), AI Intelligence Results (research), multi-model comparison view, and any Overall/composite score.
+Delivered now: the unified Results shell, dark visual system, shared navigation/modules, and L0→L1→L2 convention. **Not yet delivered:** AI Intelligence Results (research), multi-model comparison view, and any Overall/composite score. The Context-degradation Results UI (RM-26-AA-0018) is now delivered; see below.
 
 ---
 
@@ -179,7 +180,7 @@ Delivered now: the unified Results shell, dark visual system, shared navigation/
 - **Configuration-dependent:** numbers depend on your specific model, quantization, hardware, LM Studio settings, and context size. Do not compare results across materially different configurations without care.
 - **Standard Speed uses fixed points** (8K / 16K / 32K); it measures performance, never correctness or intelligence.
 - **Workflow is deterministic correctness**, not a general-intelligence score — strong models can saturate it.
-- **Context is not yet delivered** (planned).
+- **Context is delivered** (benchmark family RM-26-AA-0009 + degradation Results UI RM-26-AA-0018); unsupported points remain null-scored gaps, never rescaled.
 - **AI Intelligence is not yet delivered** (research/planned) — do not treat it as available.
 - **Windows-focused**; untested on macOS/Linux.
 

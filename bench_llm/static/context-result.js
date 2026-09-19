@@ -31,7 +31,7 @@
 
     // --- state fragments ---------------------------------------------------
     function hide() {
-        var ids = ["cr-loading", "cr-error", "cr-identity", "cr-points", "cr-curve"];
+        var ids = ["cr-loading", "cr-error", "cr-identity", "cr-coverage", "cr-points", "cr-curve"];
         ids.forEach(function (id) {
             var node = document.getElementById(id);
             if (node) { node.classList.add("hidden"); }
@@ -117,6 +117,14 @@
                 tdState.appendChild(reason);
             }
             row.appendChild(tdState);
+
+            // L2 evidence drill-down (ST-007): native <details> is semantic and
+            // keyboard-operable without JS. Facts are rendered verbatim from the
+            // authoritative read-model evidence -- never re-derived or grouped by a
+            // frontend rule that could conflict with it. Colour marks pass/fail
+            // only; the word label + symbol are always present too.
+            row.appendChild(buildEvidenceCell(p));
+
             body.appendChild(row);
         });
     }
@@ -321,6 +329,145 @@
             metricCard("Degradation from baseline", degrVal, degrSub, degrDir);
     }
 
+    // --- point coverage rollup (ST-006) ------------------------------------
+    // Categorises Context points into AUTHORITATIVE states so the categories stay
+    // distinct at a glance: supported / unsupported(capacity) / missing(no run
+    // record) / invalid(unusable answer) / failed(operational). This is pure
+    // presentation aggregation of per-point status + context_points_contract --
+    // no scoring, no recomputation, nothing coerced to zero. Unknown statuses are
+    // bucketed separately (and only shown when present) so the rollup never drops
+    // or mislabels a point.
+    function computeCoverage(data) {
+        var points = data.points || [];
+        var supported = 0, unsupported = 0, invalid = 0, failed = 0, other = 0;
+        var byRequested = {};
+        var unknownStatuses = {};
+        points.forEach(function (p) {
+            byRequested[p.requested_context_tokens] = true;
+            switch (p.status) {
+                case "success": supported++; break;
+                case "unsupported": unsupported++; break;
+                case "failed": failed++; break;
+                case "extraction_failure":
+                case "malformed": invalid++; break;
+                default:
+                    other++;
+                    if (p.status != null) { unknownStatuses[String(p.status)] = true; }
+                    break;
+            }
+        });
+
+        // Missing = contract points with no run record at all. Distinct from
+        // unsupported, which is a capacity limit on a point that WAS attempted.
+        var contract = Array.isArray(data.context_points_contract) ? data.context_points_contract : [];
+        var missing = 0;
+        contract.forEach(function (req) {
+            if (!byRequested[req]) { missing++; }
+        });
+
+        return {
+            supported: supported,
+            unsupported: unsupported,
+            missing: missing,
+            invalid: invalid,
+            failed: failed,
+            other: other,
+            unknownStatuses: Object.keys(unknownStatuses),
+            contractTotal: contract.length
+        };
+    }
+
+    function renderCoverage(data) {
+        var body = document.getElementById("cr-coverage-body");
+        if (!body) { return; }
+        var c = computeCoverage(data);
+
+        function cell(cls, count, label, hint) {
+            return '<div class="cr-cov-cell ' + cls + '">' +
+                "<span class='cr-cov-count'>" + count + "</span>" +
+                "<span class='cr-cov-label'>" + esc(label) + "</span>" +
+                (hint ? "<span class='cr-cov-hint'>" + esc(hint) + "</span>" : "") +
+                "</div>";
+        }
+
+        var cells =
+            cell("cr-cov-supported", c.supported, "Supported", "Gradeable") +
+            cell("cr-cov-unsupported", c.unsupported, "Unsupported", "Above capacity") +
+            cell("cr-cov-missing", c.missing, "Missing", c.contractTotal ? "No run record" : "") +
+            cell("cr-cov-invalid", c.invalid, "Invalid", "Unusable answer") +
+            cell("cr-cov-failed", c.failed, "Failed", "Operational");
+
+        if (c.other > 0) {
+            cells += cell("cr-cov-other", c.other, "Other", c.unknownStatuses.join(", "));
+        }
+        if (!c.contractTotal) {
+            cells += "<p class='cr-note'>Contract points unknown; coverage derived from recorded points only.</p>";
+        }
+
+        body.innerHTML = "<div class='cr-coverage cr-cov-compact'>" + cells + "</div>";
+    }
+
+    // --- L2 evidence drill-down (ST-007) -----------------------------------
+    // Traces a measured Context point back to its authoritative per-fact evidence.
+    // Renders point.evidence verbatim; empty evidence surfaces honestly as "No
+    // per-fact evidence recorded" rather than inventing results. Telemetry is
+    // shown only when present, also verbatim.
+    function buildEvidenceCell(point) {
+        var ev = Array.isArray(point.evidence) ? point.evidence : [];
+        var passedCount = 0;
+        ev.forEach(function (f) { if (f && f.passed) { passedCount++; } });
+
+        var summaryText = ev.length
+            ? "Evidence (— " + String(ev.length) + " facts, " + String(passedCount) + " pass)"
+            : "No evidence";
+
+        var inner;
+        if (!ev.length) {
+            inner = "<p class='cr-ev-empty'>No per-fact evidence recorded for this point.</p>";
+        } else {
+            var parts = [];
+            parts.push('<table class="cr-ev-table" aria-label="Authoritative evidence for ' + esc(String(point.context_point)) + '">');
+            parts.push('<thead><tr><th scope="col">Fact</th><th scope="col">Expected</th><th scope="col">Actual</th><th scope="col">Result</th></tr></thead>');
+            parts.push('<tbody>');
+            ev.forEach(function (f) {
+                var passed = !!(f && f.passed);
+                var resultCls = passed ? "cr-ev-pass" : "cr-ev-fail";
+                var actualText = (f.actual == null || f.actual === "") ? "<span class='cr-na'>\u2014</span>" : esc(String(f.actual));
+                parts.push('<tr>');
+                var label = resultLabelFor(passed);
+                parts.push("<td>" + esc(String(f.key)) + "</td>");
+                parts.push("<td>" + esc(String(f.expected)) + "</td>");
+                parts.push("<td>" + actualText + "</td>");
+                parts.push("<td class='cr-ev-result'><span class='" + resultCls + "' aria-hidden='true'>" + (passed ? "\u2713" : "\u2717") + "</span> " +
+                    "<span class='cr-ev-resultlabel' role='img' aria-label='Result: " + esc(label) + "'>" + label + "</span></td>");
+                parts.push("</tr>");
+            });
+            parts.push("</tbody></table>");
+
+            // Telemetry (verbatim), only when present -- reinforces L2 traceability.
+            var tel = point.telemetry && typeof point.telemetry === "object" ? point.telemetry : null;
+            if (tel) {
+                var keys = Object.keys(tel).filter(function (k) { return tel[k] != null; });
+                if (keys.length) {
+                    parts.push("<div class='cr-ev-tel'><span class='cr-ev-tel-label'>Telemetry</span>");
+                    keys.forEach(function (k) {
+                        parts.push("<div class='cr-ev-tel-item'><span class='cr-ev-tel-key'>" + esc(String(k)) + "</span>: " +
+                            "<span class='cr-ev-tel-val'>" + esc(String(tel[k])) + "</span></div>");
+                    });
+                    parts.push("</div>");
+                }
+            }
+            inner = parts.join("");
+        }
+
+        return el("td", "cr-ev-cell",
+            "<details class='cr-evidence'><summary>" + esc(summaryText) + "</summary>" + inner + "</details>");
+    }
+
+    function resultLabelFor(passed) {
+        return passed ? "Pass" : "Fail";
+    }
+
     // --- render run identity + per-point data (available state) ------------
     function renderAvailable(data) {
         hide();
@@ -374,10 +521,14 @@
         // Key metrics (ST-005): baseline / retention / degradation figures.
         renderMetrics(data);
 
+        // Point coverage rollup (ST-006): supported / unsupported / missing /
+        // invalid / failed -- kept distinct, derived authoritatively.
+        renderCoverage(data);
+
         // Degradation / retention curve (ST-004).
         buildCurve(data);
 
-        show(["cr-loading" /* keep hidden */, "cr-identity", "cr-points", "cr-metrics", "cr-curve"]);
+        show(["cr-loading" /* keep hidden */, "cr-identity", "cr-coverage", "cr-points", "cr-metrics", "cr-curve"]);
         var loading = document.getElementById("cr-loading");
         if (loading) { loading.classList.add("hidden"); }
     }

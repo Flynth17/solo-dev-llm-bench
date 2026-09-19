@@ -4,31 +4,6 @@ Focused local-LLM benchmark with four benchmark families: **Standard Speed**, **
 
 Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derived from `TODO` in document order and is never stored. Identifiers `RM-26-AA-NNNN` are immutable identities only; they do not encode status, priority, hierarchy, or execution order. Legacy Acts/slugs are preserved as metadata, not as canonical keys.
 
-## ACTIVE
-
-### RM-26-AA-0018 — Context degradation Results UI
-
-Results surface for the Context benchmark family's degradation signal. Distinct from, and downstream of, RM-26-AA-0009 (the benchmark must exist before this UI can consume authoritative results). Scope: context-size progression, degradation/drift curve, baseline/reference point, unsupported/gap states, validity/failure states, individual run/evidence drill-down, and model/config transparency. Consumes the Context read-model output through the unified Results foundation; does not define or hard-code benchmark design (e.g. target context points) here — that is owned by RM-26-AA-0009. N/A/unsupported never coerced to zero.
-
-- Category: product
-- Depends on: RM-26-AA-0016, RM-26-AA-0009
-- Documentation: required
-- Updated: 2026-09-19T15:03:35Z
-- Legacy ID: context-degradation-results-ui
-
-#### Subtasks
-
-- [x] ST-001 — Verify Context read-model and API contract
-- [x] ST-002 — Enable Context navigation and establish the Context Results pane
-- [x] ST-003 — Render model/config identity and Context benchmark summary
-- [x] ST-004 — Implement the context degradation / retention curve
-- [x] ST-005 — Present baseline, retention and degradation metrics
-- [ ] ST-006 — Implement unsupported, gap, invalid and failure-state presentation
-- [ ] ST-007 — Implement L0 → L1 → L2 Context evidence drill-down
-- [ ] ST-008 — Complete filters, accessibility and responsive behaviour
-- [ ] ST-009 — Add automated tests and direct-CLI browser acceptance
-- [ ] ST-010 — Update documentation, validate acceptance and close RM-26-AA-0018
-
 ## TODO
 
 ## FUTURE
@@ -86,6 +61,55 @@ Results UI for the AI Intelligence benchmark family. Purely downstream: cannot b
 - Legacy ID: intelligence-results-integration
 
 ## DONE
+
+### RM-26-AA-0018 — Context degradation Results UI
+
+Delivered. Results surface for the Context benchmark family's degradation signal, rendered through the unified Results foundation (RM-26-AA-0016). Distinct from, and downstream of, RM-26-AA-0009 (the benchmark must exist before this UI can consume authoritative results). Scope: context-size progression, degradation/drift curve, baseline/reference point, unsupported/gap states, validity/failure states, individual run/evidence drill-down, and model/config transparency. Consumes the Context read-model output through the unified Results foundation; does not define or hard-code benchmark design (e.g. target context points) — that is owned by RM-26-AA-0009. N/A/unsupported never coerced to zero.
+
+- Category: product
+- Depends on: RM-26-AA-0016, RM-26-AA-0009
+- Documentation: required
+- Updated: 2026-09-19T17:05:00Z
+- Legacy ID: context-degradation-results-ui
+
+#### Subtasks
+
+- [x] ST-001 — Verify Context read-model and API contract
+- [x] ST-002 — Enable Context navigation and establish the Context Results pane
+- [x] ST-003 — Render model/config identity and Context benchmark summary
+- [x] ST-004 — Implement the context degradation / retention curve
+- [x] ST-005 — Present baseline, retention and degradation metrics
+- [x] ST-006 — Implement unsupported, gap, invalid and failure-state presentation
+- [x] ST-007 — Implement L0 → L1 → L2 Context evidence drill-down
+- [x] ST-008 — Complete filters, accessibility and responsive behaviour
+- [x] ST-009 — Add automated tests and direct-CLI browser acceptance
+- [x] ST-010 — Update documentation, validate acceptance and close RM-26-AA-0018
+
+#### Acceptance
+
+| Subtask | Acceptance criterion | Verification |
+|---------|----------------------|--------------|
+| ST-001 | UI consumes authoritative Context read model; no hardcoded benchmark design (target points owned by RM-26-AA-0009) | `test_context_result_page.py`; architecture.md §5.3 |
+| ST-002 | Context navigation enabled; Context Results pane established and reachable from the unified shell nav | app-shell.js nav chip `rs-chip-delivered` |
+| ST-003 | Model/config identity + Context benchmark summary rendered | identity block + summary module |
+| ST-004 | Degradation/retention curve plotted over supported points only; no values invented for non-measured points | context-result.js curve render |
+| ST-005 | Baseline, retention and degradation metric cards present | metric cards |
+| ST-006 | unsupported / missing(gap) / invalid / failed kept distinct; N/A ≠ 0, missing ≠ unsupported; curve + metric cards never invent values for non-measured points | coverage rollup + `test_unsupported_point_is_na_not_zero` |
+| ST-007 | Every plotted/measured point traceable L0 model/version → L1 config/quantization → L2 run/evidence; no frontend grouping that conflicts with the read model | L0/L1/L2 evidence column + `test_read_model_surfaces_evidence_verbatim_for_drill_down` |
+| ST-008 | Useful Context filters; keyboard navigation + focus-visible; semantic controls; chart meaning not dependent on colour alone; responsive down to narrow widths | context-result.css `:focus-visible`; filter/aria markup asserted in tests |
+| ST-009 | Automated tests pass; direct-CLI browser acceptance clean | 6/6 pass; fast gate shows zero new failures attributable to RM-26-AA-0018 |
+| ST-010 | README.md, architecture.md, ROADMAP.md updated; this acceptance table; RM moved ACTIVE → DONE | this entry + doc edits |
+
+#### Evidence
+
+- `bench_llm/static/context-result.html` — Context Results pane: identity block, benchmark summary, degradation-curve canvas, metric cards, coverage rollup (supported / unsupported / **missing** / invalid / failed) and an L0→L1→L2 per-point evidence column
+- `bench_llm/static/context-result.js` — consumes `/api/context/runs/{run_id}` read model; renders a supported-only degradation curve (no invented values), coverage rollup via `computeCoverage` (`missing` = contract points with no run record, distinct from `unsupported` capacity limit), and L0→L1→L2 evidence drill-down through native `<details>`; formats only, performs no client-side scoring or dimension recomputation
+- `bench_llm/static/context-result.css` — dark visual system ("dark mode or nothing", no light/dark toggle); explicit `:focus-visible` on every interactive control; responsive layout for narrow widths
+- `bench_llm/src/v2_context_read_model.py` — authoritative per-point projection with baseline/degradation over authoritative scores and ownership-fingerprint integrity checks (no cross-model evidence leakage)
+- `bench_llm/tests/test_context_result_page.py` — acceptance suite: page serves with persistent sidebar; evidence + coverage markup present; ST-006/ST-007 logic asserted; read model surfaces contract + counts for coverage and verbatim L2 evidence for drill-down; unsupported point is N/A not zero
+- `docs/architecture.md` §5.3 (Context — DELIVERED, Results UI bullet), §9 routing table (Context row) and §12 extension points updated; `README.md` Context section + results table updated to delivered
+- browser acceptance: `/context/results/{run_id}` renders the degradation curve, identity, metrics, coverage rollup and L0→L1→L2 evidence drill-down; keyboard-navigable with visible focus; no console errors during interaction
+- measured: fast gate 653 passed / 40 deselected; new test file 6/6 pass; zero NEW failures attributable to RM-26-AA-0018. Five pre-existing/unrelated baseline failures remain (not fixed here, outside ST-001–ST-010 scope): 3 stale context-sidebar assertions that predate this session (`test_app_shell.py::test_context_is_coming_soon_and_disabled`, `test_results_shell_route.py::test_navigation_status_chips_reflect_reality`, `test_results_shell_route.py::test_sidebar_context_is_disabled_and_planned`) and 2 speed-suite isolation failures from uncommitted `v2_speed_*.py` WIP belonging to other Acts (`test_v2_speed_suite_runner.py::test_fixed_iterations_and_output_budget`, `test_v2_speed_suite_runner.py::test_run_speed_persists_three_completed_rows_with_metrics`).
 
 ### RM-26-AA-0017 — Speed & Workflow Results experience
 

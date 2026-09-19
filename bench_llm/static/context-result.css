@@ -134,3 +134,20 @@
 .cr-metric .cr-dir-down { color: #ffb4b4; }
 .cr-metric .cr-dir-flat { color: #e6c56b; }
 @media (max-width: 720px) { .cr-metrics { grid-template-columns: 1fr; } }
+
+/* --- Point coverage rollup (ST-006) --------------------------------------
+     Distinct cells keep supported / unsupported / missing / invalid / failed
+     distinct. Colour conveys category only -- the word label is always shown
+     too, so meaning never depends on colour alone. */
+.cr-coverage { display: grid; gap: 0.75rem; }
+.cr-coverage.cr-cov-compact { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.cr-cov-cell { border: 1px solid #1e3350; border-radius: 8px; background: #0c1626; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.15rem; }
+.cr-cov-count { font-size: 1.5rem; font-weight: 800; color: #e8eef6; line-height: 1; font-variant-numeric: tabular-nums; }
+.cr-cov-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #9fb0c8; }
+.cr-cov-hint { font-size: 0.74rem; color: #7f93af; }
+.cr-cov-supported .cr-cov-label { color: #8ee0a8; }
+.cr-cov-unsupported .cr-cov-label { color: #e6c56b; }
+.cr-cov-missing .cr-cov-label { color: #9fb0c8; }
+.cr-cov-invalid .cr-cov-label { color: #f0d28a; }
+.cr-cov-failed .cr-cov-label { color: #ff9d9d; }
+.cr-cov-other .cr-cov-label { color: #ffb4b4; }

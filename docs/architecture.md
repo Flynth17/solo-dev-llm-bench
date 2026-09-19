@@ -272,11 +272,17 @@ Results UI (that is RM-26-AA-0018).
 - **Launch + status:** `routes/context.py` exposes execution plumbing only (`POST /api/context/run`,
   `GET /api/context/runs/{id}/status`) plus a read-only single-run view (`GET /api/context/runs/{id}`).
   Completion is proven by a durable artifact, not a live process. A temporary result-page shell in
-  `main.py` exists only so the launcher's `result_url` deep-link resolves; the full degradation UI
-  is RM-26-AA-0018.
+  `main.py` exists only so the launcher's `result_url` deep-link resolves.
+- **Results UI (RM-26-AA-0018, DELIVERED):** `bench_llm/static/context-result.html` +
+  `context-result.js`/`.css` render the degradation curve, model/config identity, baseline/
+  retention/degradation metrics, a supported/unsupported/**missing**/**invalid**/**failed** coverage
+  rollup (N/A and unsupported are never coerced to zero), and an L0→L1→L2 per-point evidence
+  drill-down. It consumes the Context read model through the unified Results shell contract; it
+  formats and drills down only — no benchmark scoring or dimension recomputation.
 - **CLI:** `python -m src context-suite` runs the family as a fresh process (see §3).
 - **Tests:** `tests/test_context_corpus.py`, `tests/test_context_suite_runner.py`,
-  `tests/test_context_read_model.py`, `tests/test_context_route.py`. Full suite: 623 passed.
+  `tests/test_context_read_model.py`, `tests/test_context_route.py`,
+  `tests/test_context_result_page.py`. Full suite: 623 passed.
 
 ### 5.4 AI Intelligence — RESEARCH · not implemented
 
@@ -423,6 +429,7 @@ mixed-Results product:
 | Single run detail by point | `/speed/results/{run_id}` → `speed-result.html` | `/api/speed/runs/{run_id}` (`routes/v2_speed.py`) | Standard Speed |
 | Single run detail by suite/check | `/v2/results/{run_id}` → `v2-result.html` | `/api/v2/results/{run_id}` (`routes/v2_results.py`) | Workflow |
 | Ranking / aggregation grid | `/results` → `results.html` (`results-shell.js`) | `/api/ranking*` (`routes/ranking.py`) | Speed + Agentic |
+| Context degradation curve | `/context/results/{run_id}` → `context-result.html` (`context-result.js`) | `/api/context/runs/{run_id}` (`routes/context.py`) | Context |
 
 All data comes from validated read models; static pages derive `run_id` from the URL and fetch it.
 No per-run HTML is generated server-side. The unified Results shell (RM-26-AA-0016) renders the
@@ -431,8 +438,9 @@ cards/modules and collapsible sections, L0→L1→L2 drill-down conventions, and
 N/A/invalid-state contract. The frontend formats and drills down only — it performs no benchmark
 scoring or dimension recomputation, and the ranking read model stays authoritative.
 
-**Not built (planned):** Context-degradation results (RM-26-AA-0018), Intelligence results,
-multi-model comparison view, and future composite-score views have no implementation today. The
+**Not built (planned):** Intelligence results, multi-model comparison view, and future
+composite-score views have no implementation today. Context-degradation results (RM-26-AA-0018) are
+now delivered; see §5.3. The
 ranking API provides data only; it does not itself render any grid — the delivered shell consumes it
 client-side.
 
@@ -478,8 +486,8 @@ These map to roadmap items, not to current implementation:
 
 - **Context benchmark family (RM-26-AA-0009)** — DELIVERED: runner (`src/v2_context_suite_runner.py`),
   deterministic corpus (`src/context_corpus/`), atomic artifacts (`src/v2_context_artifact.py`), read
-  model (`src/v2_context_read_model.py`) and API (`src/routes/context.py`). Only the degradation Results
-  UI surface remains (RM-26-AA-0018).
+  model (`src/v2_context_read_model.py`) and API (`src/routes/context.py`), plus the delivered
+  Context-degradation Results UI (RM-26-AA-0018, see §5.3).
 - **AI Intelligence benchmark family (RM-26-AA-0010)** — discriminative capability benchmark for
   cases where Workflow saturates; requires corpus, scoring methodology, and UI before any
   implementation.

@@ -55,6 +55,22 @@
             </dl>
         </section>
 
+        <!-- Point coverage rollup (ST-006): at-a-glance categorisation of Context
+             points into AUTHORITATIVE states -- supported / unsupported(capacity)
+             / missing(no run record) / invalid(unusable answer) / failed(operational).
+             Distinct cells keep these distinct: unsupported is a capability limit,
+             missing is an absent contract point, invalid/failed are operational and
+             never read as degradation. Colour conveys category only; each cell shows
+             its word too. Derived from per-point status + context_points_contract;
+             nothing is recomputed or coerced to zero. -->
+        <section id="cr-coverage" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Point coverage</span>
+            </div>
+            <p class="cr-note">Each Context point is categorised from its authoritative per-point status. Unsupported means capacity was exceeded; missing means no run record exists for that contract point; invalid and failed are operational failures, not degradation.</p>
+            <div id="cr-coverage-body" class="cr-coverage"></div>
+        </section>
+
         <!-- Authoritative per-point table: one row per context point. Establishes the
              ordered points, baseline and retention/degradation trend from the read API.
              The visual degradation chart is delivered in a later subtask (ST-004). -->
@@ -75,6 +91,7 @@
                             <th scope="col" title="Retention vs baseline (score / baseline); dash when N/A">Retention</th>
                             <th scope="col" title="Degradation vs baseline (score - baseline); dash when N/A">Degradation</th>
                             <th scope="col" title="Point state: success / unsupported / extraction_failure / malformed / failed">State</th>
+                            <th scope="col" title="Authoritative per-fact evidence for this point (L2). Expands to show each fact's expected vs actual result.">Evidence</th>
                         </tr>
                     </thead>
                     <tbody id="cr-body"></tbody>
@@ -109,6 +126,6 @@
     <!-- app-shell.js: single source of truth for the persistent sidebar; must load
          before page-specific scripts so the nav exists and active state is set. -->
     <script src="/static/app-shell.js?v=4"></script>
-    <script src="/static/context-result.js?v=4"></script>
+    <script src="/static/context-result.js?v=8"></script>
 </body>
 </html>
