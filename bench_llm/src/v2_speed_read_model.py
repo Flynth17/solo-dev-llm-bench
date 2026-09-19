@@ -266,6 +266,118 @@ def _project_speed_point(row: dict) -> dict[str, Any]:
     }
 
 
+# --- Repeatability (Evidence-First Redesign): independent runs per point -------------
+#
+# Each SUPPORTED point persists one row per stage -- 1 cold (cache-busted full-prefill) +
+# 2 warm (warm_a / warm_b) -- tagged by speed_run_stage. The helpers below let the read
+# model relax its old "one aggregate row per point" validation, surface each run's explicit
+# provenance/validity under ``runs``, and derive the flat point summary without ever mixing
+# cold and warm: prefill stays a cold-only signal and generation is a warm-only mean.
+#
+# Legacy single-row-per-point rows (no speed_run_stage) keep their exact historical shape so
+# old evidence renders unchanged -- only when more than one stage is persisted for a point is
+# the extra ``runs`` provenance list attached.
+
+
+def _stage_of(row: dict) -> str:
+    """Return a row's repeatability stage tag (empty string for legacy/unstaged rows)."""
+    raw = row.get("speed_run_stage")
+    if isinstance(raw, str):
+        return raw.strip().lower() or ""
+    return ""
+
+
+def _project_stage_run(row: dict) -> dict[str, Any]:
+    """Project one persisted stage row into a full per-run evidence view.
+
+    Extends the flat point projection with explicit provenance (run_id + speed_run_stage),
+    the warm-run raw TTFT kept as diagnostic evidence, optional reasoning-token capture,
+    and status/state verbatim -- so downstream UIs can render successful runs by default and
+    unsuccessful ones behind an explicit toggle. Missing telemetry stays None (NOT REPORTED).
+    """
+    proj = dict(_project_speed_point(row))
+    proj["speed_run_stage"] = _stage_of(row)
+    # Explicit validity + provenance verbatim (computed ``status`` is derived); a failed or
+    # interrupted stage stays visible under this flag so the UI can render successful runs by
+    # default and unsuccessful ones behind an explicit Show-unsuccessful toggle.
+    proj["speed_point_status"] = (
+        str((row.get("speed_point_status") or "").strip().lower()) or "completed"
+    )
+    reasoning = row.get("reasoning_output_tokens")
+    proj["reasoning_output_tokens"] = (
+        reasoning if isinstance(reasoning, int) and not isinstance(reasoning, bool) else None
+    )
+    warm_ttft = row.get("warm_ttft_seconds")
+    proj["warm_ttft_seconds"] = _as_number(warm_ttft)
+    proj["run_id"] = _norm_str(row.get("run_id"))
+    return proj
+
+
+def _representative_speed_run(rows: list) -> dict:
+    """Pick the row that drives a point's flat summary.
+
+    The cold full-prefill run is preferred (it owns prefill/ttft/actual_prompt_tokens);
+    otherwise the first completed run; otherwise the first persisted row. This keeps the flat
+    summary anchored on genuine full-prefill evidence rather than a cache-reused warm sample,
+    and preserves legacy single-row behavior.
+    """
+    for r in rows:
+        if _stage_of(r) == "cold":
+            return r
+    for r in rows:
+        status = str((r.get("speed_point_status") or "").strip().lower())
+        if status == "completed":
+            return r
+    return rows[0]
+
+
+def _ordered_runs(rows: list) -> list:
+    """Order a point's runs into the canonical cold -> warm_a -> warm_b sequence."""
+    order = {"cold": 0, "warm_a": 1, "warm_b": 2}
+    return sorted(rows, key=lambda r: order.get(_stage_of(r), len(order)))
+
+
+def _has_warm_stages(rows: list) -> bool:
+    """True when the point persists at least one warm repeatability-stage run."""
+    return any(_stage_of(r) in ("warm_a", "warm_b") for r in rows)
+
+
+def _warm_only_mean(rows: list) -> Optional[float]:
+    """Warm-only mean of completed runs' generation throughput; cold decode excluded.
+
+    Never blends cold and warm. Returns None when no warm run completed so a missing value is
+    honest rather than a fabricated zero (falls back to the representative's own value in that
+    case, keeping legacy single-row data unchanged).
+    """
+    values: list[float] = []
+    for r in rows:
+        if _stage_of(r) not in ("warm_a", "warm_b"):
+            continue
+        if str((r.get("speed_point_status") or "").strip().lower()) != "completed":
+            continue
+        tps = _as_number(r.get("tokens_per_second"))
+        if isinstance(tps, (int, float)) and tps > 0:
+            values.append(float(tps))
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def _point_status(rows: list) -> str:
+    """Point-level status over all persisted stages.
+
+    Completed only when every stage is completed; an explicit single non-completed state (e.g.
+    ``unsupported``) is preserved verbatim so it is not misreported as partial; any mix of
+    successful and unsuccessful stages yields ``partial`` so unsuccessful runs remain visible as
+    diagnostic evidence behind the Show-unsuccessful toggle rather than being collapsed away.
+    """
+    statuses = [str((r.get("speed_point_status") or "").strip().lower()) or "completed" for r in rows]
+    if all(s == "completed" for s in statuses):
+        return "completed"
+    distinct = {s for s in statuses}
+    if len(distinct) == 1:
+        return next(iter(distinct))
+    return "partial"
+
+
 def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
     """Return the normalized Standard Speed result for exactly one speed run id.
 
@@ -306,12 +418,22 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
         if model_id:
             model_ids.add(model_id)
 
-    # Duplicate canonical points are not representable (one aggregate row per point).
+    # Repeatability contract: each supported point persists one independent row per stage --
+    # 1 cold + 2 warm (warm_a / warm_b) -- tagged by speed_run_stage. Multiple DISTINCT stages
+    # for the same target are expected and representable; genuine DUPLICATES (the same stage,
+    # or more than one unstaged legacy row, appearing twice for one target) indicate corrupt/
+    # mixed rows and are rejected rather than silently collapsed.
+    seen_stages: dict[Optional[int], set[str]] = {}
     for target, rows in seen_targets.items():
-        if len(rows) > 1:
-            raise SpeedReadModelIntegrityError(
-                f"run {rid!r} has duplicate rows for the {STANDARD_SPEED_CANONICAL_POINTS[target]} point"
-            )
+        stages = seen_stages.setdefault(target, set())
+        for r in rows:
+            stage = _stage_of(r)
+            if stage in stages:
+                raise SpeedReadModelIntegrityError(
+                    f"run {rid!r} has duplicate rows for the "
+                    f"{STANDARD_SPEED_CANONICAL_POINTS[target]} point at stage {stage!r}"
+                )
+            stages.add(stage)
 
     # Model identity must be consistent across every row in the run.
     if len(model_ids) > 1:
@@ -320,6 +442,13 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
         )
 
     # --- Build the canonical, ordered point list. --------------------------
+    # Each supported point persists one independent row per stage (1 cold + 2 warm). The flat
+    # point summary is projected from the representative stage (cold full-prefill first) so
+    # prefill/ttft stay a cold-only signal and generation uses a warm-only mean -- never an
+    # average that blends cold and warm. Every persisted stage is additionally exposed under
+    # ``runs`` (with speed_run_stage, telemetry and validity) so downstream UIs can show
+    # successful runs by default and unsuccessful ones behind an explicit toggle. Legacy
+    # single-row-per-point rows keep the exact historical flat shape (no ``runs`` key).
     points: list[dict[str, Any]] = []
     statuses: set[str] = set()
     for target in (8192, 16384, 32768):
@@ -328,8 +457,22 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
             # A missing canonical point is left out rather than fabricated; the
             # remaining points still render. Unsupported-but-stored points are kept.
             continue
-        statuses.add(str((rows[0].get("speed_point_status") or "").strip().lower()) or "completed")
-        points.append(_project_speed_point(rows[0]))
+        representative = _representative_speed_run(rows)
+        point = dict(_project_speed_point(representative))
+        # Flat generation is a warm-only mean of the repeatability pair (cold excluded); never
+        # blended with cold decode. Falls back to the representative value when no warm run
+        # completed, keeping legacy single-row data unchanged.
+        point["generation_tokens_per_second"] = (
+            _warm_only_mean(rows) if _has_warm_stages(rows)
+            else point.get("generation_tokens_per_second")
+        )
+        point["status"] = _point_status(rows)
+        statuses.add(point.get("status") or "completed")
+        # Provenance + validity per stage (only when more than one run is persisted for the point).
+        runs = [_project_stage_run(r) for r in _ordered_runs(rows)]
+        if len(runs) > 1:
+            point["runs"] = runs
+        points.append(point)
 
     if not points:
         raise SpeedRunNotFoundError(f"no renderable Standard Speed point for {rid!r}")

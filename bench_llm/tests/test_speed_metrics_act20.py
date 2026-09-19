@@ -14,7 +14,10 @@ from __future__ import annotations
 import pytest
 
 import src.v2_speed_suite_runner as vs
-from src.v2_speed_read_model import load_speed_run_by_id
+from src.v2_speed_read_model import (
+    SpeedReadModelIntegrityError,
+    load_speed_run_by_id,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -266,3 +269,102 @@ class TestMetricVersioning:
         by_t = {p["target_context_tokens"]: p for p in result["points"]}
         assert by_t[8192]["target_error_tokens"] is None
         assert by_t[8192]["target_error_percent"] is None
+
+
+# ---------------------------------------------------------------------------
+# Repeatability contract (Evidence-First Redesign): independent runs per point
+#
+# Each supported point now persists 1 cold + 2 warm rows tagged by speed_run_stage. The read
+# model must expose every stage's provenance/validity under ``runs``, derive the flat summary
+# without ever mixing cold and warm (prefill = cold-only, generation = warm-only mean), keep
+# legacy single-row data unchanged, and still reject genuine duplicate rows.
+#
+# No network, no real benchmark -- read-model projection only.
+# ---------------------------------------------------------------------------
+
+
+def _stage_row(target, input_tokens, output_tokens, ttft, tps,
+               stage="cold", status="completed", reasoning=None):
+    base = dict(
+        run_id="speed-xyz", model_key="m", model_display_name="m",
+        target_context_tokens=target, input_tokens=input_tokens, output_tokens=output_tokens,
+        ttft_seconds=ttft, prefill_tokens_per_second=(
+            round(input_tokens / ttft, 1) if stage == "cold" else None),
+        tokens_per_second=tps, wall_time_seconds=8.0,
+        speed_run_stage=stage, cold_or_warm="warm" if stage != "cold" else "cold",
+        speed_point_status=status,
+    )
+    if reasoning is not None:
+        base["reasoning_output_tokens"] = reasoning
+    return base
+
+
+class TestRepeatabilityRunProvenance:
+    def test_three_runs_per_point_expose_stage_provenance(self):
+        rows = [
+            _stage_row(16384, 12000, 50, 0.70, tps=100.0, stage="cold"),
+            _stage_row(16384, 12000, 50, 0.60, tps=200.0, stage="warm_a"),
+            _stage_row(16384, 12000, 50, 0.64, tps=220.0, stage="warm_b"),
+        ]
+        result = load_speed_run_by_id("speed-xyz", rows)
+        point = next(p for p in result["points"] if p["target_context_tokens"] == 16384)
+
+        # Flat summary is a cold-only prefill signal + warm-only mean generation (never blended).
+        assert point["prefill_tokens_per_second"] == round(12000 / 0.70, 1)
+        assert point["generation_tokens_per_second"] == 210.0
+        # Every persisted stage is exposed with explicit provenance and validity.
+        stages = {r["speed_run_stage"]: r for r in point["runs"]}
+        assert set(stages) == {"cold", "warm_a", "warm_b"}
+        assert all(r["run_id"] == "speed-xyz" for r in point["runs"])
+        # Cold run carries prefill throughput; warm runs keep it as diagnostic null.
+        assert stages["cold"]["prefill_tokens_per_second"] is not None
+        assert stages["warm_a"]["prefill_tokens_per_second"] is None
+        assert point["status"] == "completed"
+
+    def test_reasoning_token_capture_only_when_reported(self):
+        rows = [
+            _stage_row(16384, 12000, 50, 0.70, tps=100.0, stage="cold"),
+            _stage_row(16384, 12000, 50, 0.60, tps=200.0, stage="warm_a"),
+            _stage_row(16384, 12000, 50, 0.64, tps=220.0,
+                       stage="warm_b", reasoning=9999),
+        ]
+        point = next(p for p in load_speed_run_by_id("speed-xyz", rows)["points"]
+                     if p["target_context_tokens"] == 16384)
+        by_stage = {r["speed_run_stage"]: r for r in point["runs"]}
+        # Reported stage keeps the integer; absent stages stay null (NOT REPORTED), never fabricated.
+        assert by_stage["cold"]["reasoning_output_tokens"] is None
+        assert by_stage["warm_a"]["reasoning_output_tokens"] is None
+        assert by_stage["warm_b"]["reasoning_output_tokens"] == 9999
+
+    def test_unsuccessful_run_stays_visible_as_partial_not_collapsed(self):
+        rows = [
+            _stage_row(16384, 12000, 50, 0.70, tps=100.0, stage="cold"),
+            _stage_row(16384, 12000, 50, 0.60, tps=200.0, stage="warm_a"),
+            _stage_row(16384, 12000, 50, 0.64, tps=220.0,
+                       stage="warm_b", status="failed"),
+        ]
+        point = next(p for p in load_speed_run_by_id("speed-xyz", rows)["points"]
+                     if p["target_context_tokens"] == 16384)
+        by_stage = {r["speed_run_stage"]: r for r in point["runs"]}
+        # Warm-only mean excludes the failed stage's throughput entirely.
+        assert point["generation_tokens_per_second"] == 200.0
+        assert point["status"] == "partial"
+        # The failed run remains visible with its explicit status as diagnostic evidence.
+        assert by_stage["warm_b"]["speed_point_status"] == "failed"
+
+    def test_duplicate_stage_for_same_point_is_rejected(self):
+        rows = [
+            _stage_row(16384, 12000, 50, 0.70, tps=100.0, stage="cold"),
+            _stage_row(16384, 12000, 50, 0.60, tps=200.0, stage="cold"),
+        ]
+        with pytest.raises(SpeedReadModelIntegrityError):
+            load_speed_run_by_id("speed-xyz", rows)
+
+    def test_legacy_single_row_stays_flat_without_runs(self):
+        # Pre-redesign evidence has no speed_run_stage and one row per point -- must render
+        # exactly as before, with no extra provenance key.
+        legacy = _row(16384, 12000, 50, 0.70, tps=185.0)
+        point = next(p for p in load_speed_run_by_id("speed-xyz", [legacy])["points"]
+                     if p["target_context_tokens"] == 16384)
+        assert "runs" not in point
+        assert point["generation_tokens_per_second"] == 185.0

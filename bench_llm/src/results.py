@@ -45,6 +45,16 @@ CSV_HEADERS = [
     "context_point",
     "speed_point_status",
     "speed_metric_version",
+    # --- Standard Speed repeatability (Evidence-First Redesign): each supported point
+    #     persists one independent row per run -- 1 cold (cache-busted full-prefill) +
+    #     2 warm (warm_a / warm_b) -- tagged by speed_run_stage so cold and warm are never
+    #     averaged together. Optional reasoning-token capture (only when the backend reports
+    #     it; otherwise null/NOT REPORTED). warm_ttft_seconds preserves each warm run's raw
+    #    TTFT as diagnostic evidence without feeding the cold full-prefill derivation.
+    #     Additive, backward-safe; historical rows load as None/blank. ---
+    "speed_run_stage",
+    "reasoning_output_tokens",
+    "warm_ttft_seconds",
     # Standard Speed Suite prefill throughput, derived via the authoritative definition
     # (actual_prompt_tokens / ttft_seconds) and persisted when available. Additive,
     # backward-safe; historical rows load as None/blank.
@@ -139,6 +149,11 @@ SQLITE_COLUMNS = [
     ("context_point", "TEXT"),
     ("speed_point_status", "TEXT"),
     ("speed_metric_version", "INTEGER"),
+    # --- Standard Speed repeatability (Evidence-First Redesign): per-stage run identity +
+    #     optional reasoning-token capture + warm-run raw TTFT. Additive, backward-safe. ---
+    ("speed_run_stage", "TEXT"),
+    ("reasoning_output_tokens", "INTEGER"),
+    ("warm_ttft_seconds", "REAL"),
     ("prefill_tokens_per_second", "REAL"),
     # --- Act 7: additive metadata columns (types mirror CSV_HEADERS order) ---
     ("model_max_context", "INTEGER"),
@@ -204,6 +219,13 @@ OPTIONAL_METADATA_COLUMNS = [
     ("context_point", "TEXT"),
     ("speed_point_status", "TEXT"),
     ("speed_metric_version", "INTEGER"),
+    # --- Standard Speed repeatability (Evidence-First Redesign): per-stage run identity +
+    #     optional reasoning-token capture + warm-run raw TTFT. ALTER-migrated; None/blank
+    #     for historical rows, never fabricated. Kept here so _init_db migrates them onto any
+    #     pre-existing database schema. ---
+    ("speed_run_stage", "TEXT"),
+    ("reasoning_output_tokens", "INTEGER"),
+    ("warm_ttft_seconds", "REAL"),
     ("prefill_tokens_per_second", "REAL"),
     ("model_max_context", "INTEGER"),
     ("loaded_context", "INTEGER"),
