@@ -15,7 +15,17 @@ Side-by-side comparison of exactly two selectable model/configurations across ev
 #### Subtasks
 
 - [x] ST-001 — Verify comparison read-model/API contract
-- [ ] ST-002 — Establish two-subject comparison selection flow
+- [x] ST-002 — Establish two-subject comparison selection flow
+  - Implemented: pure composition layer `src/comparison_read_model.py` (subject catalogue +
+    `resolve_comparison`) and read-only routes `/api/comparison/subjects` and `/api/comparison?a=&b=`
+    (`src/routes/comparison.py`, registered in `src/main.py`). Subjects are keyed by base-model
+    identity + a family fingerprint/signature, never display name. Same-model/different-config
+    comparison reports Workflow as AMBIGUOUS for both (its fingerprint omits quantization) and pins
+    only the representative family AVAILABLE — never duplicates one shared run into both columns.
+    Neutral run selection: recency (`generated_at`) for Workflow/Context, deterministic `run_id`
+    fallback for Speed (no ordering field); a newer failed terminal run is not replaced by an older
+    success. State semantics preserved (missing / unsupported / in_progress). Tests:
+    `tests/test_comparison_read_model.py` (17 passing).
 - [ ] ST-003 — Implement model/config identity comparison header
 - [ ] ST-004 — Implement Speed side-by-side comparison
 - [ ] ST-005 — Implement Workflow side-by-side comparison
@@ -39,7 +49,7 @@ Side-by-side comparison of exactly two selectable model/configurations across ev
 
 - Category: product
 - Depends on: RM-26-AA-0016
-- Updated: 2026-09-19T17:15:00Z
+- Updated: 2026-09-21T09:00:00Z
 - Legacy ID: multi-model-comparison-view; scorecard-export
 
 ## FUTURE
