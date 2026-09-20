@@ -93,6 +93,8 @@ from src.benchmark import (
     resolve_loaded_instance_config,
 )
 from src.results import compute_configuration_fingerprint, classify_run_for_result
+# Run-level execution provenance (Act: reproducibility). Stdlib-only capture module.
+from src.provenance import capture_provenance as _capture_provenance
 
 # --- Reuse read-only: the shared read-only model-loaded probe. ---
 from src.v2_quality_suite_runner import verify_model_loaded
@@ -474,6 +476,16 @@ async def run_context_suite(
     fingerprint = compute_configuration_fingerprint(cfg)
     classification = classify_run_for_result(cfg)
 
+    # --- Run-level execution provenance (Act: reproducibility). Captured ONCE at
+    # benchmark start from the resolved config + a host snapshot, then attached to the
+    # run document at RUN level and inherited by every point via context_run_id. Never
+    # duplicated into per-point evidence.
+    provenance = _capture_provenance(
+        lm_studio_url=base_url,
+        model_identifier=clean_model,
+        model_config=cfg,
+    )
+
     # --- Confirm the expected model is loaded (read-only) before spending work. ---
     if model_config_override is None:
         registry = await verify_model_loaded(base_url, clean_model)
@@ -564,6 +576,7 @@ async def run_context_suite(
     document = {
         "context_run_id": rid,
         "artifact_type": _artifact.ARTIFACT_TYPE,
+        "provenance": provenance,
         "generated_at": _now_iso(),
         "model_key": cfg.get("model_key"),
         "model_display_name": clean_model,

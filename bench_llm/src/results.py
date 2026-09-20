@@ -116,6 +116,11 @@ CSV_HEADERS = [
     "kv_cache_v_quantization",
     "kv_cache_quantization_source",
     "lmstudio_instance_config_json",
+    # --- Act (reproducibility): run-level execution provenance as a JSON snapshot,
+    # captured once per run and shared across Speed/Workflow/Context families. None/
+    # blank for historical rows; never fabricated. ALTER-migrated via OPTIONAL_METADATA.
+    # ---
+    "provenance_json",
     # Deterministic V2 fingerprint + canonical/incomplete classification. These are
     # DERIVED at write time and are intentionally kept OUT of the ALTER-migrated
     # OPTIONAL_METADATA set (see _init_db derived-column handling).
@@ -204,6 +209,7 @@ SQLITE_COLUMNS = [
     ("kv_cache_v_quantization", "TEXT"),
     ("kv_cache_quantization_source", "TEXT"),
     ("lmstudio_instance_config_json", "TEXT"),
+    ("provenance_json", "TEXT"),
     ("configuration_fingerprint", "TEXT"),
     ("result_classification", "TEXT"),
 ]
@@ -278,6 +284,7 @@ OPTIONAL_METADATA_COLUMNS = [
     ("kv_cache_v_quantization", "TEXT"),
     ("kv_cache_quantization_source", "TEXT"),
     ("lmstudio_instance_config_json", "TEXT"),
+    ("provenance_json", "TEXT"),
 ]
 
 # Blank placeholder for missing values

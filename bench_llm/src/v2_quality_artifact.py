@@ -132,7 +132,7 @@ def build_run_document(aggregate: dict[str, Any], suite_results: List[Any]) -> d
         else:
             raise TypeError(f"each suite result must expose to_dict() or be a dict, got {item!r}")
 
-    return {
+    document = {
         "schema_version": SCHEMA_VERSION,
         "artifact_type": ARTIFACT_TYPE,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -146,6 +146,15 @@ def build_run_document(aggregate: dict[str, Any], suite_results: List[Any]) -> d
         # Full authoritative per-suite documents (identity + config + failures + telemetry).
         "suites": suites_out,
     }
+
+    # Run-level execution provenance (Act: reproducibility). Captured ONCE at benchmark
+    # start and attached here at the RUN level -- never duplicated into the per-suite
+    # documents above. Legacy aggregates carry no ``provenance`` key, so historical
+    # artifacts load unchanged and read-models report those fields as NOT STORED.
+    provenance = aggregate.get("provenance")
+    if isinstance(provenance, dict):
+        document["provenance"] = provenance
+    return document
 
 
 # ---------------------------------------------------------------------------

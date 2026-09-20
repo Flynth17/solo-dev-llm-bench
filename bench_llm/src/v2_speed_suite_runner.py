@@ -53,6 +53,9 @@ import src.standard_run_guard as standard_run_guard  # noqa: E402
 # Canonical benchmark reasoning rule: throughput metrics are measured with reasoning
 # explicitly OFF (identical to run_benchmark's payload and the legacy speed path).
 from src.results import BENCHMARK_REASONING_MODE  # noqa: E402
+# Run-level execution provenance (Act: reproducibility). Stdlib-only capture module;
+# captured once per run and attached to every row of that run via the shared identity.
+from src.provenance import capture_provenance as _capture_provenance, to_json as _provenance_to_json
 
 # Migrated from the retired legacy-Evaluation ``evaluation_prompts`` module (Act 24).
 # Retained here as the sole active consumer of this lightweight char/token estimator so no
@@ -496,6 +499,39 @@ async def run_speed_suite(
         quantization=quantization, loaded_context=loaded_context,
         model_max_context=model_max_context, inst=inst, hardware_label=hardware_label,
     )
+
+    # --- Run-level execution provenance (Act: reproducibility). Captured ONCE for the
+    # whole suite and attached to every row of this run via the shared identity dict.
+    # Hardware/runtime/model/inference are captured once -- never recomputed per point or
+    # per stage. The same JSON-native object is what Speed's flat store persists under
+    # ``provenance_json``; Workflow/Context attach the nested object directly.
+    try:
+        prov_model_config = {
+            "model_key": clean_model,
+            "model_quantization": quantization,
+            "loaded_context": loaded_context,
+            "model_max_context": model_max_context,
+            "reasoning_mode": BENCHMARK_REASONING_MODE,
+            "flash_attention": inst.get("flash_attention"),
+            "offload_kv_cache_to_gpu": inst.get("offload_kv_cache_to_gpu"),
+            "eval_batch_size": inst.get("eval_batch_size"),
+            "physical_batch_size": inst.get("physical_batch_size"),
+            "parallel": inst.get("parallel"),
+            "num_experts": inst.get("num_experts"),
+            "speculative_draft_mtp": inst.get("speculative_draft_mtp"),
+            "speculative_draft_simple": inst.get("speculative_draft_simple"),
+            "speculative_draft_model": inst.get("speculative_draft_model") or None,
+        }
+        identity["provenance_json"] = _provenance_to_json(
+            _capture_provenance(
+                lm_studio_url=base_url,
+                model_identifier=clean_model,
+                model_config=prov_model_config,
+            )
+        )
+    except Exception as exc:  # pragma: no cover - defensive; provenance must not abort a run
+        print(f"warning: failed to capture speed run provenance: {exc}", file=sys.stderr)
+        identity["provenance_json"] = None
 
     points: list[SpeedPointResult] = []
     for point in CANONICAL_CONTEXT_POINTS:

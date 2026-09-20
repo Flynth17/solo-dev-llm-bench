@@ -99,6 +99,9 @@ from src.benchmark import (
     resolve_loaded_instance_config,
 )
 from src.results import compute_configuration_fingerprint, classify_run_for_result
+# Run-level execution provenance (Act: reproducibility). Stdlib-only capture module;
+# importing it cannot introduce benchmark-execution side effects.
+from src.provenance import capture_provenance as _capture_provenance
 
 # Chat endpoint path on the LM Studio base URL (identical to the live executor).
 CHAT_ENDPOINT = "/api/v1/chat"
@@ -905,6 +908,18 @@ async def run_v2_run(
             f"expected model {model!r} is not loaded in LM Studio at {lm_studio_url}"
         )
 
+    # --- Run-level execution provenance (Act: reproducibility). Captured ONCE at
+    # benchmark start from a single read-only config probe plus a host snapshot, then
+    # attached to the run document at RUN level and inherited by every suite via
+    # ``run_id``. Hardware/runtime/model/inference fields are NOT duplicated into the
+    # per-suite records -- child evidence inherits provenance through the run id.
+    model_config = await _probe_model_config(lm_studio_url, model)
+    provenance = _capture_provenance(
+        lm_studio_url=lm_studio_url,
+        model_identifier=model,
+        model_config=model_config,
+    )
+
     root = Path(project_root) if project_root else Path(__file__).resolve().parent.parent
     workdir = Path(out_dir) if out_dir else Path(tempfile.mkdtemp(prefix="benchllm_v2_suite_"))
 
@@ -936,6 +951,10 @@ async def run_v2_run(
         shutil.rmtree(workdir, ignore_errors=True)
 
     agg = combine_suite_results(results)
+
+    # Attach the run-level provenance snapshot to the aggregate before persistence. It is
+    # stored once at the run level; build_run_document surfaces it as a top-level key.
+    agg["provenance"] = provenance
 
     # Durable result artifact (Act 2): persist the completed run so it can be
     # loaded later by ``run_id`` for the read-only UI. Best-effort and reported on
