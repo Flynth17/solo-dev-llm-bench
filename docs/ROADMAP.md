@@ -6,6 +6,21 @@ Stored lifecycle states are `DONE`, `ACTIVE`, `TODO`, `FUTURE`. `NEXT` is derive
 
 ## TODO
 
+### RM-26-AA-0023 — Aggregate Context run enumeration/projection read model
+
+Backend/read-model capability that exposes committed Context runs for the Results UI so the aggregate Context experience (P5) can render instead of a placeholder. Per-run Context detail is already delivered (RM-26-AA-0018, `GET /api/context/runs/{run_id}`); this item adds the missing **aggregate** layer — enumeration and projection across runs — which no current endpoint provides. It is a new capability, not a reopening or change of per-run Context detail.
+
+Contract delivered by this item: available committed Context runs (enumeration/listing over existing artifacts), grouped and projected by authoritative model/config identity; per-run context point series (`requested_context_tokens`, `score`, `degradation_from_baseline`, `retention_relative_to_baseline`, `status` — verbatim); status/coverage metadata (supported/partial/unsupported/invalid/failed counts and baseline point); and an evidence deep-link (`/context/results/{run_id}`).
+
+Purpose: unblock P5 Context aggregate Results UX and provide the backend prerequisite for Context comparison work where applicable. Consumes output of RM-26-AA-0009 (Context benchmark family); does not define or hard-code benchmark design (target context points remain owned by RM-26-AA-0009).
+
+Scope — in: read-only enumeration of committed Context run artifacts; grouping/projection by authoritative model/config identity; per-run Context point-series projection; authoritative point/run status and coverage metadata; evidence/deep-link identity; tests for legacy/missing/partial evidence; preserve N/A distinctly from zero. Scope — out: benchmark execution changes; Context scoring/formula changes; persistence-format redesign; ranking/composite changes (RM-26-AA-0015); frontend P5 implementation; comparison UI implementation (RM-26-AA-0013); retroactive reconstruction of historical evidence.
+
+- Category: product / backend-read-model
+- Depends on: RM-26-AA-0009
+- Updated: 2026-09-20T18:37:01Z
+- Legacy ID: aggregate-context-run-enumeration
+
 ## ACTIVE
 
 ### RM-26-AA-0013 — Multi-model comparison view
