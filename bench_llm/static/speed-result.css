@@ -133,6 +133,121 @@
     padding: 0.55rem 0.85rem;
 }
 
+/* --- Per-point Status column ------------------------------------------------ */
+.srb-status-cell {
+    white-space: nowrap;
+}
+.srb-badge.is-unsupported { background: #172233; color: #7f93af; border: 1px solid #25344d; }
+.srb-badge.is-failed     { background: #3a1616; color: #fca5a5; border: 1px solid #6b2525; }
+/* Per-point / per-stage badges are rendered uppercase verbatim -- override the
+   shared .srb-badge capitalize so COMPLETED / FAILED stay uppercase. */
+.srb-status-cell .srb-badge,
+.srb-stage-table .srb-badge { text-transform: none; }
+
+/* --- Repeatability note ----------------------------------------------------- */
+.srb-repeatability {
+    color: #fbbf24;
+    border-left: 3px solid #6b4e12;
+    padding-left: 0.75rem;
+}
+
+/* --- Stage repeatability disclosure ----------------------------------------- */
+.srb-stages-row td {
+    background: #0a1422;
+    padding: 0.25rem 0.75rem 0.75rem 0.85rem;
+    border-bottom: 1px solid #14233a;
+}
+.srb-stage-details {
+    width: 100%;
+    border: 1px solid #1e3350;
+    border-radius: 8px;
+    background: #0b1729;
+}
+.srb-stage-details summary {
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #9ec5ff;
+    letter-spacing: 0.02em;
+}
+.srb-stage-details summary:hover { color: #e8eef6; }
+.srb-stage-wrap {
+    overflow-x: auto;
+    padding: 0 0.75rem 0.75rem;
+}
+.srb-stage-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    min-width: 820px;
+    margin-top: 0.5rem;
+}
+.srb-stage-table th {
+    text-align: left;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7f93af;
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid #1e3350;
+}
+.srb-stage-table td {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid #14233a;
+    color: #e8eef6;
+}
+.srb-stage-table tbody tr:last-child td { border-bottom: none; }
+.srb-stage-run code {
+    font-size: 0.78rem;
+    color: #9fb0c7;
+}
+.srb-stage-validity {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: capitalize;
+}
+.srb-stage-validity.is-valid   { color: #34d399; }
+.srb-stage-validity.is-invalid { color: #fbbf24; }
+
+/* --- Run provenance section ------------------------------------------------- */
+.srb-prov-section + .srb-prov-section { margin-top: 0.75rem; }
+.srb-prov-section {
+    border: 1px solid #1e3350;
+    border-radius: 8px;
+    background: #0b1729;
+}
+.srb-prov-section > summary {
+    cursor: pointer;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #e8eef6;
+    letter-spacing: 0.02em;
+}
+.srb-prov-section > summary:hover { background: #12203a; }
+.srb-prov-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.srb-prov-table th {
+    text-align: left;
+    font-weight: 600;
+    color: #7f93af;
+    padding: 0.45rem 0.85rem 0.45rem 1rem;
+    vertical-align: top;
+    width: 22%;
+}
+.srb-prov-table td {
+    padding: 0.45rem 0.85rem;
+    color: #e8eef6;
+}
+.srb-prov-none   { color: #6b7f99; font-style: italic; }
+.srb-prov-unknown { color: #fbbf24; font-weight: 600; }
+
 @media (max-width: 640px) {
     .srb-grid { grid-template-columns: 1fr; }
 }

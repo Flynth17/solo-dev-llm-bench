@@ -44,6 +44,38 @@
         if (!isFinite(s)) return null;
         return s.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " tokens";
     }
+    // Human-readable byte counts for provenance (RAM / VRAM / file size).
+    function fmtBytes(n) {
+        if (n == null || n === "") return null;
+        var b = Number(n);
+        if (!isFinite(b) || b < 0) return null;
+        var units = ["B", "KB", "MB", "GB", "TB"];
+        var i = 0;
+        while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+        return (i === 0 ? String(b) : b.toFixed(1)) + " " + units[i];
+    }
+    // Authoritative per-point status -> badge class. Only the four contract states are
+    // styled distinctly; any other terminal failure state falls to is-failed so it never
+    // reads as a healthy completed point.
+    function pointStatusClass(status) {
+        var s = String(status || "").toLowerCase();
+        if (s === "completed") return "is-completed";
+        if (s === "partial") return "is-partial";
+        if (s === "unsupported") return "is-unsupported";
+        return "is-failed";
+    }
+    // Authoritative per-point status -> uppercase label. Rendered verbatim; never inferred
+    // from metric presence.
+    function pointStatusText(status) {
+        var s = String(status || "").toUpperCase();
+        return s === "" ? "UNKNOWN" : s;
+    }
+    // A stage is valid when its own authoritative status is completed. This classifies the
+    // backend speed_point_status value only -- it does not inherit the parent point's
+    // status and never reads metrics to decide validity.
+    function stageValidity(status) {
+        return String(status || "").toLowerCase() === "completed" ? "valid" : "invalid";
+    }
     function esc(s) {
         return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
             return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -72,23 +104,76 @@
         }
     }
 
-    // One row per canonical point. Unsupported-but-stored points render as a
+    // One row per canonical point. Columns: POINT | STATUS | ACTUAL INPUT | TARGET ERR. |
+    // TTFT | PREFILL | GENERATION | OUTPUT | WALL. The authoritative per-point status is
+    // rendered as an explicit Status cell (completed / partial / unsupported / failed);
+    // metrics stay visible for completed and partial points alike -- a partial point still
+    // shows its valid metric cells. Unsupported-but-stored points show the status plus a
     // single spanned note -- never zeros for their metrics.
     function pointRow(p) {
+        var statusCell = '<span class="badge srb-badge ' + pointStatusClass(p.status) +
+            '">' + esc(pointStatusText(p.status)) + "</span>";
         if (String(p.status || "").toLowerCase() === "unsupported") {
-            return '<tr class="srb-uns"><td class="srb-point">' + esc(p.label) +
-                '</td><td colspan="6" class="srb-none">Not supported</td></tr>';
+            return "<tr class='srb-uns'>" +
+                '<td class="srb-point">' + esc(p.label) + "</td>" +
+                '<td class="srb-status-cell">' + statusCell + "</td>" +
+                '<td colspan="7" class="srb-none">Not supported</td></tr>';
         }
-        return "<tr>" +
+        var row = "<tr class='srb-point-row'>" +
             '<td class="srb-point">' + esc(p.label) + "</td>" +
+            '<td class="srb-status-cell">' + statusCell + "</td>" +
             '<td class="srb-num">' + cell(p.actual_prompt_tokens, fmtTokens) + "</td>" +
+            '<td class="srb-num">' + cell(p.target_error_percent, fmtPct) + "</td>" +
             '<td class="srb-num">' + cell(p.ttft_seconds, fmtMs) + "</td>" +
             '<td class="srb-num">' + cell(p.prefill_tokens_per_second, fmtRate) + "</td>" +
             '<td class="srb-num">' + cell(p.generation_tokens_per_second, fmtRate) + "</td>" +
             '<td class="srb-num">' + cell(p.completion_tokens, fmtTokens) + "</td>" +
             '<td class="srb-num">' + cell(p.wall_time_seconds, fmtWall) + "</td>" +
-            '<td class="srb-num">' + cell(p.target_error_percent, fmtPct) + "</td>" +
             "</tr>";
+        // Progressive disclosure of persisted repeatability stages (1 cold + 2 warm). Only
+        // stage-aware runs carry ``runs``; legacy single-row runs have none and instead show
+        // the run-level repeatability note. Stages render in deterministic cold -> warm_a ->
+        // warm_b order using backend values verbatim -- nothing recomputed here.
+        var stages = (p && p.runs) ? p.runs : [];
+        if (stages.length) {
+            row += stageDisclosureRow(stages);
+        }
+        return row;
+    }
+    // Deterministic cold -> warm_a -> warm_b ordering; defensive against any store order.
+    var STAGE_ORDER = { cold: 0, warm_a: 1, warm_b: 2 };
+    function stageDisclosureRow(stages) {
+        var ordered = stages.slice().sort(function (a, b) {
+            return (STAGE_ORDER[a.speed_run_stage] != null ? STAGE_ORDER[a.speed_run_stage] : 99) -
+                (STAGE_ORDER[b.speed_run_stage] != null ? STAGE_ORDER[b.speed_run_stage] : 99);
+        });
+        var rows = "";
+        for (var i = 0; i < ordered.length; i++) {
+            var s = ordered[i];
+            rows += "<tr>" +
+                '<td class="srb-point">' + esc((s.speed_run_stage || "?").toUpperCase()) + "</td>" +
+                '<td class="srb-stage-run"><code>' + esc(s.run_id || "\u2014") + "</code></td>" +
+                '<td class="srb-status-cell">' + '<span class="badge srb-badge ' + pointStatusClass(s.speed_point_status) +
+                    '">' + esc(pointStatusText(s.speed_point_status)) + "</span>" + "</td>" +
+                '<td class="srb-stage-validity ' + (stageValidity(s.speed_point_status) === "valid" ? "is-valid" : "is-invalid") +
+                    '">' + esc(stageValidity(s.speed_point_status)) + "</td>" +
+                '<td class="srb-num">' + cell(s.ttft_seconds, fmtMs) + "</td>" +
+                '<td class="srb-num">' + cell(s.warm_ttft_seconds, fmtMs) + "</td>" +
+                '<td class="srb-num">' + cell(s.prefill_tokens_per_second, fmtRate) + "</td>" +
+                '<td class="srb-num">' + cell(s.generation_tokens_per_second, fmtRate) + "</td>" +
+                '<td class="srb-num">' + cell(s.completion_tokens, fmtTokens) + "</td>" +
+                '<td class="srb-num">' + cell(s.reasoning_output_tokens, fmtTokens) + "</td>" +
+                '<td class="srb-num">' + cell(s.wall_time_seconds, fmtWall) + "</td>" +
+                "</tr>";
+        }
+        return '<tr class="srb-stages-row"><td colspan="9"><details class="srb-stage-details">' +
+            '<summary>Repeatability stages &mdash; ' + ordered.length + '</summary>' +
+            '<div class="srb-stage-wrap"><table class="srb-stage-table" aria-label="Repeatability stages">' +
+            '<thead><tr><th scope="col">Stage</th><th scope="col">Run ID</th><th scope="col">Status</th>' +
+            '<th scope="col">Validity</th><th scope="col">TTFT</th><th scope="col">Warm TTFT</th>' +
+            '<th scope="col">Prefill</th><th scope="col">Generation</th><th scope="col">Output</th>' +
+            '<th scope="col">Reasoning</th><th scope="col">Wall</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div></details></td></tr>';
     }
 
     function renderIdentity(run) {
@@ -133,15 +218,22 @@
             return (a.target_context_tokens || 0) - (b.target_context_tokens || 0);
         });
         if (!points.length) {
-            body.innerHTML = '<tr><td colspan="7" class="srb-none">No point data recorded.</td></tr>';
+            body.innerHTML = '<tr><td colspan="9" class="srb-none">No point data recorded.</td></tr>';
             return;
         }
         // Act 20: legacy runs (no speed_metric_version == 2) still show their stored prefill
         // values, but with an honest warning that they were derived from a cached TTFT.
         if (run.legacy_prefill_warning) {
             body.insertAdjacentHTML("afterbegin",
-                '<tr class="srb-legacy"><td colspan="7">Legacy prefill measurement \u2014 affected ' +
+                '<tr class="srb-legacy"><td colspan="9">Legacy prefill measurement \u2014 affected ' +
                 'by prompt-cache reuse.</td></tr>');
+        }
+        // Act 26-AA-0017: genuine legacy single-row runs (no persisted cold/warm stages)
+        // get an explicit repeatability note. Driven by the authoritative read-model
+        // ``repeatability_stored`` signal -- never inferred.
+        var repNote = by("sr-repeatability-note");
+        if (repNote) {
+            repNote.classList.toggle("hidden", run.repeatability_stored !== false);
         }
         for (var j = 0; j < points.length; j++) {
             body.insertAdjacentHTML("beforeend", pointRow(points[j]));
@@ -172,6 +264,63 @@
         el.classList.remove("hidden");
     }
 
+    // --- Run-level execution provenance (Act 26-AA-0017) --------------------------
+    // Progressive disclosure with the three shared meanings -- Stored / Unknown /
+    // Not stored -- grouped under Hardware / Runtime / Model / Inference. The read model
+    // classifies each field via the shared provenance contract, so "Unknown" never
+    // collapses into "Not stored". A legacy run (no provenance object) shows an explicit
+    // not-captured note rather than fabricated per-field rows.
+    function renderProvenance(run) {
+        var el = by("sr-provenance");
+        if (!el) { return; }
+        var prov = (run && run.provenance);
+        if (!prov || !prov.present) {
+            el.innerHTML = '<p class="srb-note">Run provenance was not captured for this legacy ' +
+                'run &mdash; it predates the shared execution-provenance contract.</p>';
+            el.classList.remove("hidden");
+            return;
+        }
+        var html = "";
+        html += provSection("Hardware", prov.hardware, prov.hardware_extra);
+        html += provSection("Runtime", prov.runtime);
+        html += provSection("Model", prov.model);
+        html += provSection("Inference", prov.inference);
+        el.innerHTML = html;
+        el.classList.remove("hidden");
+    }
+    function provSection(name, fields, extra) {
+        var keys = Object.keys(fields || {});
+        if (!keys.length && !(extra && Object.keys(extra).length)) { return ""; }
+        var out = '<details class="srb-prov-section"><summary>' + esc(name) + '</summary>' +
+            '<table class="srb-prov-table" aria-label="' + esc(name) + ' provenance"><tbody>';
+        for (var i = 0; i < keys.length; i++) {
+            out += '<tr><th scope="row">' + esc(keys[i]) + '</th><td>' + provField(fields[keys[i]]) + '</td></tr>';
+        }
+        if (extra) {
+            var ekeys = Object.keys(extra);
+            for (var j = 0; j < ekeys.length; j++) {
+                out += '<tr><th scope="row">' + esc(ekeys[j]) + '</th><td>' + provField(extra[ekeys[j]]) + '</td></tr>';
+            }
+        }
+        out += '</tbody></table></details>';
+        return out;
+    }
+    // Render one classified provenance field. stored -> the persisted value; unknown_at
+    // execution -> "Unknown"; not_stored -> "Not stored". Booleans render as Yes/No.
+    function provField(field) {
+        if (!field || !field.status) { return '<span class="srb-prov-none">Not stored</span>'; }
+        if (field.status === "unknown_at_execution") {
+            return '<span class="srb-prov-unknown" title="Provenance exists but the runtime could not expose this field at execution time">Unknown</span>';
+        }
+        var v = field.value;
+        if (v === null || v === undefined || v === "") {
+            return '<span class="srb-prov-none">Not stored</span>';
+        }
+        if (typeof v === "boolean") { return esc(v ? "Yes" : "No"); }
+        if (typeof v === "number") { return esc(v.toLocaleString("en-US")); }
+        return esc(v);
+    }
+
     function showRun(run) {
         by("srb-loading").classList.add("hidden");
         by("srb-identity").classList.remove("hidden");
@@ -179,6 +328,7 @@
         renderIdentity(run);
         renderCalibration(run);
         renderTable(run);
+        renderProvenance(run);
     }
 
     function showError(detail) {

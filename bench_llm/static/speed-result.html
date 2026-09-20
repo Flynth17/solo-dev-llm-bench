@@ -75,23 +75,39 @@
                 <span class="dapp-section-label">Context scaling &middot; TTFT &middot; prefill &middot; generation</span>
             </div>
             <p class="srb-note">Prefill reflects the persisted benchmark measurement.</p>
+            <!-- Repeatability evidence note (Act 26-AA-0017). Shown only for genuine legacy
+                 single-row runs whose run_id carries no cold/warm stage rows. Hidden by default.
+                 Driven by the authoritative read-model ``repeatability_stored`` signal. -->
+            <p id="sr-repeatability-note" class="srb-note srb-repeatability hidden">Repeatability evidence &mdash; not stored for this legacy run. This result predates the 1-cold / 2-warm persistence contract.</p>
             <div class="srb-table-wrap">
                 <table id="sr-table" class="srb-tel-table" aria-label="Standard Speed result by context size">
                     <thead>
                         <tr>
                             <th scope="col">Point</th>
+                            <th scope="col" title="Authoritative per-point run state (completed / partial / unsupported / failed)">Status</th>
                             <th scope="col" title="Actual prompt tokens issued to the model">Actual input</th>
+                            <th scope="col" title="Deviation of actual prompt tokens from the canonical target context">Target err.</th>
                             <th scope="col" title="Time to first token (TTFT)">TTFT</th>
                             <th scope="col" title="Prompt-processing throughput (prefill)">Prefill</th>
                             <th scope="col" title="Generation / decode throughput">Generation</th>
                             <th scope="col" title="Completed generation tokens">Output</th>
                             <th scope="col" title="Wall-clock time for the point">Wall</th>
-                            <th scope="col" title="Deviation of actual prompt tokens from the canonical target context">Target err.</th>
                         </tr>
                     </thead>
                     <tbody id="sr-body"></tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- Run-level execution provenance (Act 26-AA-0017). Progressive disclosure with the
+             three shared meanings -- Stored / Unknown / Not stored -- grouped under Hardware /
+             Runtime / Model / Inference. Hidden until the read model exposes a provenance
+             object; a legacy run shows an explicit not-captured note instead of fabricated data. -->
+        <section id="sr-provenance-panel" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Run provenance</span>
+            </div>
+            <div id="sr-provenance"></div>
         </section>
     </div>
         </main><!-- /.rs-main -->

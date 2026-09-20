@@ -36,6 +36,9 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Optional
 
+# Read-model isolation: provenance is imported lazily inside the projection helper so this
+# pure view-model never gains a hard dependency on the capture path (see _speed_run_provenance).
+
 
 # --- small type guards -------------------------------------------------------------
 
@@ -378,6 +381,111 @@ def _point_status(rows: list) -> str:
     return "partial"
 
 
+def _speed_run_provenance(rows: list[dict]) -> Optional[dict]:
+    """Additive projection of an already-persisted run-level provenance snapshot.
+
+    Returns ``None`` when no row carries a provenance object (a legacy run) so the UI can
+    render ``Not stored`` for every field without fabricating anything. When present, each
+    scalar field is classified via the shared :func:`provenance.field_status` contract into
+    exactly one of three meanings -- ``stored`` / ``unknown_at_execution`` / ``not_stored``
+    -- and grouped under Hardware / Runtime / Model / Inference so the UI renders structured
+    sections only (never raw JSON). GPU is a list of objects; it is summarised to count /
+    names + VRAM / driver. This never changes persistence, formulas or representative logic.
+    """
+    # Local import keeps this pure view-model decoupled from the capture path.
+    from src.provenance import field_status, from_json
+
+    prov_doc = None
+    for r in rows:
+        raw = r.get("provenance_json")
+        if not raw:
+            continue
+        parsed = from_json(raw)
+        if isinstance(parsed, dict) and parsed:
+            prov_doc = parsed
+            break
+    if not isinstance(prov_doc, dict):
+        return None
+
+    def classify(section: Any, fields: list[tuple[str, str]]) -> dict[str, Any]:
+        # (contract_field, display_label)
+        base = prov_doc.get("hardware") if section is None else section
+        out: dict[str, Any] = {}
+        for key, label in fields:
+            value = base.get(key) if isinstance(base, dict) else None
+            out[label] = {"value": value, "status": field_status(value)}
+        return out
+
+    hardware = prov_doc.get("hardware") or {}
+    runtime = prov_doc.get("runtime") or {}
+    model = prov_doc.get("model") or {}
+    inference = prov_doc.get("inference") or {}
+
+    gpus = hardware.get("gpu") if isinstance(hardware.get("gpu"), list) else []
+    gpu_names = [g.get("name") for g in gpus if isinstance(g, dict) and g.get("name")]
+    gpu_summary = ", ".join(str(n) for n in gpu_names) if gpu_names else None
+    vram_total = sum(
+        int(g.get("vram_bytes"))
+        for g in gpus
+        if isinstance(g, dict) and isinstance(g.get("vram_bytes"), (int, float))
+    ) or None
+    drivers = [
+        g.get("driver_version") for g in gpus
+        if isinstance(g, dict) and g.get("driver_version")
+    ]
+    driver_summary = ", ".join(str(d) for d in drivers) if drivers else None
+
+    return {
+        "present": True,
+        "hardware": classify(hardware, [
+            ("cpu_model", "CPU"),
+            ("cpu_architecture", "Architecture"),
+            ("logical_cpu_count", "Logical CPUs"),
+            ("system_ram_bytes", "RAM"),
+            ("gpu_count", "GPU count"),
+        ]),
+        # Derived from the gpu list rather than a scalar contract field.
+        "hardware_extra": {
+            "GPU": {"value": gpu_summary, "status": field_status(gpu_summary)},
+            "VRAM": {"value": vram_total, "status": field_status(vram_total)},
+            "Driver": {"value": driver_summary, "status": field_status(driver_summary)},
+        },
+        "runtime": classify(runtime, [
+            ("backend_type", "Backend"),
+            ("backend_url", "Backend URL"),
+            ("lm_studio_version", "LM Studio version"),
+            ("runtime_engine", "Runtime/engine"),
+        ]),
+        "model": classify(model, [
+            ("identifier", "Identifier"),
+            ("publisher", "Publisher"),
+            ("architecture", "Architecture"),
+            ("model_path", "Model path"),
+            ("model_filename", "File"),
+            ("quantization", "Quantization"),
+            ("file_size_bytes", "File size"),
+            ("max_context", "Max context"),
+            ("loaded_context", "Loaded context"),
+        ]),
+        "inference": classify(inference, [
+            ("kv_cache_k_type", "K/V cache (k)"),
+            ("kv_cache_v_type", "K/V cache (v)"),
+            ("flash_attention", "Flash Attention"),
+            ("reasoning_mode", "Reasoning"),
+            ("mtp_state", "MTP"),
+            ("speculative_enabled", "Speculative decoding"),
+            ("draft_model", "Draft model"),
+            ("temperature", "Temperature"),
+            ("top_p", "Top-p"),
+            ("top_k", "Top-k"),
+            ("seed", "Seed"),
+            ("max_output_tokens", "Max output tokens"),
+            ("gpu_offload", "GPU offload"),
+            ("cpu_offload", "CPU offload"),
+        ]),
+    }
+
+
 def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
     """Return the normalized Standard Speed result for exactly one speed run id.
 
@@ -527,6 +635,17 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
     ]
     _mean_err_tokens = round(sum(_toks) / len(_toks), 1) if _toks else None
 
+    # --- Additive presentation projections (never change persistence/formulas). -------
+    # Repeatability signal: a run is stage-aware when any point persisted more than one
+    # stage row (1 cold + 2 warm). Genuine legacy single-row runs have no ``runs`` key on
+    # any point, so this is the authoritative read-model signal the UI uses to distinguish
+    # "repeatability stored" from a legacy run that predates the contract. Additive only.
+    repeatability_stored = any("runs" in p for p in points)
+    # Run-level execution provenance (already-persisted evidence), classified into the
+    # three shared meanings (stored / unknown_at_execution / not_stored). None for legacy
+    # runs so the UI renders "Not stored" without fabricating anything.
+    speed_provenance = _speed_run_provenance(mine)
+
     return {
         "run_id": rid,
         "model_identifier": model_identifier,
@@ -540,4 +659,8 @@ def load_speed_run_by_id(run_id: str, runs: Iterable[Any]) -> dict[str, Any]:
         "legacy_prefill_warning": legacy_prefill_warning,
         "max_abs_target_error_percent": _abs_err_pct,
         "mean_target_error_tokens": _mean_err_tokens,
+        # --- Additive presentation projections (see above). Never consumed by scoring, ---
+        # ranking, representative-run or representative-stage logic -- UI only. ---
+        "repeatability_stored": repeatability_stored,
+        "provenance": speed_provenance,
     }
