@@ -471,54 +471,144 @@
         return html;
     }
 
+    // Canonical agentic suite order + human labels, used ONLY to align per-suite rows by name
+    // for display (never array position). Presentation-only ordering/labels -- never recomputes
+    // totals, changes suite definitions or denominators. Mirrors the backend SUITES tuple so
+    // every view orders suites identically.
+    var WF_CANONICAL_SUITES = ["python", "java", "markdown", "evidence", "drift"];
+    var WF_SUITE_LABELS = { python: "Python", java: "Java", markdown: "Markdown", evidence: "Evidence", drift: "Drift" };
+
+    // Order suite keys by canonical name (display only). Any suite the backend exposes that is
+    // not in the canonical set is appended alphabetically so nothing is dropped or reordered.
+    function wfOrderedSuiteNames(suiteMap) {
+        var names = WF_CANONICAL_SUITES.filter(function (n) { return Object.prototype.hasOwnProperty.call(suiteMap, n); });
+        var extra = Object.keys(suiteMap).filter(function (n) { return WF_CANONICAL_SUITES.indexOf(n) === -1; }).sort();
+        return names.concat(extra);
+    }
+
+    // One suite row from a name-keyed map: name + compact pass bar (presentation only) +
+    // authoritative passed/total. A failing suite is flagged with its failing-check count; N/A
+    // stays an em-dash, never zero (N/A is never coerced to a real pass).
+    function wfSuiteRow(suiteMap, suiteName) {
+        var d = suiteMap[suiteName] || {};
+        var passed = (d.passed != null) ? d.passed : null;
+        var total = (d.total != null) ? d.total : null;
+        var valTxt = (passed != null && total != null) ? (String(passed) + "/" + String(total)) : "\u2014";
+        var failing = (passed != null && total != null && total > passed) ? (total - passed) : 0;
+        var pct = (passed != null && total != null && total > 0) ? Math.max(0, Math.min(100, Math.round((passed / total) * 100))) : null;
+        var toneCls = (pct === null) ? "" : (failing > 0 ? " rs-wf-suite-fail" : " rs-wf-suite-ok");
+        var barHtml = (pct === null)
+            ? ""
+            : "<span class='rs-wf-suite-bar' role='img' aria-label='" + esc(String(suiteName)) + " pass rate bar'>" +
+              "<span class='rs-wf-suite-fill' style='width:" + pct + "%'></span></span>";
+        return "<div class='rs-wf-suite" + toneCls + "' data-suite='" + esc(String(suiteName)) + "'>" +
+            "<span class='rs-wf-suite-name'>" + esc(WF_SUITE_LABELS[suiteName] || String(suiteName).replace(/_/g, " ")) + "</span>" +
+            barHtml +
+            "<span class='rs-wf-suite-val'>" + esc(valTxt) + (failing > 0 ? " &middot; " + failing + " failing" : "") + "</span>" +
+            "</div>";
+    }
+
+    // Suite performance block: all measured suites, aligned by canonical name. Authoritative
+    // per-suite passed/total from the read model -- no recomputation of totals.
+    function wfSuitesBlock(suiteMap) {
+        var names = wfOrderedSuiteNames(suiteMap);
+        if (names.length === 0) { return "<p class='rs-wf-muted'>\u2014</p>"; }
+        return "<div class='rs-wf-suites'>" +
+            names.map(function (n) { return wfSuiteRow(suiteMap, n); }).join("") +
+            "</div>";
+    }
+
     function renderWorkflowRunRow(e) {
-        var scorePct = (typeof e.fraction === "number" && !isNaN(e.fraction)) ? Math.round(e.fraction * 100) : null;
+        // Headline pass rate: eligible runs format the authoritative fraction verbatim; an
+        // incomplete/diagnostic run shows raw presentation arithmetic over backend-exposed
+        // counts (explicitly labelled "raw", never an approved score or leaderboard input).
+        // N/A stays an em-dash, never zero.
+        var scorePct = null;
+        if (typeof e.fraction === "number" && !isNaN(e.fraction)) {
+            scorePct = e.fraction;
+        } else if (e.passed != null && e.total != null && e.total > 0) {
+            scorePct = e.passed / e.total;
+        }
+        // Present as a percentage with one decimal. Multiply by 100 first, then round via
+        // Math.round(f*1000)/10 so the IEEE-754 representation of the fraction (e.g. 0.8915)
+        // rounds to the honest 89.2% instead of underflowing to 89.1.
+        var scorePctTxt = (scorePct === null) ? "\u2014" : (Math.round(scorePct * 1000) / 10).toFixed(1);
+
         var passedTxt = (e.passed != null) ? String(e.passed) : "\u2014";
         var totalTxt = (e.total != null) ? String(e.total) : "\u2014";
 
-        // Status chip: presentation semantics (label/tone/chip) come from the shared
-        // results-status.js layer -- never recomputed here, never colour-only.
-        var statusPres = statusPresentation(e.status);
+        // Name-keyed per-suite map (authoritative passed/total), aligned by suite name in display.
+        var suiteMap = {};
+        (e.suites || []).forEach(function (s) { suiteMap[s.suite] = { passed: s.passed, total: s.total }; });
 
-        // Suite breakdown chips (authoritative per-suite passed/total).
-        var suiteChips = "";
-        (e.suites || []).forEach(function (s) {
-            var label = s.suite ? esc(s.suite.replace(/_/g, " ")) : "suite";
-            var val = (s.passed != null && s.total != null) ? (s.passed + "/" + s.total) : "\u2014";
-            suiteChips += "<span class='rs-badge rs-badge-accent' title='" + label + "'>" + label + " " + esc(val) + "</span>";
-        });
+        // Scoreability is authoritative from the entry: an eligible/canonical run carries an
+        // approved fraction and e.diagnostic is falsy; a diagnostic/incomplete run does not.
+        // We never recompute or infer eligibility -- we only format what /api/ranking exposes.
+        var scoreable = e.diagnostic !== true;
 
-        // A perfect run (all checks passed) reads as a success; any failing check is flagged.
-        // When the total is unknown (null), never claim "all passed" -- show an em-dash so
-        // N/A stays distinct from a real pass (N/A is never coerced to a success).
-        var failedChip;
-        if (e.total == null) {
-            failedChip = "<span class='rs-na'>\u2014</span>";
-        } else if (e.failedCount > 0) {
-            failedChip = "<span class='rs-badge rs-badge-unavailable' title='Failing checks'>" + e.failedCount + " failing</span>";
-        } else {
-            failedChip = "<span class='rs-badge rs-badge-ok'>All checks passed</span>";
+        // Status chip via the shared P1 layer (never recomputed here, never colour-only).
+        // Eligible/canonical runs ran to completion with all measurements valid; diagnostic runs
+        // use their backend classification. "completed" is the honest semantic of an eligible
+        // run (the read model exposes no per-configuration status), not a re-derived score.
+        var presStatus = scoreable ? statusPresentation("completed") : statusPresentation(e.status);
+
+        // Model name is the primary element; the technical configuration fingerprint recedes to a
+        // quiet mono provenance token. No quantization/config fields are fabricated -- only what
+        // the Workflow evidence stores.
+        var identityModel = e.model_version || e.model_family || "unknown";
+
+        // Secondary scoreability note for diagnostic/incomplete runs only: concise, via shared P1
+        // language, never FAILED and never dominating the actual benchmark result. Keeps the
+        // "inspectable diagnostic evidence" marker (contract/regression). Eligible runs show none.
+        var scoreabilityMsg = "";
+        if (!scoreable) {
+            scoreabilityMsg = "<p class='rs-wf-diagnostic' data-status='" + esc(String(presStatus.state)) + "' role='status'>" +
+                "Evidence available \u2014 this run is not eligible for scoring (inspectable diagnostic evidence)." +
+                "</p>";
         }
 
-        var scoreTxt = (scorePct === null) ? "<span class='rs-na'>\u2014</span>" : scorePct + "%";
+        // Progressive failure disclosure: summary -> suites with failures -> failed-check counts.
+        // Collapsed by default so it never dominates; expands to per-suite failing counts plus the
+        // dedicated /v2/results/{run_id} evidence link (kept always visible below).
+        var failingNames = wfOrderedSuiteNames(suiteMap).filter(function (n) {
+            var d = suiteMap[n]; return d.passed != null && d.total != null && d.total > d.passed;
+        });
+        var failureBlock;
+        if (e.failedCount > 0) {
+            var flist = failingNames.map(function (n) {
+                var d = suiteMap[n];
+                return "<li>" + esc(WF_SUITE_LABELS[n] || String(n).replace(/_/g, " ")) + " &middot; " + (d.total - d.passed) + " failing</li>";
+            }).join("");
+            failureBlock = "<details class='rs-wf-failures'><summary>" + e.failedCount + " failing check" +
+                (e.failedCount !== 1 ? "s" : "") + " across " + failingNames.length + " suite" +
+                (failingNames.length !== 1 ? "s" : "") + "</summary>" +
+                "<ul class='rs-wf-failure-list'>" + flist + "</ul></details>";
+        } else {
+            failureBlock = "<p class='rs-wf-allpassed'>All checks passed.</p>";
+        }
+
+        var evidenceLink = "<a class='rs-view-link rs-wf-evidence' href='/v2/results/" + encodeURIComponent(e.run_id) + "' data-run-id='" + esc(e.run_id) + "'>View full suite/case evidence &rarr;</a>";
 
         return '<details class="rs-wf-run" open>' +
             '<summary>' +
-                '<span class="rs-wf-head">' +
-                    "<span class='rs-badge rs-badge-accent'>" + esc(e.model_family) + "</span>" +
-                    "<code class='rs-wf-fp' title='Configuration fingerprint'>" + esc(String(e.configuration_fingerprint).slice(0, 12)) + "</code>" +
-                    failedChip +
-                    "<span class='rs-chip " + statusPres.className + "' title='" + esc(statusPres.explanation || "") + "'>" +
-                        esc(statusPres.label) + "</span>" +
-                "</span>" +
-                '<span class="rs-wf-score">' +
-                    "<span class='rs-wf-checks'>" + esc(passedTxt) + " / " + esc(totalTxt) + " checks<span class='rs-wf-score-pct'> · " + scoreTxt + "</span></span>" +
-                "</span></summary>" +
+                '<div class="rs-wf-headline">' +
+                    '<span class="rs-wf-identity">' +
+                        "<span class='rs-wf-model'>" + esc(identityModel) + "</span>" +
+                        "<code class='rs-wf-fp' title='Configuration fingerprint'>" + esc(String(e.configuration_fingerprint).slice(0, 12)) + "</code>" +
+                    "</span>" +
+                    "<span class='rs-wf-status rs-chip " + presStatus.className + "' title='" + esc(presStatus.explanation || "") + "'>" +
+                        esc(presStatus.label) + "</span>" +
+                "</div>" +
+                '<div class="rs-wf-checks">' + esc(passedTxt) + " / " + esc(totalTxt) + " checks" +
+                    (scorePct === null ? "" : "<span class='rs-wf-pct'> &middot; " + scorePctTxt + "% raw pass rate</span>") +
+                "</div>" +
+            "</summary>" +
             '<div class="rs-wf-body">' +
-                (e.diagnostic ? "<p class='rs-wf-diagnostic'>Incomplete run \u2014 inspectable diagnostic evidence; no approved composite score is computed.</p>" : "") +
+                scoreabilityMsg +
+                "<div class='rs-wf-suites-block'>" + wfSuitesBlock(suiteMap) + "</div>" +
+                failureBlock +
+                evidenceLink +
                 "<div class='rs-wf-meta'><span>Run <code>" + esc(e.run_id) + "</code></span></div>" +
-                (suiteChips ? "<div class='rs-wf-suites'>" + suiteChips + "</div>" : "") +
-                "<a class='rs-view-link rs-wf-evidence' href='/v2/results/" + encodeURIComponent(e.run_id) + "' data-run-id='" + esc(e.run_id) + "'>View suite/case evidence \u2192</a>" +
             "</div></details>";
     }
 

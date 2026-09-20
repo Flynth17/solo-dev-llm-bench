@@ -893,27 +893,62 @@
 
 .rs-wf-run > summary {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
     cursor: pointer;
     list-style: none;
-    padding: 0.35rem 0;
+    padding: 0.55rem 0.4rem 0.45rem;
 }
 
 .rs-wf-run > summary::-webkit-details-marker { display: none; }
 
-.rs-wf-run > summary .rs-wf-head {
+/* Headline row: model/config identity leads left, scoreability chip right. */
+.rs-wf-headline {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+/* Model/config identity leads; configuration fingerprint recedes to a quiet mono
+   provenance token (GAP-2). */
+.rs-wf-identity {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
     flex-wrap: wrap;
     min-width: 0;
 }
 
-.rs-wf-run > summary .rs-wf-head .rs-badge {
-    font-size: 0.68rem;
+/* Primary identity: model family + version -- the loudest element in the card. */
+.rs-wf-model {
+    font-weight: 700;
+    color: var(--rs-text);
+    font-size: 1.02rem;
+    line-height: 1.25;
+}
+
+/* Headline checks + raw pass rate. Numbers are louder than prose (design system §1.3). */
+.rs-wf-checks {
+    font-weight: 700;
+    color: var(--rs-text);
+    font-size: 0.95rem;
+}
+
+.rs-wf-pct {
+    color: var(--rs-text-muted);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* Scoreability chip in the headline -- reuses the shared P1 .rs-chip-{tone} palette, so it
+   is always word + tint + colour (never colour alone). */
+.rs-wf-status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .rs-wf-fp {
@@ -926,28 +961,11 @@
     word-break: break-all;
 }
 
-.rs-wf-score {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.rs-wf-checks {
-    font-weight: 700;
-    color: var(--rs-text);
-    font-size: 0.9rem;
-}
-
-.rs-wf-score-pct {
-    color: var(--rs-text-muted);
-    font-weight: 600;
-}
-
 .rs-wf-body {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    padding: 0.5rem 0 0.4rem;
+    gap: 0.65rem;
+    padding: 0 0 0.4rem;
 }
 
 .rs-wf-meta {
@@ -960,10 +978,72 @@
     font-size: 0.78rem;
 }
 
+/* Suite performance grid: aligned by suite name, one row per measured suite with a compact
+   pass bar (presentation only) and authoritative passed/total text always visible. */
+.rs-wf-suites {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.3rem;
+}
+
+.rs-wf-suite {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.5rem 0.7rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: 6px;
+}
+
+.rs-wf-suite:nth-child(odd) {
+    background: var(--rs-surface-2);
+}
+
+.rs-wf-suite-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--rs-text);
+}
+
+.rs-wf-suite-bar {
+    position: relative;
+    height: 6px;
+    background: var(--rs-bg);
+    border: 1px solid var(--rs-border-soft);
+    border-radius: 999px;
+    overflow: hidden;
+    min-width: 42px;
+}
+
+.rs-wf-suite-fill {
+    position: absolute;
+    inset-left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    background: var(--rs-accent);
+    border-radius: 999px;
+}
+
+/* Pass/fail tone from the shared palette -- reinforcement, never the sole signal. */
+.rs-wf-suite-ok .rs-wf-suite-fill { background: var(--rs-ok); }
+.rs-wf-suite-fail .rs-wf-suite-fill { background: var(--rs-error); }
+
+.rs-wf-suite-val {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--rs-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.rs-wf-suite-fail .rs-wf-suite-val { color: var(--rs-error-text); }
+
 // Incomplete-but-valid Workflow runs: inspectable diagnostic evidence only -- never a
-// canonical result. Warn tone keeps it visually distinct from an approved score.
+// canonical result. Warn tone keeps it visually distinct from an approved score, and it stays
+// secondary so it never dominates the actual benchmark result.
 .rs-wf-diagnostic {
-    margin: 0 0 0.6rem 0;
+    margin: 0;
     padding: 0.45rem 0.7rem;
     font-size: 0.82rem;
     line-height: 1.4;
@@ -973,10 +1053,46 @@
     border-radius: 4px;
 }
 
-.rs-wf-suites {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
+.rs-wf-muted {
+    color: var(--rs-text-muted);
+    font-size: 0.82rem;
+    margin: 0;
+}
+
+/* Progressive failure disclosure (collapsed by default): per-suite failing counts, then the
+   dedicated /v2/results/{run_id} evidence link below. */
+.rs-wf-allpassed {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--rs-ok-text);
+}
+
+.rs-wf-failures {
+    margin: 0;
+    border: 1px solid var(--rs-border-soft);
+    border-radius: 6px;
+    background: var(--rs-surface-2);
+    padding: 0.3rem 0.65rem;
+}
+
+.rs-wf-failures > summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--rs-warn-text);
+    padding: 0.3rem 0;
+}
+
+.rs-wf-failure-list {
+    margin: 0.35rem 0 0.15rem;
+    padding-left: 1.25rem;
+}
+
+.rs-wf-failure-list li {
+    font-size: 0.8rem;
+    color: var(--rs-error-text);
+    line-height: 1.4;
 }
 
 /* Drill-down link to the dedicated /v2/results/{run_id} evidence page. */
