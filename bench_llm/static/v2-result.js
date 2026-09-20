@@ -62,11 +62,15 @@
     // native Number check rather than fmt(), which would coerce to a string.
     function _isFiniteNum(v) { return typeof v === "number" && isFinite(v); }
 
-    function classificationState(c) {
-        var v = String(c || "").trim().toLowerCase();
-        if (v === "canonical") return "is-canonical";
-        if (v === "incomplete") return "is-incomplete";
-        return "is-default";
+    // Run-level classification -> presentation metadata. Label/tone come from the shared
+    // results-status.js layer; "canonical" is a positive eligibility state handled here so
+    // it reads as success rather than the neutral safe-default used for unknown states.
+    function classificationPresentation(cls) {
+        var v = String(cls || "").trim().toLowerCase();
+        if (v === "canonical") {
+            return { state: cls, tone: "positive", label: "CANONICAL", className: "rs-chip-positive", explanation: null };
+        }
+        return statusPresentation(cls);
     }
 
     // ---- Copy with graceful fallback ----------------------------------
@@ -119,8 +123,9 @@
 
         var cls = run.classification || "unknown";
         var badge = by("v2-classification");
-        badge.textContent = String(cls).toUpperCase();
-        badge.className = "badge v2-badge " + classificationState(cls);
+        var clsPres = classificationPresentation(cls);
+        badge.textContent = clsPres.label;
+        badge.className = "badge v2-badge " + clsPres.className;
     }
 
     function suiteFill(passed, total) {
@@ -196,8 +201,9 @@
 
         var cls = run.classification || "unknown";
         var cBadge = by("c-classification");
-        cBadge.textContent = String(cls).toUpperCase();
-        cBadge.className = "badge v2-badge " + classificationState(cls);
+        var clsPres = classificationPresentation(cls);
+        cBadge.textContent = clsPres.label;
+        cBadge.className = "badge v2-badge " + clsPres.className;
 
         // Fingerprint: short by default, full hidden until "Full".
         var fp = cfg.configuration_fingerprint || "";

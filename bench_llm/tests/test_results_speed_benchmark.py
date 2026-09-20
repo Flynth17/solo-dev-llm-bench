@@ -19,6 +19,7 @@ import pytest
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 RESULTS_JS = STATIC_DIR / "results.js"
+SHARED_HELPER_JS = STATIC_DIR / "results-status.js"
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +86,10 @@ var allSpeedRuns = [];
 var filteredSpeedRuns = [];
 var renderResults = function () {};   // overwritten by the real file under eval
 var applyFilters = function () {};    // no-op: results.js's loadResults() calls it after fetch
+
+// --- Shared status helper (results-status.js) -- loaded BEFORE consumers so that
+//     statusPresentation is a global exactly as in the browser build. ---
+global.statusPresentation = require(process.argv[3]).statusPresentation;
 
 // --- Load the actual production file under test ---
 eval(fs.readFileSync(process.argv[2], "utf8"));
@@ -235,7 +240,7 @@ def _run_harness(tmp_path):
     harness = tmp_path / "results_benchmark_harness.js"
     harness.write_text(HARNESS_JS, encoding="utf-8")
     return subprocess.run(
-        [node, str(harness), str(RESULTS_JS)],
+        [node, str(harness), str(RESULTS_JS), str(SHARED_HELPER_JS)],
         capture_output=True,
         text=True,
     )

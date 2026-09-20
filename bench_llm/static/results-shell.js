@@ -429,9 +429,9 @@
         var passedTxt = (e.passed != null) ? String(e.passed) : "\u2014";
         var totalTxt = (e.total != null) ? String(e.total) : "\u2014";
 
-        // Status chip: colour is never the sole signal -- the word is always shown too.
-        var statusCls = e.status === "completed" ? "rs-badge-ok" :
-            (e.status === "unknown" ? "rs-badge-unavailable" : "rs-badge-warn");
+        // Status chip: presentation semantics (label/tone/chip) come from the shared
+        // results-status.js layer -- never recomputed here, never colour-only.
+        var statusPres = statusPresentation(e.status);
 
         // Suite breakdown chips (authoritative per-suite passed/total).
         var suiteChips = "";
@@ -461,7 +461,8 @@
                     "<span class='rs-badge rs-badge-accent'>" + esc(e.model_family) + "</span>" +
                     "<code class='rs-wf-fp' title='Configuration fingerprint'>" + esc(String(e.configuration_fingerprint).slice(0, 12)) + "</code>" +
                     failedChip +
-                    "<span class='rs-badge " + statusCls + "'>" + esc(String(e.status)) + "</span>" +
+                    "<span class='rs-chip " + statusPres.className + "' title='" + esc(statusPres.explanation || "") + "'>" +
+                        esc(statusPres.label) + "</span>" +
                 "</span>" +
                 '<span class="rs-wf-score">' +
                     "<span class='rs-wf-checks'>" + esc(passedTxt) + " / " + esc(totalTxt) + " checks<span class='rs-wf-score-pct'> · " + scoreTxt + "</span></span>" +

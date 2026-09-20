@@ -49,18 +49,25 @@
     // Capability states (unsupported/gap) are distinct from operational failures,
     // and neither is ever rendered as a passing score. Colour is never the sole
     // signal: the word is always shown too.
+    //
+    // Context degradation uses its own per-point status vocabulary. For the two states
+    // that overlap the shared Results vocabulary (failed / unsupported) we adopt the
+    // shared chip class from results-status.js; context-specific states keep their
+    // page-local label + treatment (label/tone semantics come from the shared layer only
+    // where a standard state applies).
     function stateMeta(status) {
+        var shared = (status === "failed" || status === "unsupported") ? statusPresentation(status) : null;
         switch (status) {
             case "success":
                 return { cls: "cr-badge-ok", label: "Success" };
             case "unsupported":
-                return { cls: "cr-badge-unavailable", label: "Unsupported (above capacity)" };
+                return { cls: shared ? shared.className : "cr-badge-unavailable", label: "Unsupported (above capacity)" };
             case "extraction_failure":
                 return { cls: "cr-badge-warn", label: "Extraction failure" };
             case "malformed":
                 return { cls: "cr-badge-warn", label: "Malformed answer" };
             case "failed":
-                return { cls: "cr-badge-error", label: "Failed" };
+                return { cls: shared ? shared.className : "cr-badge-error", label: "Failed" };
             default:
                 return { cls: "cr-badge-unavailable", label: String(status || "\u2014") };
         }

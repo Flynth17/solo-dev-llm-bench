@@ -58,6 +58,18 @@
         unavailable: "rs-badge-unavailable",
         legacy: "rs-badge-legacy"
     };
+    // Dimension-availability badge class. Standard benchmark states (ambiguous/failed/
+    // unsupported/unavailable) adopt the shared chip class from results-status.js; the
+    // dimension-availability states (available/missing/in_progress/legacy) keep their
+    // page-local badge. Human labels + per-family notes stay page-specific explanatory
+    // copy -- label/tone semantics for standard states come from the shared layer.
+    function stateBadgeClass(st) {
+        var SHARED_STATES = { ambiguous: 1, failed: 1, unsupported: 1, unavailable: 1 };
+        if (SHARED_STATES[st] && typeof statusPresentation === "function") {
+            return statusPresentation(st).className;
+        }
+        return STATE_BADGE[st] || STATE_BADGE.unavailable;
+    }
 
     // AMBIGUOUS is an evidence limitation, not an error. Per-family explanation of WHY
     // ownership cannot be established (honest cross-family identity, ST-002 contract).
@@ -308,12 +320,12 @@
 
         if (!dim || !STATE_LABELS[dim.state]) {
             // No authoritative state at all -> unavailable, never fabricated.
-            out += "<span class='rs-badge " + STATE_BADGE.unavailable + "'>Unavailable</span></div>";
+            out += "<span class='rs-badge " + stateBadgeClass("unavailable") + "'>Unavailable</span></div>";
             return out;
         }
 
         var st = dim.state;
-        out += "<span class='rs-badge " + (STATE_BADGE[st] || STATE_BADGE.unavailable) + "'>" + esc(STATE_LABELS[st]) + "</span>";
+        out += "<span class='rs-badge " + (stateBadgeClass(st)) + "'>" + esc(STATE_LABELS[st]) + "</span>";
 
         if (st === "ambiguous") {
             // Evidence limitation, not an application error: explain it in text.
@@ -538,7 +550,7 @@
         var html = '<td class="cmp-speed-statecell cmp-speed-cell-' + slot + '" data-side="' + slot.toUpperCase() + '"' +
             (span > 1 ? ' rowspan="' + span + '"' : "") +
             ' aria-label="Subject ' + slot.toUpperCase() + ': ' + esc(STATE_LABELS[st]) + '">';
-        html += '<span class="rs-badge ' + (STATE_BADGE[st] || STATE_BADGE.unavailable) + '">' + esc(STATE_LABELS[st]) + "</span>";
+        html += '<span class="rs-badge ' + (stateBadgeClass(st)) + '">' + esc(STATE_LABELS[st]) + "</span>";
         html += '<p class="cmp-speed-note">' + esc(SPEED_STATE_NOTES[st] || "") + "</p>";
         if (dim && dim.run_id && dim.deep_link) {
             html += '<a class="rs-view-link cmp-evidence" href="' + esc(dim.deep_link) + '">View Speed evidence (' + esc(String(dim.run_id)) + ') &rarr;</a>';
@@ -737,7 +749,7 @@
         var html = '<td class="cmp-workflow-statecell cmp-cell-' + slot + '" data-side="' + slot.toUpperCase() + '"'
             + (span > 1 ? ' rowspan="' + span + '"' : "")
             + ' aria-label="Subject ' + slot.toUpperCase() + ': ' + esc(STATE_LABELS[st]) + '">';
-        html += '<span class="rs-badge ' + (STATE_BADGE[st] || STATE_BADGE.unavailable) + '">' + esc(STATE_LABELS[st]) + "</span>";
+        html += '<span class="rs-badge ' + (stateBadgeClass(st)) + '">' + esc(STATE_LABELS[st]) + "</span>";
         html += '<p class="cmp-workflow-note">' + esc(WORKFLOW_STATE_NOTES[st] || "") + "</p>";
         if (dim && dim.run_id && dim.deep_link) {
             html += '<a class="rs-view-link cmp-evidence" href="' + esc(dim.deep_link) + '">View Workflow evidence (' + esc(String(dim.run_id)) + ') &rarr;</a>';

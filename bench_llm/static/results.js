@@ -564,10 +564,11 @@ function modalRow(label, valueHtml) {
 }
 
 function stateBadge(status) {
-    var s = String((status || "").toLowerCase());
-    if (s === "completed") { return "<span class='rs-badge rs-badge-ok'>" + escapeHtml(status) + "</span>"; }
-    if (s === "partial") { return "<span class='rs-badge rs-badge-warn'>" + escapeHtml(status) + "</span>"; }
-    return "<span class='rs-badge rs-badge-unavailable'>" + escapeHtml(status) + "</span>";
+    // Presentation semantics (label/tone/chip) come from the shared results-status.js
+    // layer -- never recomputed here, never colour-only (word always shown).
+    var p = statusPresentation(status);
+    return "<span class='rs-chip " + p.className + "' title='" + escapeHtml(p.explanation || "") + "'>" +
+        escapeHtml(p.label) + "</span>";
 }
 
 // ---------------------------------------------------------------------------

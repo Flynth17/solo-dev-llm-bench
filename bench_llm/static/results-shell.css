@@ -613,6 +613,33 @@
 .rs-badge-error { background: rgba(248,113,113,0.15); color: var(--rs-error-text); border-color: rgba(248,113,113,0.4); }
 
 /* ---------------------------------------------------------------------------
+   Shared status-chip system (RM-26-AA Results UX P1).
+   One visual vocabulary for every Results surface: the tone drives background/edge
+   treatment via these classes (produced by results-status.js -> .rs-chip-{tone}).
+   Colour is NEVER the sole signal -- the uppercase word is always shown too.
+   Tones map onto the existing rs-* palette above for visual continuity:
+     positive <- ok(green)  warning <- warn(amber)  negative <- error(red)
+     neutral <- unavailable(grey)  info <- accent(blue)
+   --------------------------------------------------------------------------- */
+
+.rs-chip {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+.rs-chip-positive { background: rgba(52,211,153,0.15); color: var(--rs-ok-text); border-color: rgba(52,211,153,0.4); }
+.rs-chip-warning  { background: rgba(251,191,36,0.15); color: var(--rs-warn-text); border-color: rgba(251,191,36,0.4); }
+.rs-chip-negative { background: rgba(248,113,113,0.15); color: var(--rs-error-text); border-color: rgba(248,113,113,0.4); }
+.rs-chip-neutral  { background: rgba(107,127,153,0.15); color: var(--rs-unavailable); border-color: var(--rs-border); }
+.rs-chip-info     { background: rgba(147,196,245,0.15); color: var(--rs-accent); border-color: var(--rs-border-soft); }
+
+/* ---------------------------------------------------------------------------
    States: loading / no-results / unavailable placeholder
    (semantically distinct; each carries a text label, not colour alone)
    --------------------------------------------------------------------------- */

@@ -64,11 +64,12 @@
         if (s === "unsupported") return "is-unsupported";
         return "is-failed";
     }
-    // Authoritative per-point status -> uppercase label. Rendered verbatim; never inferred
-    // from metric presence.
+    // Authoritative per-point status -> uppercase human label. The label/tone semantics
+    // come from the shared results-status.js layer (never inferred from metric presence);
+    // pointStatusClass() below is this page's presentation-specific styling hook.
     function pointStatusText(status) {
-        var s = String(status || "").toUpperCase();
-        return s === "" ? "UNKNOWN" : s;
+        var p = statusPresentation(status);
+        return p.label;
     }
     // A stage is valid when its own authoritative status is completed. This classifies the
     // backend speed_point_status value only -- it does not inherit the parent point's
