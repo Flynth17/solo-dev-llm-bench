@@ -11,6 +11,53 @@
 
 ---
 
+## Delivery status (execution update)
+
+Surfaces are delivered in the order Overall → Speed → Workflow → Context → Compare. The table below
+records live work on `feat/results-ux`; it is distinct from the Phase 0–7 proposal in §4, which remains
+the uncreated RM-26-AA-0022 specification.
+
+| Surface | Item | Status |
+|---------|------|--------|
+| Overall | P2 | delivered — product hero, per-dimension readiness |
+| Speed | P3 | delivered — primary results experience |
+| Workflow | P4 | delivered — trend/coverage + progressive disclosure |
+| **Context** | **P5** | **BLOCKED** — aggregate Context enumeration/projection not exposed by the API (see below) |
+| Compare | P6 | next in queue — uses the existing `/api/comparison` read model, presentation-only |
+
+### BLOCKED — Context (P5): missing aggregate Context contract
+
+Context is the one delivered surface that cannot yet render its primary experience. The per-run read
+model exists (`GET /api/context/runs/{run_id}` → points, scores, degradation, retention, status), but
+**no API enumerates or projects committed Context runs**, so the JS cannot build the identity → trend →
+coverage → disclosure hierarchy P5 specifies.
+
+Exact API gap (verified against `routes/ranking.py`, `ranking_read_model.py`, `routes/context.py`,
+`v2_context_read_model.py`):
+
+- `/api/ranking` exposes only Speed + Agentic (`available_dimensions = [speed, agentic]`); Context is an
+  explicitly *unimplemented* dimension.
+- Context runs are reachable **per-run only** via `GET /api/context/runs/{run_id}`; there is no listing/
+  enumeration endpoint. The sole server-side scan of `CONTEXT_RUNS_DIR` lives in `routes/comparison.py`,
+  which feeds `/api/comparison?a=<key>&b=<key>` and needs known run keys — not an enumeration surface.
+
+Required future backend/read-model contract (a separate Act, solved after this presentation-only phase):
+
+```
+model/config
+→ available Context runs        (enumeration/listing endpoint over committed artifacts)
+→ per-run context point series  (requested_context_tokens, score, degradation_from_baseline,
+                                 retention_relative_to_baseline, status) verbatim
+→ status/coverage metadata      (supported / partial / unsupported / invalid / failed counts, baseline point)
+→ evidence deep-link            (/context/results/{run_id})
+```
+
+No production code was changed for P5. P5 resumes once that contract exists; until then the Context tab
+keeps its honest grounded placeholder. This entry does not touch `docs/ROADMAP.md` and does not create
+RM-26-AA-0022.
+
+---
+
 ## 1. North-star goal
 
 By the end of this work, a user opening `/results` sees a **ranked, evidence-backed benchmark
