@@ -133,7 +133,7 @@
     // Dimension family -> human label.
     var DIM_LABELS = {
         "speed": "Speed",
-        "agentic": "Workflow / Agentic",
+        "agentic": "Workflow",
         "context_degradation": "Context",
         "intelligence": "Intelligence"
     };
@@ -157,35 +157,38 @@
         var composite = ranking.composite || {};
         var html = "";
 
-        // Composite banner: honest "no approved composite score" state.
+        // Composite status: honest "no approved composite score" state with an explicit
+        // NO COMPOSITE badge so the Overall view reads as deliberately unavailable -- not
+        // partially implemented. The frontend never recomputes or infers a score.
         html += '<div class="rs-panel">';
-        html += banner("unavailable", "Composite score",
+        html += '<div class="rs-panel-title">Overall</div>';
+        html += "<span class='rs-badge rs-badge-unavailable' aria-label='No composite score'>NO COMPOSITE</span>";
+        html += banner("unavailable", "Composite score unavailable",
             esc(composite.reason ||
                 "Overall Solo Bench composite scoring contract is not yet approved; no Overall Solo Bench score is computed or inferred."));
         html += "</div>";
 
-        // Per-dimension availability cards (authoritative from the read model).
+        // Per-dimension availability (authoritative from the read model). Approved,
+        // implemented benchmark families render as available even before any run exists;
+        // unimplemented families render N/A with their backend-provided reason. The
+        // frontend performs no dimension recomputation -- status comes from /api/ranking.
         var dims = ranking.all_dimensions || [];
-        var dimScores = ranking.models && ranking.models.length
-            ? (ranking.models[0].dimensions || {})
-            : {};
-        // Prefer per-model dimension data; fall back to composite lists.
+        var approved = new Set(composite.available_dimensions || []);
+        var dimReasons = composite.dimension_reasons || {};
+        // Per-model detail (reason text) when results exist; backend reason otherwise.
+        var perModel = (ranking.models && ranking.models.length) ? (ranking.models[0].dimensions || {}) : {};
         html += '<div class="rs-panel">';
-        html += '<div class="rs-panel-title">Dimension availability</div>';
+        html += '<div class="rs-panel-title">Available dimensions</div>';
         html += '<div class="rs-card-grid">';
         dims.forEach(function (dim) {
-            var info = dimScores[dim] || {};
-            var status = info.status || "unavailable";
-            var cls = status === "available" ? "rs-dim-ok" : "rs-dim-unavailable";
             var label = DIM_LABELS[dim] || dim;
-            var valueText;
-            if (status === "available") {
-                // Component score is a nested object (speed/agentic); surface a short label.
-                valueText = "<span class='rs-ok-value'>Available</span>";
-            } else {
-                var reason = info.reason || "not available";
-                valueText = "<span class='rs-dim-status " + cls + "'>" + esc(reason) + "</span>";
-            }
+            var isApproved = approved.has(dim);
+            var reason = (perModel[dim] && perModel[dim].reason) || dimReasons[dim];
+            var marker = isApproved ? "\u2713" : "\u25CB"; // ✓ / ○
+            var cls = isApproved ? "rs-dim-ok" : "rs-dim-unavailable";
+            var valueText = isApproved
+                ? "<span class='rs-ok-value'>\u2713 Available</span>"
+                : "<span class='rs-dim-status " + cls + "'>\u2014 " + esc(reason || "Not available") + "</span>";
             html += '<div class="rs-metric-card">';
             html += '<div class="rs-metric-label">' + esc(label) + "</div>";
             html += valueText;
@@ -193,20 +196,15 @@
         });
         html += "</div></div>";
 
-        // L0 model list (collapsible to L1 configurations). Reusable drill-down primitive.
-        html += '<div class="rs-panel">';
-        html += '<div class="rs-panel-title">Models</div>';
-        if (!ranking.models || ranking.models.length === 0) {
-            html += stateNoResults("No benchmark results yet.");
-        } else {
-            html += renderL0Models(ranking.models);
-        }
-        html += "</div>";
-
         container.innerHTML = html;
     }
 
-    // L0 model identity -> expandable to L1 configurations.
+    // Reusable L0 -> L1 drill-down primitive (model family/version -> configuration/
+    // quantization -> run evidence). Retained as a Results-UI-foundation component with
+    // its own styling (.rs-model-group) and contract, but intentionally NOT invoked on
+    // the Overall composite-unavailable view: while no approved composite exists the
+    // Overall page must read as deliberately unavailable, never a partial leaderboard.
+    // Other surfaces that legitimately drill model -> configuration consume it directly.
     function renderL0Models(models) {
         var out = "";
         models.forEach(function (m) {
@@ -287,14 +285,23 @@
     }
 
     // Aggregate agentic evidence from the authoritative ranking into per-run entries.
-    // One entry per persisted run id, carrying the headline result + suite breakdown that
-    // the failure-first view needs. No scoring is done here.
+    // Two distinct sources, kept visually and semantically separate:
+    //   1. eligible (canonical) Workflow results -- carry an approved fraction + suite
+    //      breakdown; rendered as normal results.
+    //   2. incomplete-but-valid runs (agentic_diagnostic_runs) -- carry real check counts
+    //      and per-suite evidence but NO approved fraction (N/A stays N/A); rendered with
+    //      an explicit incomplete/diagnostic marker, never as a canonical result.
+    // No scoring is done here; all numbers are authoritative from /api/ranking.
     function buildWorkflowEntries(ranking) {
         var entries = [];
+        // (1) Eligible (canonical) Workflow results.
         (ranking.models || []).forEach(function (m) {
             (m.configurations || []).forEach(function (c) {
                 if (c.benchmark_family !== "agentic") { return; }
-                var ag = (c.component_score && c.component_score.agentic) || {};
+                var ag = c.component_score && c.component_score.agentic;
+                // Ineligible runs have no component score; they are surfaced below via
+                // agentic_diagnostic_runs so they are never emitted as empty rows.
+                if (!ag) { return; }
                 var suites = (ag.per_suite || []).map(function (s) {
                     return {
                         suite: s.suite,
@@ -328,8 +335,32 @@
                 });
             });
         });
+        // (2) Incomplete-but-valid Workflow runs -- inspectable diagnostic evidence.
+        // Real check counts + per-suite breakdown are surfaced, but fraction is explicitly
+        // null so the view never claims an approved composite score for these runs.
+        (ranking.agentic_diagnostic_runs || []).forEach(function (d) {
+            var passed = _asInt(d.checks_passed);
+            var total = _asInt(d.checks_total);
+            entries.push({
+                model_version: d.model_version,
+                model_family: d.model_family || d.model_version || "unknown",
+                architecture: d.architecture || "unknown",
+                configuration_fingerprint: d.configuration_fingerprint || "\u2014",
+                run_id: d.run_id,
+                status: d.status || "incomplete",
+                passed: passed,
+                total: total,
+                fraction: null, // diagnostic runs never carry an approved fraction
+                suites: ((d.per_suite || []).map(function (s) {
+                    return { suite: s.suite, passed: _asInt(s.checks_passed), total: _asInt(s.checks_total) };
+                })),
+                failedCount: (total != null && passed != null && total > passed) ? (total - passed) : 0,
+                diagnostic: true
+            });
+        });
         // Failure-first ordering: runs with more failing checks surface at the top so the
-        // correctness signal is never buried under perfect runs.
+        // correctness signal is never buried under perfect runs. Canonical and diagnostic
+        // runs share this ordering; rendering keeps them visually distinct.
         entries.sort(function (a, b) { return b.failedCount - a.failedCount; });
         return entries;
     }
@@ -385,7 +416,7 @@
 
     function renderWorkflowRuns(entries) {
         var html = '<div class="rs-panel">';
-        html += '<div class="rs-panel-title">Workflow / Agentic results</div>';
+        html += '<div class="rs-panel-title">Workflow results</div>';
         html += "<p class='rs-placeholder-note' style='margin:0 0 1rem'>Authoritative Workflow scores come from the backend read model; this view only formats, filters and drills down -- it never recomputes a score.</p>";
         html += "<div class='rs-wf-list'>";
         entries.forEach(function (e) { html += renderWorkflowRunRow(e); });
@@ -436,6 +467,7 @@
                     "<span class='rs-wf-checks'>" + esc(passedTxt) + " / " + esc(totalTxt) + " checks<span class='rs-wf-score-pct'> · " + scoreTxt + "</span></span>" +
                 "</span></summary>" +
             '<div class="rs-wf-body">' +
+                (e.diagnostic ? "<p class='rs-wf-diagnostic'>Incomplete run \u2014 inspectable diagnostic evidence; no approved composite score is computed.</p>" : "") +
                 "<div class='rs-wf-meta'><span>Run <code>" + esc(e.run_id) + "</code></span></div>" +
                 (suiteChips ? "<div class='rs-wf-suites'>" + suiteChips + "</div>" : "") +
                 "<a class='rs-view-link rs-wf-evidence' href='/v2/results/" + encodeURIComponent(e.run_id) + "' data-run-id='" + esc(e.run_id) + "'>View suite/case evidence \u2192</a>" +

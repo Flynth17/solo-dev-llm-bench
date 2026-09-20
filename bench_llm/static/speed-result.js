@@ -30,6 +30,20 @@
         if (n == null || n === "") return null;
         return Number(n).toFixed(2) + " s";
     }
+    // Target calibration: deviation of the actual prompt tokens from the canonical
+    // target context. Percent is signed (over/under target); the mean is in tokens.
+    function fmtPct(n) {
+        if (n == null || n === "") return null;
+        var s = Number(n);
+        if (!isFinite(s)) return null;
+        return s.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+    }
+    function fmtMeanError(n) {
+        if (n == null || n === "") return null;
+        var s = Number(n);
+        if (!isFinite(s)) return null;
+        return s.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " tokens";
+    }
     function esc(s) {
         return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
             return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -73,6 +87,7 @@
             '<td class="srb-num">' + cell(p.generation_tokens_per_second, fmtRate) + "</td>" +
             '<td class="srb-num">' + cell(p.completion_tokens, fmtTokens) + "</td>" +
             '<td class="srb-num">' + cell(p.wall_time_seconds, fmtWall) + "</td>" +
+            '<td class="srb-num">' + cell(p.target_error_percent, fmtPct) + "</td>" +
             "</tr>";
     }
 
@@ -133,11 +148,36 @@
         }
     }
 
+    // Run-level target calibration summary (Act 21). Hidden until the read model
+    // exposes input data -- a run with no calibration evidence stays hidden rather
+    // than showing fabricated numbers.
+    function renderCalibration(run) {
+        var maxPct = (run && run.max_abs_target_error_percent);
+        var meanTok = (run && run.mean_target_error_tokens);
+        if (maxPct == null && meanTok == null) { return; }
+        var el = by("sr-calib");
+        if (!el) { return; }
+        var maxEl = by("sr-calib-max");
+        var meanEl = by("sr-calib-mean");
+        if (maxEl) {
+            maxEl.innerHTML = (maxPct == null)
+                ? '<span class="srb-none">Not recorded</span>'
+                : esc(fmtPct(maxPct));
+        }
+        if (meanEl) {
+            meanEl.innerHTML = (meanTok == null)
+                ? '<span class="srb-none">Not recorded</span>'
+                : esc(fmtMeanError(meanTok));
+        }
+        el.classList.remove("hidden");
+    }
+
     function showRun(run) {
         by("srb-loading").classList.add("hidden");
         by("srb-identity").classList.remove("hidden");
         by("srb-points").classList.remove("hidden");
         renderIdentity(run);
+        renderCalibration(run);
         renderTable(run);
     }
 

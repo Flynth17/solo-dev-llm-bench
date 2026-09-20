@@ -211,6 +211,36 @@ def test_quality_incomplete_classification_not_eligible():
     assert speed_cfg["has_eligible_component_score"] is True
 
 
+def test_incomplete_agentic_run_is_inspectable_diagnostic_not_a_score():
+    """Incomplete-but-valid Workflow runs surface as inspectable diagnostic evidence.
+
+    A run that carries real check evidence but is not canonical/eligible (e.g. a
+    Speed-only classifier marked it ``incomplete``) must NOT become a component score
+    (N/A stays N/A), yet its real check counts + per-suite breakdown are exposed so the
+    Results UI can render it as inspectable incomplete-run evidence.
+    """
+    rows = _speed_run_rows("run-a", "model-x")
+    qv = _quality_view("model-x", passed=148, total=166, classification="incomplete")
+    out = rm.build_ranking(rows, [qv])
+
+    # Not eligible: no canonical component score is invented for an incomplete run.
+    m = out["models"][0]
+    agentic_cfg = next(c for c in m["configurations"] if c["benchmark_family"] == "agentic")
+    assert agentic_cfg["has_eligible_component_score"] is False
+
+    # Surfaced as inspectable diagnostic evidence with real, authoritative numbers.
+    diag = out.get("agentic_diagnostic_runs", [])
+    assert len(diag) == 1
+    d = diag[0]
+    assert d["run_id"] == "q-model-x"
+    assert d["status"] == "incomplete"
+    assert d["checks_passed"] == 148
+    assert d["checks_total"] == 166
+    # Per-suite breakdown is preserved verbatim (authoritative, never recomputed).
+    assert len(d["per_suite"]) == 5
+    assert d["per_suite"][0] == {"suite": "python", "checks_passed": 55, "checks_total": 58}
+
+
 # ---------------------------------------------------------------------------
 # 4. Composite unavailable; no fabricated best score (results-data-contract §7).
 # ---------------------------------------------------------------------------

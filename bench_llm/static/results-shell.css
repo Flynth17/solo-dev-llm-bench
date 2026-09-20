@@ -821,6 +821,19 @@
     font-size: 0.78rem;
 }
 
+// Incomplete-but-valid Workflow runs: inspectable diagnostic evidence only -- never a
+// canonical result. Warn tone keeps it visually distinct from an approved score.
+.rs-wf-diagnostic {
+    margin: 0 0 0.6rem 0;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--rs-warn-text);
+    background: rgba(251, 191, 36, 0.10);
+    border-left: 3px solid rgba(251, 191, 36, 0.5);
+    border-radius: 4px;
+}
+
 .rs-wf-suites {
     display: flex;
     flex-wrap: wrap;

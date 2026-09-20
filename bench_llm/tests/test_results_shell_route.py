@@ -353,6 +353,66 @@ def test_collapsible_l0_l1_primitive_present():
 
 
 # ---------------------------------------------------------------------------
+# 5b. Overall view correction (RM-26-AA-0016): no partial leaderboard
+# ---------------------------------------------------------------------------
+
+def test_overall_view_suppresses_partial_leaderboard_but_keeps_no_composite():
+    """Overall reads as deliberately unavailable, not partially implemented.
+
+    While no approved composite exists the Overall view must SUPPRESS the model-by-model
+    cards / configuration rows / evidence counts (the partial leaderboard) while KEEPING
+    the explicit NO COMPOSITE badge, the explanatory banner and an authoritative
+    per-dimension availability list. The L0->L1 collapsible primitive is retained as a
+    foundation component but must not be invoked on this view.
+    """
+    js = (STATIC_DIR / "results-shell.js").read_text(encoding="utf-8")
+
+    # Suppressed: the composite-unavailable Overall view no longer invokes the L0
+    # model/config/evidence-count leaderboard rendering.
+    assert "renderL0Models(ranking.models)" not in js, (
+        "Overall must not render the L0 model/config partial leaderboard"
+    )
+
+    # Retained as a foundation primitive (not invoked here): definition stays present.
+    assert "function renderL0Models(models)" in js
+
+    # Kept: explicit NO COMPOSITE badge + explanatory banner title.
+    assert "NO COMPOSITE" in js
+    assert "Composite score unavailable" in js
+
+    # Kept: authoritative per-dimension availability, rendered with ✓/○ markers and the
+    # backend-provided reason (single source of truth -- no frontend recomputation).
+    assert "Available dimensions" in js
+    assert "available_dimensions" in js
+    assert "dimension_reasons" in js
+    assert "\\u2713" in js  # ✓ check marker for approved families
+    assert "\\u25CB" in js  # ○ circle marker for unimplemented families
+
+
+def test_workflow_incomplete_runs_are_inspectable_diagnostic_not_a_score():
+    """Incomplete-but-valid Workflow runs surface as inspectable diagnostic evidence.
+
+    The Results UI must NOT emit empty rows for incomplete runs (the old partial-
+    leaderboard behaviour) and must NOT claim an approved fraction for them. Instead,
+    real check counts + per-suite breakdown are surfaced with an explicit incomplete /
+    diagnostic marker, while N/A stays distinct from a canonical score.
+    """
+    js = (STATIC_DIR / "results-shell.js").read_text(encoding="utf-8")
+
+    # Diagnostic path exists: reads backend-exposed agentic_diagnostic_runs and marks
+    # entries as diagnostic so they render distinctly from canonical results.
+    assert "agentic_diagnostic_runs" in js
+    assert "diagnostic:" in js
+
+    # Explicit incomplete / diagnostic indicator is rendered (never a percentage claim).
+    assert "inspectable diagnostic evidence" in js
+
+    # The old empty-row pattern is gone: eligible runs are only emitted when they carry
+    # an authoritative component score; ineligible runs are handled via the diagnostic path.
+    assert "if (!ag) { return; }" in js
+
+
+# ---------------------------------------------------------------------------
 # 6. State contract: loading / no-results / error fragments are distinct
 # ---------------------------------------------------------------------------
 

@@ -101,7 +101,7 @@ APPROVED_DIMENSIONS: tuple[str, ...] = (DIMENSION_SPEED, DIMENSION_AGENtic)
 
 # Families with no implemented benchmark/scoring contract today.
 UNIMPLEMENTED_DIMENSIONS: dict[str, str] = {
-    DIMENSION_CONTEXT_DEGRADATION: "context_degradation benchmark is not implemented",
+    DIMENSION_CONTEXT_DEGRADATION: "context_degradation results are available on the Context page",
     DIMENSION_INTELLIGENCE: "intelligence benchmark is not implemented",
 }
 
@@ -323,6 +323,14 @@ def _quality_view_component(quality_view: dict[str, Any], fingerprint: Optional[
         "eligible": eligible,
         "classification": classification,
         "component_score": component_score,
+        # Raw aggregate evidence is ALWAYS exposed (inspectable) regardless of
+        # eligibility. This is diagnostic data only -- never a canonical score.
+        # Ineligible runs keep ``component_score`` / ``eligible`` falsy so N/A stays
+        # distinct from 0; the frontend renders these as inspectable incomplete-run
+        # evidence rather than an approved fraction (see agentic_diagnostic_runs).
+        "checks_passed": overall_passed,
+        "checks_total": overall_total,
+        "per_suite": suites,
     }
 
 
@@ -395,6 +403,11 @@ def build_ranking(
 
     # --- Build L0 entries. ----------------------------------------------------
     models_out: list[dict[str, Any]] = []
+    # Incomplete-but-valid Workflow runs that carry real check evidence but are not
+    # canonical/eligible (e.g. a Speed-only classifier marked them ``incomplete``).
+    # They never become a component score; they are surfaced as inspectable diagnostic
+    # evidence so persisted results are visible without claiming an approved fraction.
+    diagnostic_runs: list[dict[str, Any]] = []
     for mv in sorted(version_architectures):  # deterministic outer order; arch is inner
         arch_set = version_architectures[mv]
         for arch in sorted(arch_set):  # distinct families (dense/moe/unknown) separated
@@ -449,6 +462,20 @@ def build_ranking(
                     slot["run_ids"].append(comp["run_id"])
                 if comp.get("eligible") and comp.get("component_score"):
                     slot["_eligible"][comp["run_id"]] = comp["component_score"]
+                elif comp.get("checks_total") is not None or comp.get("per_suite"):
+                    # Ineligible but real evidence -> inspectable diagnostic row. N/A stays
+                    # N/A: no component score / fraction is invented here.
+                    diagnostic_runs.append({
+                        "run_id": comp["run_id"],
+                        "model_version": mv,
+                        "model_family": display_by_version.get(mv) or mv,
+                        "architecture": arch,
+                        "configuration_fingerprint": fp,
+                        "status": comp.get("status") or classification,
+                        "checks_passed": comp.get("checks_passed"),
+                        "checks_total": comp.get("checks_total"),
+                        "per_suite": comp.get("per_suite") or [],
+                    })
                 slot["_count"] += 1
 
             # Collapse each config into its presentation shape. A config slot belongs
@@ -510,10 +537,18 @@ def build_ranking(
             ),
             "available_dimensions": list(APPROVED_DIMENSIONS),
             "missing_dimensions": list(UNIMPLEMENTED_DIMENSIONS),
+            # Authoritative per-unimplemented-dimension reason (single source of truth for
+            # the Results UI). Kept separate from ``missing_dimensions`` (keys only) so a
+            # frontend can render each family's status without duplicating backend copy.
+            "dimension_reasons": dict(UNIMPLEMENTED_DIMENSIONS),
         },
         "available_dimensions": list(APPROVED_DIMENSIONS),
         "all_dimensions": list(APPROVED_DIMENSIONS) + list(UNIMPLEMENTED_DIMENSIONS),
         "models": ranking,
+        # Incomplete-but-valid Workflow runs as inspectable diagnostic evidence (never a
+        # canonical score). The Results UI renders these with their real check counts,
+        # per-suite breakdown and evidence links, explicitly labeled incomplete.
+        "agentic_diagnostic_runs": diagnostic_runs,
     }
 
 

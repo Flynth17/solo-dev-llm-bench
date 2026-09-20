@@ -193,6 +193,17 @@ class TestSpeedReadModelDirect:
         unsupported = [p for p in result["points"] if p["target_context_tokens"] == 32768][0]
         assert unsupported["status"] == "unsupported"
 
+    def test_calibration_evidence_present(self):
+        # Act 21: target calibration evidence is derived from already-persisted input /
+        # target tokens -- run-level (max abs % + mean tokens) and per-point (%).
+        result = load_speed_run_by_id("speed-unit-0001", standard_run())
+        assert result["max_abs_target_error_percent"] == pytest.approx(32.73, abs=0.01)
+        assert result["mean_target_error_tokens"] == pytest.approx(-6227.7, abs=0.1)
+        # Signed: actual prompt tokens fall short of the canonical target (under-run).
+        assert result["mean_target_error_tokens"] < 0
+        assert [p["target_error_percent"] for p in result["points"]] == \
+            [pytest.approx(v, abs=0.01) for v in (-32.12, -32.52, -32.73)]
+
 
 # ---------------------------------------------------------------------------
 # Route / API behaviour (items 2, 10/11 via HTTP, 13-16).
@@ -264,6 +275,20 @@ class TestDedicatedSpeedPage:
         assert "text/html" in (resp.headers.get("content-type", "") or "")
         assert "sr-table" in resp.text
         assert "SPEED RESULT" in resp.text
+
+    def test_dedicated_speed_page_includes_calibration_summary(self, seeded_speed):
+        # The dedicated page surfaces the run-level target calibration summary (Act 21)
+        # and a per-point target-error column -- evidence the read model already exposes.
+        client, sid = seeded_speed
+        resp = client.get(f"/speed/results/{sid}")
+        assert resp.status_code == 200
+        body = resp.text
+        assert 'id="srb-calib"' in body
+        assert "Target calibration" in body
+        assert "sr-calib-max" in body
+        assert "sr-calib-mean" in body
+        # Per-point target-error column header is present in the telemetry table.
+        assert "Target err." in body
 
 
 # ---------------------------------------------------------------------------

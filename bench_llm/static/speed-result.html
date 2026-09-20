@@ -56,12 +56,25 @@
             </dl>
         </section>
 
+        <!-- Target calibration summary: run-level evidence that the x-axis was
+             calibrated to the canonical 8K/16K/32K targets (Act 21). Hidden until
+             the read model exposes input data -- never fabricated for a missing run. -->
+        <section id="srb-calib" class="panel hidden">
+            <div class="dapp-section-head">
+                <span class="dapp-section-label">Target calibration</span>
+            </div>
+            <dl class="srb-grid">
+                <div><dt>Max target error</dt><dd id="sr-calib-max">&mdash;</dd></div>
+                <div><dt>Mean target error</dt><dd id="sr-calib-mean">&mdash;</dd></div>
+            </dl>
+        </section>
+
         <!-- Primary result table: one row per canonical Speed point. -->
         <section id="srb-points" class="panel hidden">
             <div class="dapp-section-head">
                 <span class="dapp-section-label">Context scaling &middot; TTFT &middot; prefill &middot; generation</span>
             </div>
-            <p class="srb-note">Prefill metric reflects the currently persisted benchmark measurement (under review in a later Act).</p>
+            <p class="srb-note">Prefill reflects the persisted benchmark measurement.</p>
             <div class="srb-table-wrap">
                 <table id="sr-table" class="srb-tel-table" aria-label="Standard Speed result by context size">
                     <thead>
@@ -73,6 +86,7 @@
                             <th scope="col" title="Generation / decode throughput">Generation</th>
                             <th scope="col" title="Completed generation tokens">Output</th>
                             <th scope="col" title="Wall-clock time for the point">Wall</th>
+                            <th scope="col" title="Deviation of actual prompt tokens from the canonical target context">Target err.</th>
                         </tr>
                     </thead>
                     <tbody id="sr-body"></tbody>
