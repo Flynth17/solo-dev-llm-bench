@@ -61,14 +61,17 @@
 
 /* Clear Filters buttons (speed + workflow filter bars): same dark ghost language as
    .rs-detail-btn -- their .btn-secondary base is light-themed and reads as a bright
-   block inside the dark shell. */
+   block inside the dark shell.
+   Vertical box model matches .filter-group input/select exactly (shared.css: padding
+   0.5rem, font-size 0.9rem) so button height equals the filter boxes; .filter-row's
+   align-items:flex-end then bottom-aligns them in one row. */
 #clear-filters,
 #wf-clear-filters {
     background: transparent;
     color: var(--rs-text-muted);
     border: 1px solid var(--rs-border-soft);
-    padding: 0.35rem 1rem;
-    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
 }
 #clear-filters:hover,
 #wf-clear-filters:hover {

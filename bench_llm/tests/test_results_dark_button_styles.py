@@ -44,6 +44,15 @@ def test_clear_filters_buttons_are_dark_ghosts():
         assert "var(--rs-border-soft)" in body
 
 
+def test_clear_filters_button_height_matches_filter_inputs():
+    # Button vertical box must equal .filter-group input/select (shared.css):
+    # padding 0.5rem + font-size 0.9rem -> equal height, bottom-aligned by flex-end.
+    for selector in ('#clear-filters', '#wf-clear-filters'):
+        body = _rule(selector)
+        assert "padding: 0.5rem 1rem" in body
+        assert "font-size: 0.9rem" in body
+
+
 def test_modal_code_chip_is_dark_and_readable():
     # Run ID <code> must not inherit the light global chip (white-on-white).
     body = _rule("#speed-detail-content code {")
