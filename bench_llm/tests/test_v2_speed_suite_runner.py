@@ -423,9 +423,15 @@ def test_context_point_labels_match_contract():
 
 
 def test_fixed_iterations_and_output_budget():
-    # Never varies between points or models. Not inherited from the Workflow Suite's
-    # 75_percent_context policy -- Speed and Workflow have distinct fixed budgets.
-    assert vs.STANDARD_ITERATIONS == 5
+    # Repeatability contract: each supported point records exactly one independent run per
+    # stage -- 1 cold (cache-busted full-prefill) + 2 warm (warm_a / warm_b) repeatability
+    # pair. SPEED_TOTAL_RUNS_PER_POINT is the fixed per-point row count; it never varies
+    # between points or models.
+    assert vs.SPEED_COLD_RUNS == 1
+    assert vs.SPEED_WARM_RUNS == 2
+    assert vs.SPEED_TOTAL_RUNS_PER_POINT == 3
+    # Fixed generation/output budget -- distinct from the Workflow Suite's
+    # 75_percent_context policy. Speed and Workflow have distinct fixed budgets.
     assert vs.STANDARD_OUTPUT_TOKENS == 512
 
 
@@ -573,25 +579,53 @@ def test_run_speed_persists_three_completed_rows_with_metrics(monkeypatch):
     assert {p["target_context_tokens"] for p in summary["points"]} == {8192, 16384, 32768}
 
     rows = store.rows
-    assert len(rows) == 3
+    # Contract: 3 benchmark points x (1 cold + 2 warm) = SPEED_TOTAL_RUNS_PER_POINT * 3 rows.
+    assert len(rows) == vs.SPEED_TOTAL_RUNS_PER_POINT * 3
+    assert len(rows) == 9
+
+    # Exactly 3 logical benchmark points, each with exactly SPEED_TOTAL_RUNS_PER_POINT stage
+    # rows. Every expected row is completed and carries the fixed output budget.
+    by_point: dict[int, list[dict]] = {}
     for row in rows:
         assert row["speed_point_status"] == "completed"
-        assert row["iteration"] == vs.STANDARD_ITERATIONS
         assert row["temperature"] == 0.0
         assert row["max_output_tokens"] == vs.STANDARD_OUTPUT_TOKENS
         assert row["model_key"] == MODEL
-        # Generated throughput flows through the existing tokens_per_second column so the
-        # Act 13 read model (and /results) consume it unchanged.
+        by_point.setdefault(row["target_context_tokens"], []).append(row)
+
+    # Generated throughput flows through the existing tokens_per_second column so the Act 13
+    # read model (and /results) consume it unchanged; input tokens are constant per point.
+    for row in rows:
         assert row["tokens_per_second"] == pytest.approx(38.5, rel=1e-6)
         assert row["input_tokens"] == 9001
-        # Prefill is derived from the persisted input tokens + TTFT.
-        assert row["prefill_tokens_per_second"] == pytest.approx(round(9001 / 0.13, 1), rel=1e-6)
-        # Act 20/21: corrected runs persist a metric version so legacy cached-TTFT prefill on
-        # older runs is flagged without rewriting history. Act 21 bumped it from 2 (corrected
-        # full-prefill semantics) to 3 because calibration changes the ACTUAL input size that
-        # each point reports while keeping the same 8K/16K/32K label -- the marker lets consumers
-        # tell the sizing era apart. Track the module constant so it evolves with the code.
+    # Act 20/21: corrected runs persist a metric version so legacy cached-TTFT prefill on
+    # older runs is flagged without rewriting history. Act 21 bumped it from 2 (corrected
+    # full-prefill semantics) to 3 because calibration changes the ACTUAL input size that
+    # each point reports while keeping the same 8K/16K/32K label -- the marker lets consumers
+    # tell the sizing era apart. Track the module constant so it evolves with the code.
+    for row in rows:
         assert row["speed_metric_version"] == vs.SPEED_METRIC_VERSION
+
+    # Exactly three logical points at the canonical targets, each fully supported here.
+    assert set(by_point) == {8192, 16384, 32768}
+    for point_rows in by_point.values():
+        assert len(point_rows) == vs.SPEED_TOTAL_RUNS_PER_POINT
+
+    # Each point has exactly one cold + two warm runs with distinct stage identities.
+    for point_rows in by_point.values():
+        stages = sorted(r["speed_run_stage"] for r in point_rows)
+        assert stages == ["cold", "warm_a", "warm_b"]  # canonical stage set
+        assert len(set(stages)) == 3                  # no duplicated stage rows
+        assert sum(1 for r in point_rows if r["cold_or_warm"] == "cold") == 1
+        assert sum(1 for r in point_rows if r["cold_or_warm"] == "warm") == 2
+        # Each run records its own iteration: cold=1, warm_a=2, warm_b=3.
+        assert sorted(r["iteration"] for r in point_rows) == [1, 2, 3]
+        # Cold owns the authoritative full-prefill TTFT + derived prefill throughput; warm runs
+        # are NOT cold samples -> no prefill derivation (prefill stays a cold-only signal).
+        cold = next(r for r in point_rows if r["speed_run_stage"] == "cold")
+        warm = [r for r in point_rows if r["speed_run_stage"].startswith("warm")]
+        assert cold["prefill_tokens_per_second"] == pytest.approx(round(9001 / 0.13, 1), rel=1e-6)
+        assert all(r["prefill_tokens_per_second"] is None for r in warm)
         assert vs.SPEED_METRIC_VERSION == 3
 
 

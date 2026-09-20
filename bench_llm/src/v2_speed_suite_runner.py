@@ -84,9 +84,20 @@ CANONICAL_CONTEXT_POINTS: tuple[int, ...] = (8192, 16384, 32768)
 # Human-facing labels for each canonical point.
 CONTEXT_POINT_LABELS: dict[int, str] = {8192: "8K", 16384: "16K", 32768: "32K"}
 
-# Fixed iteration count shared by every point (never varies between context points).
-# Reuses the project's established benchmark/evaluation default.
-STANDARD_ITERATIONS: int = 5
+# Standard Speed repeatability contract (Evidence-First Redesign). Each SUPPORTED point
+# records exactly ONE independent run per stage -- 1 cold (cache-busted full-prefill) +
+# 2 warm (warm_a / warm_b) -- persisted as separate rows so cold and warm are never averaged
+# together. The two warm runs form a repeatability pair for the generation-throughput signal;
+# their mean is the reported warm figure, but every run's telemetry stays independently
+# recoverable under its own speed_run_stage (see _persist_speed_runs).
+SPEED_COLD_RUNS: int = 1
+SPEED_WARM_RUNS: int = 2
+SPEED_TOTAL_RUNS_PER_POINT: int = SPEED_COLD_RUNS + SPEED_WARM_RUNS  # == 3
+
+# Stage tags persisted in speed_run_stage to distinguish the independent runs of one point.
+SPEED_STAGE_COLD = "cold"
+SPEED_STAGE_WARM_A = "warm_a"
+SPEED_STAGE_WARM_B = "warm_b"
 
 # Fixed generation/target output budget for stable decode throughput measurement,
 # identical across all points and models/configurations. Deliberately NOT inherited
@@ -371,7 +382,136 @@ def _is_cold_run(run: dict) -> bool:
     return str(run.get("cold_or_warm") or "").strip().lower() == "cold"
 
 
+# Stage tags persisted in speed_run_stage to distinguish the independent runs of one point
+# are declared above (SPEED_STAGE_COLD / SPEED_STAGE_WARM_A / SPEED_STAGE_WARM_B).
+def _stage_label_for(index: int) -> str:
+    """Map a 0-based run index within a supported point to its persisted stage tag.
+
+    The first run is the cold (cache-busted full-prefill) sample; runs two and three are the
+    warm repeatability pair (warm_a / warm_b). Anything beyond SPEED_TOTAL_RUNS_PER_POINT keeps
+    a stable fallback tag so extra rows never raise -- they simply never appear under this
+    contract.
+    """
+    return {0: SPEED_STAGE_COLD, 1: SPEED_STAGE_WARM_A, 2: SPEED_STAGE_WARM_B}.get(
+        index, f"warm_extra_{index}"
+    )
+
+
+def _as_number(value) -> Optional[float]:
+    """Return *value* as int/float when it is a real number, otherwise None.
+
+    Booleans are rejected (``True``/``False`` must never be treated as 1.0/0.0 numbers).
+    Used for defensive coercion of persisted telemetry so absent values degrade to None and
+    never divide/coerce into a misleading figure.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
 def _aggregate_point(bench: dict[str, Any]) -> dict[str, Any]:
+    """Collapse a :func:`run_benchmark` result into one representative point summary.
+
+    Used to build the CLI/route response for a supported point whose runs are persisted as
+    independent stage rows (see :func:`_persist_speed_runs`). Generation throughput uses the
+    warm-iteration average when available (iteration 1 is ``cold`` and carries model-load
+    variance); it falls back to the all-iteration average. Primary TTFT comes from the
+    authoritative FULL-PREFILL sample -- the cold (iteration 1) request, which Standard Speed
+    pairs with a cache-busting prompt so its time-to-first token is genuine full-prefill rather
+    than a cached hit; an average of warm (cache-reused) TTFTs must never feed prefill
+    throughput. Actual prompt tokens come from the cold run; completion tokens use the final
+    iteration as a representative generation length.
+    """
+    runs = bench.get("runs", []) or []
+    warm = bench.get("warm_aggregate", {}) or {}
+    overall = bench.get("aggregate", {}) or {}
+
+    tps = warm.get("avg_tokens_per_second")
+    if not isinstance(tps, (int, float)) or tps <= 0:
+        tps = overall.get("avg_tokens_per_second")
+
+    # Full-prefill sample only -- never the warm/cache-reused TTFT average.
+    cold_runs = [r for r in runs if _is_cold_run(r)]
+    ttft = cold_runs[0].get("ttft_seconds") if cold_runs else (runs[0].get("ttft_seconds") if runs else 0)
+
+    actual_prompt_tokens = runs[0].get("input_tokens", 0) if runs else 0
+    completion_tokens = runs[-1].get("output_tokens", 0) if runs else 0
+    wall = bench.get("benchmark_duration_seconds", 0) or 0
+
+    return {
+        "status": POINT_COMPLETED,
+        "generation_tokens_per_second": round(float(tps), 2) if isinstance(tps, (int, float)) else 0,
+        "ttft_seconds": round(float(ttft), 4) if isinstance(ttft, (int, float)) else None,
+        "actual_prompt_tokens": int(actual_prompt_tokens or 0),
+        "completion_tokens": int(completion_tokens or 0),
+        "prefill_tokens_per_second": prefill_throughput(actual_prompt_tokens, ttft),
+        "wall_time_seconds": round(float(wall), 2),
+    }
+
+
+def _persist_speed_runs(store, identity: dict, point: int, label: str, bench: dict[str, Any]) -> dict[str, Any]:
+    """Persist one independent row per run (1 cold + 2 warm) for a supported point.
+
+    Each of the SPEED_TOTAL_RUNS_PER_POINT runs is written as its own record tagged with a
+    ``speed_run_stage`` so cold and warm are never averaged together at write time or in the
+    read model. The cold run carries the authoritative full-prefill TTFT and derived prefill
+    throughput; warm runs keep their raw TTFT under ``warm_ttft_seconds`` (diagnostic only --
+    never fed into the cold full-prefill derivation). Every row records its own generation
+    throughput, wall time and optional reasoning tokens (captured only when the backend reports
+    it, else null/NOT REPORTED).
+
+    Returns a point-level summary for the CLI/route response: cold full-prefill TTFT/prefill
+    plus the warm-only mean of the repeatability pair (cold excluded -- never blended with warm).
+    """
+    runs = bench.get("runs", []) if isinstance(bench, dict) else []
+    for index in range(min(SPEED_TOTAL_RUNS_PER_POINT, len(runs))):
+        r = runs[index]
+        stage = _stage_label_for(index)
+        is_cold = index == 0
+        tps = _as_number(r.get("tokens_per_second"))
+        ttft = _as_number(r.get("ttft_seconds"))
+        input_tokens = _as_number(r.get("input_tokens"))
+        completion_tokens = _as_number(r.get("output_tokens"))
+        wall = _as_number(r.get("wall_time_seconds"))
+        if wall is None:
+            wall = _as_number(bench.get("benchmark_duration_seconds")) if isinstance(bench, dict) else None
+        reasoning = r.get("reasoning_output_tokens", None)
+
+        row = dict(identity)
+        row.update({
+            "iteration": index + 1,
+            "speed_run_stage": stage,
+            "cold_or_warm": SPEED_STAGE_COLD if is_cold else "warm",
+            "tokens_per_second": round(tps, 2) if tps is not None else 0.0,
+            "ttft_seconds": round(ttft, 4) if ttft is not None else None,
+            "input_tokens": int(input_tokens or 0),
+            "output_tokens": int(completion_tokens or 0),
+            "model_load_time_seconds": r.get("model_load_time_seconds"),
+            "wall_time_seconds": round(wall, 2) if wall is not None else 0.0,
+            # Optional reasoning-token capture: only when the backend reports it; otherwise null.
+            "reasoning_output_tokens": reasoning if isinstance(reasoning, int) and not isinstance(reasoning, bool) else None,
+            "prompt_name": f"{label} ({point} tokens) [{stage}]",
+            "max_output_tokens": STANDARD_OUTPUT_TOKENS,
+            "temperature": 0.0,
+            "target_context_tokens": point,
+            "context_point": label,
+            # Warm runs keep their raw TTFT as diagnostic evidence; the cold run owns full-
+            # prefill TTFT + derived prefill throughput (set below). Never blend stages.
+            "warm_ttft_seconds": (round(ttft, 4) if (not is_cold and ttft is not None) else None),
+            "speed_point_status": POINT_COMPLETED,
+            "speed_metric_version": SPEED_METRIC_VERSION,
+        })
+        # Cold run: authoritative full-prefill TTFT + derived prefill throughput. Warm runs are
+        # NOT cold samples -> no prefill derivation (prefill stays a cold-only signal).
+        row["prefill_tokens_per_second"] = (
+            prefill_throughput(int(input_tokens or 0), ttft) if is_cold else None
+        )
+        try:
+            store.add_run(row)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"warning: failed to persist {label} [{stage}]: {exc}", file=sys.stderr)
+
+    return _aggregate_point(bench)
     """Collapse a :func:`run_benchmark` result into one representative point snapshot.
 
     Generation throughput uses the warm-iteration average when available (iteration 1 is
@@ -541,8 +681,9 @@ async def run_speed_suite(
             # and persist that status; never silently shrink the target.
             row = dict(identity)
             row.update({
-                "iteration": STANDARD_ITERATIONS,
+                "iteration": SPEED_TOTAL_RUNS_PER_POINT,
                 "cold_or_warm": "",
+                "speed_run_stage": "",
                 "tokens_per_second": 0,
                 "ttft_seconds": None,
                 "input_tokens": None,
@@ -584,7 +725,7 @@ async def run_speed_suite(
                 model=clean_model,
                 prompt=plain_payload,
                 full_prefill_prompt=full_prefill_payload,
-                iterations=STANDARD_ITERATIONS,
+                iterations=SPEED_TOTAL_RUNS_PER_POINT,
                 max_tokens=STANDARD_OUTPUT_TOKENS,
                 temperature=0.0,
                 hardware_label=hardware_label,
@@ -596,14 +737,15 @@ async def run_speed_suite(
         except Exception as exc:  # pragma: no cover - defensive; one point must not abort the suite
             row = dict(identity)
             row.update({
-                "iteration": STANDARD_ITERATIONS,
+                "iteration": SPEED_TOTAL_RUNS_PER_POINT,
                 "cold_or_warm": "",
+                "speed_run_stage": "",
                 "tokens_per_second": 0,
                 "ttft_seconds": None,
                 "input_tokens": None,
                 "output_tokens": None,
                 "wall_time_seconds": 0,
-                "prompt_name": f"{label} ({point} tokens)",
+                "prompt_name": f"{label} ({point} tokens) [failed]",
                 "max_output_tokens": STANDARD_OUTPUT_TOKENS,
                 "temperature": 0.0,
                 "target_context_tokens": point,
@@ -617,39 +759,18 @@ async def run_speed_suite(
             points.append(SpeedPointResult(label, point, POINT_FAILED, error=str(exc)))
             continue
 
-        agg = _aggregate_point(bench)
-        row = dict(identity)
-        row.update({
-            "iteration": STANDARD_ITERATIONS,
-            "cold_or_warm": "warm",  # warm-throughput representative (model stays loaded across points)
-            "tokens_per_second": agg["generation_tokens_per_second"],
-            "ttft_seconds": agg["ttft_seconds"],
-            "input_tokens": agg["actual_prompt_tokens"],
-            "prefill_tokens_per_second": agg["prefill_tokens_per_second"],
-            "output_tokens": agg["completion_tokens"],
-            "wall_time_seconds": agg["wall_time_seconds"],
-            "prompt_name": f"{label} ({point} tokens)",
-            "max_output_tokens": STANDARD_OUTPUT_TOKENS,
-            "temperature": 0.0,
-            "target_context_tokens": point,
-            "context_point": label,
-            "speed_point_status": POINT_COMPLETED,
-            # Corrected metric semantics (Act 20): persisted so the read model can flag
-            # legacy cached-TTFT prefill on older runs and show no warning here.
-            "speed_metric_version": SPEED_METRIC_VERSION,
-        })
-        try:
-            store.add_run(row)
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"warning: failed to persist point {label}: {exc}", file=sys.stderr)
+        # Persist one independent row per run (1 cold + 2 warm), then reuse the point-level
+        # summary. Cold and warm are never averaged together: each run keeps its own telemetry,
+        # prefill stays a cold-only signal, and generation uses the warm repeatability pair only.
+        summary = _persist_speed_runs(store, identity, point, label, bench)
         points.append(SpeedPointResult(
-            label, point, POINT_COMPLETED,
-            actual_prompt_tokens=agg["actual_prompt_tokens"],
-            ttft_seconds=agg["ttft_seconds"],
-            prefill_tokens_per_second=agg["prefill_tokens_per_second"],
-            generation_tokens_per_second=agg["generation_tokens_per_second"],
-            completion_tokens=agg["completion_tokens"],
-            wall_time_seconds=agg["wall_time_seconds"],
+            label, point, summary["status"],
+            actual_prompt_tokens=summary["actual_prompt_tokens"],
+            ttft_seconds=summary["ttft_seconds"],
+            prefill_tokens_per_second=summary["prefill_tokens_per_second"],
+            generation_tokens_per_second=summary["generation_tokens_per_second"],
+            completion_tokens=summary["completion_tokens"],
+            wall_time_seconds=summary["wall_time_seconds"],
         ))
 
     statuses = [p.status for p in points]
