@@ -85,6 +85,26 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Focus — global visible-focus baseline (design-system §10).
+
+   Every interactive control gets a readable focus ring even where a surface has
+   not defined its own :focus-visible rule. The dark Results shell exposes the
+   --rs-accent token inside its .results-shell root; when absent (the light
+   Dashboard) we fall back to a blue ring so focus is never invisible on either
+   theme. Per-surface rules with equal/higher specificity still win, so this is
+   purely additive defence-in-depth and never double-outlines a control.
+   --------------------------------------------------------------------------- */
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--rs-accent, #2563eb);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
    Forms
    --------------------------------------------------------------------------- */
 
