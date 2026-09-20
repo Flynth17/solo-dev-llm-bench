@@ -59,6 +59,23 @@
     min-width: 180px;
 }
 
+/* Clear Filters buttons (speed + workflow filter bars): same dark ghost language as
+   .rs-detail-btn -- their .btn-secondary base is light-themed and reads as a bright
+   block inside the dark shell. */
+#clear-filters,
+#wf-clear-filters {
+    background: transparent;
+    color: var(--rs-text-muted);
+    border: 1px solid var(--rs-border-soft);
+    padding: 0.35rem 1rem;
+    font-size: 0.85rem;
+}
+#clear-filters:hover,
+#wf-clear-filters:hover {
+    background: var(--rs-accent-hover);
+    color: var(--rs-text);
+}
+
 /* ---------------------------------------------------------------------------
    Results count / empty state
    --------------------------------------------------------------------------- */

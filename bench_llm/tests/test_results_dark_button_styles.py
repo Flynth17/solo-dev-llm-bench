@@ -36,6 +36,14 @@ def test_modal_close_button_is_dark_ghost():
     assert "var(--rs-border-soft)" in body
 
 
+def test_clear_filters_buttons_are_dark_ghosts():
+    # Both filter bars (speed + workflow) must not keep the light .btn-secondary look.
+    for selector in ('#clear-filters', '#wf-clear-filters'):
+        body = _rule(selector)
+        assert "background: transparent" in body
+        assert "var(--rs-border-soft)" in body
+
+
 def test_modal_code_chip_is_dark_and_readable():
     # Run ID <code> must not inherit the light global chip (white-on-white).
     body = _rule("#speed-detail-content code {")
