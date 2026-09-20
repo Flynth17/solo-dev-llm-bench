@@ -138,6 +138,16 @@
         "intelligence": "Intelligence"
     };
 
+    // Dimension key -> Results shell view id (nav data-view). The agentic family renders
+    // under the "workflow" tab, so this mapping keeps delivered-dimension navigation from
+    // the Overall hero correct. Kept next to DIM_LABELS on purpose.
+    var DIM_VIEW = {
+        "speed": "speed",
+        "agentic": "workflow",
+        "context_degradation": "context",
+        "intelligence": "intelligence"
+    };
+
     // -----------------------------------------------------------------------
     // Overall view (composite status + per-dimension availability + L0 list)
     // Composite score stays explicitly unavailable -- never inferred.
@@ -155,48 +165,85 @@
 
     function renderOverall(container, ranking) {
         var composite = ranking.composite || {};
+        // Authoritative delivery state comes from /api/ranking -- never inferred or
+        // hard-coded here. Delivered dimensions are exactly those the read model lists as
+        // available; everything else in all_dimensions is future/research. The frontend
+        // performs no dimension recomputation and never infers composite eligibility.
+        var delivered = new Set(ranking.available_dimensions || composite.available_dimensions || []);
+        var allDims = ranking.all_dimensions || [];
+        var dimReasons = composite.dimension_reasons || {};
+
+        // NO COMPOSITE indicator: reuse the shared P1 presentation layer so tone and chip
+        // styling stay consistent with every other Results surface. The word "composite"
+        // lives in secondary copy only -- it is never the panel heading (GAP-1).
+        var compositePres = statusPresentation(composite.status || "unavailable");
+
         var html = "";
 
-        // Composite status: honest "no approved composite score" state with an explicit
-        // NO COMPOSITE badge so the Overall view reads as deliberately unavailable -- not
-        // partially implemented. The frontend never recomputes or infers a score.
-        html += '<div class="rs-panel">';
-        html += '<div class="rs-panel-title">Overall</div>';
-        html += "<span class='rs-badge rs-badge-unavailable' aria-label='No composite score'>NO COMPOSITE</span>";
-        html += banner("unavailable", "Composite score unavailable",
-            esc(composite.reason ||
-                "Overall Solo Bench composite scoring contract is not yet approved; no Overall Solo Bench score is computed or inferred."));
+        // Hero: strong product title + an honest, secondary NO COMPOSITE indicator. The
+        // Overall page leads with what IS available (per-dimension readiness), not with the
+        // absent composite. No score, no ranking, no model cards here.
+        html += '<div class="rs-panel rs-overall-hero">';
+        html += '<div class="rs-overall-hero-head">';
+        html += "<h2 class='rs-overall-hero-title'>" + esc("Overall \u2014 per-dimension readiness") + "</h2>";
+        html += "<span class='" + compositePres.className + "' data-status='no-composite' aria-label='No composite score'>NO COMPOSITE</span>";
+        html += "</div>";
+        html += "<p class='rs-overall-hero-lead'>" + esc(
+            "Overall Solo Bench composite scoring is not yet approved. No aggregate score is computed or inferred; individual benchmark results below are available and comparable."
+            ) + "</p>";
         html += "</div>";
 
-        // Per-dimension availability (authoritative from the read model). Approved,
-        // implemented benchmark families render as available even before any run exists;
-        // unimplemented families render N/A with their backend-provided reason. The
-        // frontend performs no dimension recomputation -- status comes from /api/ranking.
-        var dims = ranking.all_dimensions || [];
-        var approved = new Set(composite.available_dimensions || []);
-        var dimReasons = composite.dimension_reasons || {};
-        // Per-model detail (reason text) when results exist; backend reason otherwise.
-        var perModel = (ranking.models && ranking.models.length) ? (ranking.models[0].dimensions || {}) : {};
+        // Benchmark coverage: delivered dimensions render as actionable, each with a single
+        // navigation path into the dimension; future/research dimensions stay visually
+        // distinct with their backend-provided reason. Frontend performs no delivery-state
+        // recomputation -- status comes from /api/ranking. Delivered vs research is a
+        // dimension-availability axis (not a run state), so it uses the shared delivered/
+        // research chip classes rather than a run-status mapping.
         html += '<div class="rs-panel">';
-        html += '<div class="rs-panel-title">Available dimensions</div>';
-        html += '<div class="rs-card-grid">';
-        dims.forEach(function (dim) {
+        html += '<div class="rs-panel-title">Benchmark coverage</div>';
+        html += '<div class="rs-card-grid rs-coverage-grid">';
+        allDims.forEach(function (dim) {
             var label = DIM_LABELS[dim] || dim;
-            var isApproved = approved.has(dim);
-            var reason = (perModel[dim] && perModel[dim].reason) || dimReasons[dim];
-            var marker = isApproved ? "\u2713" : "\u25CB"; // ✓ / ○
-            var cls = isApproved ? "rs-dim-ok" : "rs-dim-unavailable";
-            var valueText = isApproved
-                ? "<span class='rs-ok-value'>\u2713 Available</span>"
-                : "<span class='rs-dim-status " + cls + "'>\u2014 " + esc(reason || "Not available") + "</span>";
-            html += '<div class="rs-metric-card">';
-            html += '<div class="rs-metric-label">' + esc(label) + "</div>";
-            html += valueText;
-            html += "</div>";
+            if (delivered.has(dim)) {
+                html += '<div class="rs-metric-card rs-coverage-delivered">';
+                html += '<div class="rs-metric-label">' + esc(label) + "</div>";
+                html += "<span class='rs-chip rs-chip-delivered' data-coverage='delivered'>DELIVERED</span>";
+                html += "<button type='button' class='rs-coverage-open' data-dim='" + esc(dim) + "'>Open " + esc(label) + " \u2192</button>";
+                html += "</div>";
+            } else {
+                var reason = dimReasons[dim] || "Coming soon \u2014 not yet delivered.";
+                html += '<div class="rs-metric-card rs-coverage-research">';
+                html += '<div class="rs-metric-label">' + esc(label) + "</div>";
+                html += "<span class='rs-chip rs-chip-research' data-coverage='research'>RESEARCH</span>";
+                html += "<p class='rs-coverage-reason'>" + esc(reason) + "</p>";
+                html += "</div>";
+            }
         });
-        html += "</div></div>";
+        html += "</div>";
+        html += "<p class='rs-coverage-note'>" + esc(
+            "A composite Overall score will appear only once the required scoring and weighting contract is approved; until then each benchmark is shown on its own."
+            ) + "</p>";
+        html += "</div>";
 
         container.innerHTML = html;
+
+        // Wire delivered-dimension navigation: one obvious path into each delivered
+        // dimension, reusing the shell's existing tab activation + lazy loader so a card
+        // behaves exactly like its nav tab.
+        var openButtons = container.querySelectorAll(".rs-coverage-open");
+        Array.prototype.forEach.call(openButtons, function (btn) {
+            btn.addEventListener("click", function () {
+                openDimension(btn.getAttribute("data-dim"));
+            });
+        });
+    }
+
+    // Switch to a dimension's view and lazy-load it on first open. Mirrors the shell's
+    // nav-item click handler so delivered dimensions navigate identically to the tabs.
+    function openDimension(dim) {
+        var viewId = DIM_VIEW[dim] || dim;
+        activateView(viewId);
+        ensureLoaded(viewId);
     }
 
     // Reusable L0 -> L1 drill-down primitive (model family/version -> configuration/

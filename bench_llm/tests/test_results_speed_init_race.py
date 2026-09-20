@@ -43,6 +43,7 @@ import pytest
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 UTILS_JS = STATIC_DIR / "results-utils.js"
+STATUS_JS = STATIC_DIR / "results-status.js"
 FILTERS_JS = STATIC_DIR / "results-filters.js"
 SHELL_JS = STATIC_DIR / "results-shell.js"
 RESULTS_JS = STATIC_DIR / "results.js"
@@ -162,9 +163,10 @@ var flush = function () { return new Promise(function (r) { setTimeout(r, 20); }
 // markActive from URL; no listeners). location.hash = "#speed" models a fresh
 // navigation directly to /results#speed.
 // ===========================================================================
-eval(fs.readFileSync(process.argv[2], "utf8"));  // results-utils.js (escapeHtml/formatTtft)
-eval(fs.readFileSync(process.argv[3], "utf8"));  // results-filters.js (applyFilters + listeners)
-eval(fs.readFileSync(process.argv[4], "utf8"));  // results-shell.js (hash activation + Overall loader)
+eval(fs.readFileSync(process.argv[2], "utf8"));   // results-utils.js (escapeHtml/formatTtft)
+global.statusPresentation = require(process.argv[3]).statusPresentation;  // results-status.js (shared layer)
+eval(fs.readFileSync(process.argv[4], "utf8"));   // results-filters.js (applyFilters + listeners)
+eval(fs.readFileSync(process.argv[5], "utf8"));   // results-shell.js (hash activation + Overall loader)
 
 // ===========================================================================
 // PROOF 1 -- direct initial state = Speed. The synchronous init chain must have
@@ -182,7 +184,7 @@ assert(urlsAfterShell.length === 1 && urlsAfterShell[0] === "/api/ranking",
     "Overall lazy loader must fire first during init, got " + JSON.stringify(urlsAfterShell));
 
 // Now eval results.js LAST -- its top-level loadResults() is the single init-time call.
-eval(fs.readFileSync(process.argv[5], "utf8"));  // results.js (wires modal/sort + fires loadResults())
+eval(fs.readFileSync(process.argv[6], "utf8"));  // results.js (wires modal/sort + fires loadResults())
 
 // ===========================================================================
 // PROOF 2 -- loader registration/activation order. Both lazy loaders fire during the
@@ -295,7 +297,7 @@ def _run_harness(tmp_path):
     harness = tmp_path / "speed_init_race_harness.js"
     harness.write_text(HARNESS_JS, encoding="utf-8")
     return subprocess.run(
-        [node, str(harness), str(UTILS_JS), str(FILTERS_JS), str(SHELL_JS), str(RESULTS_JS)],
+        [node, str(harness), str(UTILS_JS), str(STATUS_JS), str(FILTERS_JS), str(SHELL_JS), str(RESULTS_JS)],
         capture_output=True,
         text=True,
     )

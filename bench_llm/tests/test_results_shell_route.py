@@ -357,13 +357,17 @@ def test_collapsible_l0_l1_primitive_present():
 # ---------------------------------------------------------------------------
 
 def test_overall_view_suppresses_partial_leaderboard_but_keeps_no_composite():
-    """Overall reads as deliberately unavailable, not partially implemented.
+    """Overall reads as a product hero leading with per-dimension readiness, not the
+    absent composite (RM-26-AA Results UX P2, closes GAP-1).
 
-    While no approved composite exists the Overall view must SUPPRESS the model-by-model
-    cards / configuration rows / evidence counts (the partial leaderboard) while KEEPING
-    the explicit NO COMPOSITE badge, the explanatory banner and an authoritative
-    per-dimension availability list. The L0->L1 collapsible primitive is retained as a
-    foundation component but must not be invoked on this view.
+    While no approved composite exists the Overall view must STILL SUPPRESS the model-by-
+    model cards / configuration rows / evidence counts (the partial leaderboard) and must
+    NOT compute or infer any score. The explicit NO COMPOSITE indicator is kept but now as a
+    secondary chip beside a strong "per-dimension readiness" title rather than a heading;
+    benchmark coverage renders delivered vs future/research dimensions from the authoritative
+    /api/ranking fields (available_dimensions / dimension_reasons) with no frontend
+    recomputation. The L0->L1 collapsible primitive is retained as a foundation component but
+    must not be invoked on this view.
     """
     js = (STATIC_DIR / "results-shell.js").read_text(encoding="utf-8")
 
@@ -376,17 +380,22 @@ def test_overall_view_suppresses_partial_leaderboard_but_keeps_no_composite():
     # Retained as a foundation primitive (not invoked here): definition stays present.
     assert "function renderL0Models(models)" in js
 
-    # Kept: explicit NO COMPOSITE badge + explanatory banner title.
+    # Kept: explicit NO COMPOSITE indicator (now a secondary chip, never the heading) plus
+    # honest copy that no aggregate score is computed or inferred.
     assert "NO COMPOSITE" in js
-    assert "Composite score unavailable" in js
+    assert "No aggregate score is computed or inferred" in js
 
-    # Kept: authoritative per-dimension availability, rendered with ✓/○ markers and the
-    # backend-provided reason (single source of truth -- no frontend recomputation).
-    assert "Available dimensions" in js
+    # Kept: authoritative per-dimension delivery state from /api/ranking (single source of
+    # truth -- no frontend recomputation). Rendered as delivered vs future/research chips.
+    assert "Benchmark coverage" in js
     assert "available_dimensions" in js
     assert "dimension_reasons" in js
-    assert "\\u2713" in js  # ✓ check marker for approved families
-    assert "\\u25CB" in js  # ○ circle marker for unimplemented families
+
+    # P2 hero leads with per-dimension readiness; delivered vs research are distinct,
+    # labelled chips (never colour-only).
+    assert "per-dimension readiness" in js
+    assert "rs-chip-delivered" in js
+    assert "rs-chip-research" in js
 
 
 def test_workflow_incomplete_runs_are_inspectable_diagnostic_not_a_score():

@@ -503,6 +503,113 @@
 .rs-dim-unavailable { color: var(--rs-unavailable); }
 
 /* ---------------------------------------------------------------------------
+   Overall hero + benchmark coverage (RM-26-AA Results UX P2, closes GAP-1)
+   The Overall tab leads with per-dimension readiness, not the absent composite.
+   Delivered dimensions are actionable (single nav path into each dimension);
+   future/research dimensions stay visually distinct. No score, no ranking here.
+   --------------------------------------------------------------------------- */
+
+.rs-overall-hero {
+    border-color: var(--rs-border-soft);
+}
+
+.rs-overall-hero-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.rs-overall-hero-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--rs-text);
+    line-height: 1.2;
+    margin: 0;
+}
+
+/* Secondary NO COMPOSITE indicator -- styled via the shared P1 chip layer, never a
+   heading. Sits beside the title, not above it as the page's primary message. */
+.rs-overall-hero-head .rs-chip {
+    font-size: 0.68rem;
+}
+
+.rs-overall-hero-lead {
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: var(--rs-text-muted);
+    margin: 0 0 0.5rem;
+}
+
+/* Delivered coverage card: a subtle ok left-edge marks it actionable without implying
+   any aggregate score; the Open control is the single, obvious navigation path. */
+.rs-coverage-delivered {
+    border-left: 3px solid rgba(52,211,153,0.55);
+}
+
+.rs-coverage-delivered .rs-metric-label {
+    color: var(--rs-text);
+}
+
+/* Research / future card: muted, non-interactive -- distinct from delivered but never an
+   error. Colour reinforces only; the word + reason carry the meaning. */
+.rs-coverage-research {
+    border-left: 3px solid var(--rs-border);
+    background: rgba(107,127,153,0.05);
+}
+
+.rs-coverage-research .rs-metric-label {
+    color: var(--rs-text-muted);
+}
+
+.rs-coverage-reason {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--rs-text-faint);
+    margin: 0.6rem 0 0;
+}
+
+/* One obvious navigation path into a delivered dimension -- link-styled button, fully
+   keyboard-reachable, accent coloured (never colour-only: it also shows the word + arrow). */
+.rs-coverage-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.7rem;
+    padding: 0.35rem 0.65rem;
+    background: var(--rs-accent-hover);
+    color: var(--rs-accent);
+    border: 1px solid var(--rs-accent);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rs-coverage-open:hover {
+    background: var(--rs-accent);
+    color: var(--rs-bg);
+}
+
+.rs-coverage-open:focus-visible {
+    outline: 2px solid var(--rs-accent);
+    outline-offset: 2px;
+}
+
+/* Compact explanation under the coverage grid: composite scoring only appears after the
+   required scoring/weighting contract exists. Secondary, not a heading. */
+.rs-coverage-note {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--rs-text-muted);
+    margin: 0.9rem 0 0;
+}
+
+/* ---------------------------------------------------------------------------
    L0 model groups (collapsible drill-down primitive)
    --------------------------------------------------------------------------- */
 
@@ -638,6 +745,11 @@
 .rs-chip-negative { background: rgba(248,113,113,0.15); color: var(--rs-error-text); border-color: rgba(248,113,113,0.4); }
 .rs-chip-neutral  { background: rgba(107,127,153,0.15); color: var(--rs-unavailable); border-color: var(--rs-border); }
 .rs-chip-info     { background: rgba(147,196,245,0.15); color: var(--rs-accent); border-color: var(--rs-border-soft); }
+/* Dimension-availability (Overall hero) -- additive, dark-only, reusing existing tokens.
+   Delivered = ok green; research/future = unavailable grey. Colour is reinforcement only;
+   every chip also shows its uppercase word (never colour alone). */
+.rs-chip-delivered { background: rgba(52,211,153,0.15); color: var(--rs-ok-text); border-color: rgba(52,211,153,0.4); }
+.rs-chip-research  { background: rgba(107,127,153,0.15); color: var(--rs-unavailable); border-color: var(--rs-border); }
 
 /* ---------------------------------------------------------------------------
    States: loading / no-results / unavailable placeholder
