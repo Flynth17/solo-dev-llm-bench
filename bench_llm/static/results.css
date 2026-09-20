@@ -151,6 +151,54 @@
     margin-top: 0.4rem;
 }
 
+/* Model/config identity leads the row (GAP-1/GAP-2): model name is the hero, technical
+   config drops to a secondary sub-line. The whole cell is clickable -- it opens the detail
+   view just like the Details button, so it gets the same hover affordance. */
+.rs-speed-hero {
+    cursor: pointer;
+}
+.rs-speed-hero:hover .rs-speed-model {
+    color: var(--rs-accent);
+}
+/* Primary identity: large, bold, high-emphasis model name. */
+.rs-speed-model {
+    font-weight: 700;
+    color: var(--rs-text);
+    font-size: 1rem;
+    line-height: 1.25;
+}
+/* Secondary identity: quantization intentionally omitted (not surfaced by the read model,
+   so never fabricated here); hardware / environment / connection and metric-version chips
+   sit on one wrapping sub-line in muted, monospace-ish tokens. */
+.rs-speed-identity {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    align-items: center;
+}
+.rs-speed-identity code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.72rem;
+    background: var(--rs-bg);
+    color: var(--rs-text-muted);
+    padding: 0.05rem 0.35em;
+    border-radius: 4px;
+}
+.rs-speed-identity .rs-bench-valid {
+    margin-top: 0;
+}
+/* Headline metric label above the representative throughput value -- makes the primary Speed
+   metric's meaning explicit up front (GAP-2) instead of a bare number. */
+.rs-speed-headline-label {
+    font-size: 0.74rem;
+    color: var(--rs-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
 /* Panel title row: label left, sort control right. */
 .rs-bench-head {
     display: flex;
@@ -391,6 +439,44 @@
 .rs-modal-tel td,
 .rs-modal-tel th {
     font-size: 0.82rem;
+}
+
+/* Repeatability / stage evidence: one grouped block per canonical point, representative
+   (cold) run first. Each group is visually separated so the independent-stage rows read as a
+   set rather than a flat table. */
+.rs-stage-group {
+    margin-bottom: 1rem;
+}
+.rs-stage-group:last-child {
+    margin-bottom: 0;
+}
+.rs-stage-label {
+    font-size: 0.78rem;
+    color: var(--rs-text-muted);
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+/* Execution provenance grouping under the four contract sections (Hardware / Runtime /
+   Model / Inference). The sub-section title sits above its key/value grid. */
+.rs-modal-prov-group {
+    margin-bottom: 1rem;
+}
+.rs-modal-prov-group:last-child {
+    margin-bottom: 0;
+}
+.rs-panel-sub {
+    font-size: 0.82rem;
+    color: var(--rs-text);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.4rem;
+}
+/* unknown_at_execution is presentation metadata from the shared provenance classifier -- it
+   is marked distinctly so Unknown never collapses visually into Not stored (contract §5.1). */
+.rs-prov-unknown {
+    color: var(--rs-text-muted);
+    font-style: italic;
 }
 
 .rs-modal-footer {

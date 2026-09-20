@@ -368,11 +368,14 @@ function renderRow(r, maxAvg) {
 
     var avgHtml;
     if (r.avg == null) {
-        avgHtml = '<span class="rs-na">\u2014</span>';
+        avgHtml =
+            "<div class='rs-speed-headline-label'>Generation throughput</div>" +
+            '<span class="rs-na">\u2014</span>';
     } else {
         // Relative visual aid only: length based on the current visible maximum.
         var pct = maxAvg > 0 ? Math.max(8, (r.avg / maxAvg) * 100) : 8;
         avgHtml =
+            "<div class='rs-speed-headline-label'>Generation throughput</div>" +
             '<div class="rs-avg">' +
             "<span class='rs-avg-val'>" + fmtDec(r.avg, 1) + " tok/s</span>" +
             "<span class='rs-avg-track' role='img' aria-label='Average generation throughput bar'>" +
@@ -386,9 +389,10 @@ function renderRow(r, maxAvg) {
 
     return "<tr data-run-id=\"" + escapeHtml(String(r.runId)) + "\">" +
         "<td>" +
-        "<div class='rs-bench-model'>" + escapeHtml(r.modelLabel) + "</div>" +
-        configChips(r) +
-        validityChip +
+        "<div class='rs-speed-hero'>" +
+        "<div class='rs-speed-model'>" + escapeHtml(r.modelLabel) + "</div>" +
+        "<div class='rs-speed-identity'>" + configChips(r) + validityChip + "</div>" +
+        "</div>" +
         "</td>" +
         '<td class="rs-num">' + genCell(r.gen8k) + "</td>" +
         '<td class="rs-num">' + genCell(r.gen16k) + "</td>" +
@@ -552,6 +556,19 @@ function renderModal(run) {
     }
     out += "</section>";
 
+    // Target calibration -- demoted below the primary Speed result but kept visible as honest
+    // evidence the x-axis was calibrated on. Values are precomputed by the read model; never
+    // recomputed in JS, and a signed mean error is preserved (never coerced to zero).
+    out += renderCalibration(run);
+
+    // Repeatability / stage evidence: stage-aware runs show their 1-cold / 2-warm rows;
+    // legacy single-row runs get an honest note. No stages are ever fabricated.
+    out += renderRepeatability(run);
+
+    // Execution provenance grouped under Hardware / Runtime / Model / Inference, behind the
+    // same progressive disclosure -- never dominates the primary Speed result.
+    out += renderProvenance(run);
+
     // Deep link to the dedicated single-run evidence page.
     if (run.run_id) {
         out += "<div class='rs-modal-footer'><a class='btn-primary' href='/speed/results/" + encodeURIComponent(run.run_id) + ">Open full result &rarr;</a></div>";
@@ -569,6 +586,117 @@ function stateBadge(status) {
     var p = statusPresentation(status);
     return "<span class='rs-chip " + p.className + "' title='" + escapeHtml(p.explanation || "") + "'>" +
         escapeHtml(p.label) + "</span>";
+}
+
+// ---------------------------------------------------------------------------
+// Disclosure sections (calibration / repeatability / provenance).
+//
+// All three consume ONLY fields precomputed by the authoritative single-run read model
+// (/api/speed/runs/{id}); none recompute calibration, representative selection or stage logic
+// client-side. Each is defensively gated on field presence so a run payload that omits them
+// (e.g. legacy runs without a provenance snapshot) renders nothing rather than fabricating.
+// ---------------------------------------------------------------------------
+
+// Run-level calibration summary: max absolute target error (% of target) and mean signed
+// error tokens across points that carry input data. Section hidden when neither value is
+// exposed by the read model, so legacy runs without calibration render nothing honest.
+function renderCalibration(run) {
+    var maxErr = run.max_abs_target_error_percent;
+    var meanErr = run.mean_target_error_tokens;
+    if (maxErr == null && meanErr == null) { return ""; }
+    var out = "<section class='rs-modal-section'>";
+    out += "<div class='rs-panel-title'>Target calibration</div>";
+    out += "<div class='rs-modal-meta'>" +
+        "<div><dt>Max error</dt><dd>" +
+        (maxErr != null ? fmtDec(maxErr, 1) + "% of target" : "\u2014") + "</dd></div>" +
+        "<div><dt>Mean error</dt><dd>" +
+        // Preserve the signed value -- a negative mean is honest evidence, never zero-filled.
+        (meanErr != null ? fmtDec(meanErr, 1) + " tokens" : "\u2014") + "</dd></div>" +
+        "</div></section>";
+    return out;
+}
+
+// Repeatability / stage evidence. A stage-aware run persists one independent row per stage
+// (1 cold + 2 warm) per canonical point -- shown verbatim, representative (cold) first. A
+// legacy single-row-per-point run gets an honest note; no stages are ever fabricated.
+function renderRepeatability(run) {
+    var points = Array.isArray(run.points) ? run.points : [];
+    var stageAware = points.some(function (p) { return Array.isArray(p.runs) && p.runs.length > 1; });
+    if (!stageAware) {
+        if (run.repeatability_stored === false) {
+            return "<section class='rs-modal-section'>" +
+                "<div class='rs-panel-title'>Repeatability</div>" +
+                "<p class='rs-modal-muted'>Single-row evidence &mdash; predates the 1-cold / 2-warm " +
+                "persistence contract; no repeatability stages stored.</p>" +
+                "</section>";
+        }
+        return "";
+    }
+    var out = "<section class='rs-modal-section'>";
+    out += "<div class='rs-panel-title'>Repeatability &middot; stage evidence</div>";
+    points.forEach(function (p) {
+        if (!Array.isArray(p.runs) || p.runs.length < 2) { return; }
+        out += "<div class='rs-stage-group'>" +
+            "<div class='rs-stage-label'>" + escapeHtml(String(p.label || "")) + " point</div>";
+        out += "<table class='rs-table rs-modal-tel' aria-label='Repeatability stages for " +
+            escapeHtml(String(p.label)) + "'><thead><tr>" +
+            "<th scope='col'>Stage</th>" +
+            "<th scope='col' class='rs-num'>TTFT</th>" +
+            "<th scope='col' class='rs-num'>Prefill</th>" +
+            "<th scope='col' class='rs-num'>Generation</th>" +
+            "<th scope='col' class='rs-num'>Output</th>" +
+            "<th scope='col' class='rs-num'>Wall</th>" +
+            "</tr></thead><tbody>";
+        p.runs.forEach(function (s) {
+            // Per-stage status comes from the authoritative read model via the shared layer.
+            var statusChip = s.speed_point_status ? stateBadge(s.speed_point_status) : "";
+            out += "<tr>" +
+                "<td>" + escapeHtml(String(s.speed_run_stage || "\u2014")) + " " + statusChip + "</td>" +
+                '<td class="rs-num">' + formatTtft(s.ttft_seconds) + "</td>" +
+                '<td class="rs-num">' + fmtDec(s.prefill_tokens_per_second, 1) + " tok/s</td>" +
+                '<td class="rs-num">' + fmtDec(s.generation_tokens_per_second, 1) + " tok/s</td>" +
+                '<td class="rs-num">' + fmtComma(s.completion_tokens) + "</td>" +
+                '<td class="rs-num">' + fmtDec(s.wall_time_seconds, 1) + " s</td>" +
+                "</tr>";
+        });
+        out += "</tbody></table></div>";
+    });
+    out += "</section>";
+    return out;
+}
+
+// Run-level execution provenance, grouped under the four contract sections (Hardware /
+// Runtime / Model / Inference) and classified stored / unknown_at_execution / not_stored.
+// Hidden when no provenance snapshot was captured (a legacy run), so nothing is fabricated.
+function renderProvenance(run) {
+    var prov = run.provenance;
+    if (!prov || !prov.present) { return ""; }
+    var out = "<section class='rs-modal-section'>";
+    out += "<div class='rs-panel-title'>Execution provenance</div>";
+    var sections = [
+        ["hardware", "Hardware"],
+        ["hardware_extra", "GPU"],
+        ["runtime", "Runtime"],
+        ["model", "Model"],
+        ["inference", "Inference"]
+    ];
+    sections.forEach(function (sec) {
+        var group = prov[sec[0]];
+        if (!group) { return; }
+        var entries = Object.keys(group).map(function (label) {
+            var f = group[label];
+            var value = f.value == null ? "\u2014" : escapeHtml(String(f.value));
+            // unknown_at_execution is presentation metadata from the shared classifier; it is
+            // marked distinctly so Unknown never collapses into Not stored (contract §5.1).
+            var cls = f.status === "unknown_at_execution" ? " rs-prov-unknown" : "";
+            return "<div><dt>" + escapeHtml(label) + "</dt><dd" + (cls ? " class='" + cls + "'" : "") + ">" + value + "</dd></div>";
+        }).join("");
+        out += "<div class='rs-modal-prov-group'>" +
+            "<div class='rs-panel-sub'>" + escapeHtml(sec[1]) + "</div>" +
+            "<div class='rs-modal-meta'>" + entries + "</div></div>";
+    });
+    out += "</section>";
+    return out;
 }
 
 // ---------------------------------------------------------------------------

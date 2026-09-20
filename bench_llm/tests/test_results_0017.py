@@ -182,9 +182,15 @@ def test_speed_frontend_renders_config_and_gap_semantics():
 def test_speed_frontend_never_fabricates_repeatability_on_benchmark_table():
     # The compact benchmark summary shows one row per model/config with an average
     # generation throughput aggregate; it never fabricates repeatability/stage breakdown.
-    # (Stage repeatability is a Workflow/suite concern, tested there -- not on this surface.)
+    # (Stage repeatability is disclosed in the Details modal from the authoritative read
+    #  model -- tested there -- not on this compact-table surface.)
     assert "renderSpeedRunRepeatability" not in RESULTS_JS
-    assert "speed_run_stage" not in RESULTS_JS
+    # The compact table builder (renderRow) must never reference a stage field; stage rows
+    # live only in the modal disclosure helper, so scope the guard to renderRow's body.
+    row_start = RESULTS_JS.find("function renderRow")
+    row_end = RESULTS_JS.find("function configChips", row_start)
+    assert "speed_run_stage" not in RESULTS_JS[row_start:row_end], \
+        "the compact benchmark table must not fabricate stage/repeatability rows"
 
 
 def test_speed_frontend_never_fabricates_zero():
