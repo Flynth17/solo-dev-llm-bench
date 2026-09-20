@@ -1301,4 +1301,167 @@
     .cmp-speed-group th {
         border-top: none;
     }
+
+    /* Workflow table reflows into stacked metric blocks too -- same shared breakpoint,
+       label first, then A value, then B value -- no page-level horizontal scroll. */
+    .cmp-workflow-table {
+        display: block;
+    }
+
+    .cmp-workflow-table thead {
+        position: absolute;
+        left: -9999px;
+    }
+
+    .cmp-workflow-table tbody tr {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        padding: 0.55rem 0;
+    }
+
+    .cmp-workflow-table td,
+    .cmp-workflow-table th.cmp-workflow-metric-cell {
+        display: block;
+        width: auto;
+        border-top: none;
+        padding: 0;
+    }
+
+    /* Metric label moves above the two values; each value is prefixed with its side. */
+    .cmp-workflow-row > th.cmp-workflow-metric-cell {
+        order: -1;
+    }
+
+    .cmp-workflow-row > td[data-side]::before {
+        content: attr(data-side) " \00b7 ";
+        color: var(--rs-text-faint);
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+    }
+
+    /* Workflow group header rows stay full-width labels. */
+    .cmp-workflow-group th {
+        border-top: none;
+    }
+}
+
+/* ===========================================================================
+   Workflow side-by-side comparison (v2 Quality) -- mirrors the Speed block above.
+   Renders the authoritative run-level pass-rate aggregate plus the per-suite
+   breakdown. Same neutral-magnitude-free discipline: numbers only, honest gaps.
+   =========================================================================== */
+
+.cmp-workflow {
+    margin-top: 1.25rem;
+}
+
+/* Per-side evidence identity line: configuration fingerprint chip + run ID + link. */
+.cmp-workflow-evidence {
+    display: flex;
+    gap: 0.75rem 2rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+}
+
+.cmp-workflow-side {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.84rem;
+    color: var(--rs-text-muted);
+}
+
+.cmp-workflow-slot {
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    color: var(--rs-accent);
+}
+
+.cmp-workflow-chip,
+.cmp-workflow-runid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    background: var(--rs-surface-2);
+    border: 1px solid var(--rs-border);
+    border-radius: 4px;
+    padding: 0.05rem 0.4rem;
+}
+
+.cmp-workflow-sub {
+    color: var(--rs-text-faint);
+    font-size: 0.78rem;
+}
+
+/* The comparison table itself. */
+.cmp-workflow-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.cmp-workflow-table td,
+.cmp-workflow-table th {
+    padding: 0.45rem 0.6rem;
+    border-top: 1px solid var(--rs-border-soft);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.cmp-workflow-table thead th {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--rs-text-muted);
+}
+
+/* Group header row (Overall / Per-suite checks). */
+.cmp-workflow-group th {
+    color: var(--rs-text-faint);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* Metric label column (middle). */
+.cmp-workflow-metric-cell {
+    color: var(--rs-text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Aligned numbers + sub-text. */
+.cmp-workflow-num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* Honest gap / state text inside a metric cell -- never a fabricated zero. */
+.cmp-workflow-state {
+    color: var(--rs-text-faint);
+    font-size: 0.84rem;
+}
+
+/* Spanning state cell for a non-available side (failed / missing / ...). */
+.cmp-workflow-statecell .cmp-workflow-note {
+    margin: 0.5rem 0;
+}
+
+.cmp-workflow-note {
+    color: var(--rs-text-muted);
+    font-size: 0.84rem;
+    line-height: 1.45;
+    margin: 0.35rem 0 0.5rem;
+}
+
+/* Presentation-of-evidence contract note (never a score). */
+.cmp-workflow-footnote {
+    color: var(--rs-text-faint);
+    font-size: 0.76rem;
+    line-height: 1.4;
+    margin-top: 0.75rem;
 }

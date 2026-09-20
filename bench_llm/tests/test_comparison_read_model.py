@@ -387,6 +387,106 @@ def test_same_model_diffconfig_speed_pins_distinct_runs_with_metrics():
 
 
 # ---------------------------------------------------------------------------
+# Workflow dimension projection (v2 Quality) -- run-level pass rate + per-suite.
+# ---------------------------------------------------------------------------
+
+
+def _wf_run(run_id, model="Ornith", fingerprint="WF-A", generated_at="2026-05-01T00:00:00+00:00",
+            classification="success", checks_passed=148, checks_total=166, percentage=89.2,
+            suites=None):
+    """A Workflow candidate carrying the full build_read_model view (nested run + suites)."""
+    if suites is None:
+        suites = [
+            {"suite": "python", "checks_passed": 55, "checks_total": 58, "failed_checks": 3},
+            {"suite": "java", "checks_passed": 48, "checks_total": 52, "failed_checks": 4},
+        ]
+    return {
+        "family": "workflow",
+        "run_id": run_id,
+        "generated_at": generated_at,
+        "view": {
+            "run": {
+                "model_identifier": model,
+                "configuration_fingerprint": fingerprint,
+                "classification": classification,
+                "checks_passed": checks_passed,
+                "checks_total": checks_total,
+                "percentage": percentage,
+            },
+            "suites": suites,
+        },
+    }
+
+
+def test_workflow_available_projects_aggregate_pass_rate():
+    """An AVAILABLE Workflow run projects its authoritative run-level pass rate --
+    read verbatim from build_read_model, never recomputed here."""
+    state = rm._resolve_single(
+        [_wf_run("wf-1", checks_passed=148, checks_total=166, percentage=89.2)], "workflow"
+    )
+    assert state["state"] == rm.AVAILABLE
+    assert state["checks_passed"] == 148
+    assert state["checks_total"] == 166
+    assert abs(state["percentage"] - 89.2) < 1e-9
+    # The authoritative run classification is surfaced on the projection too.
+    assert state["classification"] == "success"
+
+
+def test_workflow_projects_per_suite_breakdown():
+    """The per-suite breakdown carries suite + checks passed/total + failed count,
+    verbatim from build_read_model's suites array."""
+    suites = [
+        {"suite": "python", "checks_passed": 55, "checks_total": 58, "failed_checks": 3},
+        {"suite": "java", "checks_passed": 52, "checks_total": 52, "failed_checks": 0},
+    ]
+    state = rm._resolve_single([_wf_run("wf-1", suites=suites)], "workflow")
+    proj_suites = state["suites"]
+    assert len(proj_suites) == 2
+    for got, want in zip(proj_suites, suites):
+        assert got["suite"] == want["suite"]
+        assert got["checks_passed"] == want["checks_passed"]
+        assert got["checks_total"] == want["checks_total"]
+        assert got["failed_checks"] == want["failed_checks"]
+
+
+def test_workflow_missing_check_data_is_honest_none():
+    """A Workflow run whose view carries no check counts projects None (never a
+    fabricated number) and an empty suite list -- the UI renders an honest gap."""
+    state = rm._resolve_single([_wf("wf-1", "Ornith")], "workflow")  # flat view, no checks
+    assert state["state"] == rm.AVAILABLE
+    assert state["checks_passed"] is None
+    assert state["checks_total"] is None
+    assert state["percentage"] is None
+    assert state["suites"] == []
+
+
+def test_workflow_failed_run_never_projects_numbers():
+    """A failed run stays FAILED with no aggregate / suite projection -- only its
+    traceability (state, run_id, deep_link)."""
+    failed = _wf_run("wf-fail", classification="failed")
+    state = rm._resolve_single([failed], "workflow")
+    assert state["state"] == rm.FAILED
+    assert "checks_passed" not in state
+    assert "suites" not in state
+
+
+def test_workflow_check_counts_are_int_not_bool():
+    """Check counts project as plain ints; a bool is rejected -> None (never 0/1)."""
+    state = rm._resolve_single(
+        [_wf_run("wf-1", checks_passed=True, checks_total=166)], "workflow"
+    )
+    assert state["checks_passed"] is None  # bool rejected, never coerced to 1
+    assert state["checks_total"] == 166
+
+
+def test_workflow_percentage_coerces_int_to_float():
+    """An integer percentage still projects as a float (matching build_read_model)."""
+    state = rm._resolve_single([_wf_run("wf-1", percentage=90)], "workflow")
+    assert state["percentage"] == 90.0
+    assert isinstance(state["percentage"], float)
+
+
+# ---------------------------------------------------------------------------
 # Two-subject validation (Phase 7).
 # ---------------------------------------------------------------------------
 

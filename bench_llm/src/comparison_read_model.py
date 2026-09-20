@@ -305,6 +305,23 @@ def average_generation_tps(points: Optional[list[dict[str, Any]]]) -> Optional[f
     return sum(values) / len(values) if values else None
 
 
+def _as_int(value):
+    """Coerce to int, rejecting bools and non-numeric values -> None (never fabricated)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+def _as_float(value):
+    """Coerce to float, rejecting bools / non-numeric / NaN / inf -> None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    f = float(value)
+    if f != f or f in (float("inf"), float("-inf")):
+        return None
+    return f
+
+
 def _state_for_run(candidate: dict[str, Any], family: str) -> dict[str, Any]:
     """Project one authoritative run into a dimension state + traceability."""
     run_id = candidate.get("run_id")
@@ -355,6 +372,34 @@ def _state_for_run(candidate: dict[str, Any], family: str) -> dict[str, Any]:
         else:
             projection["state"] = UNAVAILABLE
             projection["metric_version"] = candidate.get("metric_version")
+    if family == "workflow" and state == AVAILABLE:
+        # Authoritative Workflow (v2_quality) projection. The route attaches the full
+        # build_read_model view; run-level checks live under ``view['run']`` and the
+        # per-suite breakdown on ``view['suites']``. Read them verbatim -- never
+        # recomputed here. Missing data (e.g. a legacy artifact without check counts)
+        # stays None so the UI renders an honest gap, never a fabricated number.
+        run_view = _as_view(candidate)  # nested run OR flat view (graceful for tests)
+        full_view = candidate.get("view") if isinstance(candidate, dict) else {}
+        suites = full_view.get("suites") if isinstance(full_view, dict) else None
+        projection["checks_passed"] = _as_int(run_view.get("checks_passed"))
+        projection["checks_total"] = _as_int(run_view.get("checks_total"))
+        projection["percentage"] = _as_float(run_view.get("percentage"))
+        # Per-suite breakdown: suite + checks passed/total + failed count.
+        projection["suites"] = [
+            {
+                "suite": s.get("suite"),
+                "checks_passed": _as_int(s.get("checks_passed")),
+                "checks_total": _as_int(s.get("checks_total")),
+                "failed_checks": _as_int(s.get("failed_checks")),
+            }
+            for s in (suites or [])
+            if isinstance(s, dict)
+        ]
+        # Surface the authoritative run classification on the projection too -- the
+        # route does not carry it at top level for Workflow candidates.
+        rc = run_view.get("classification")
+        if rc:
+            projection["classification"] = str(rc)
     return projection
 
 

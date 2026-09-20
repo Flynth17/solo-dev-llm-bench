@@ -310,6 +310,48 @@ def test_speed_comparison_is_responsive():
     assert "flex-direction: column" in narrow
 
 
+def test_workflow_section_reads_only_the_workflow_dimension():
+    """The Workflow rendering block reads ONLY dimensions.workflow -- no other-dimension
+    values are joined or rendered here (mirrors the Speed scope discipline)."""
+    start = COMPARE_JS.index("function renderWorkflow")
+    end = COMPARE_JS.index("// Controls: two labelled selectors")
+    block = COMPARE_JS[start:end]
+    assert "dims.workflow.subject_a" in block and "dims.workflow.subject_b" in block
+    assert "dimensions.speed" not in block
+    assert "dimensions.context" not in block
+
+
+def test_workflow_container_present():
+    """The comparison view mounts a dedicated Workflow container beside Speed."""
+    assert 'id="compare-workflow"' in COMPARE_JS
+
+
+def test_workflow_states_rendered_as_text_not_colour_only():
+    """Every non-available Workflow state renders a text chip + explanation, never
+    colour-only (mirrors the Speed state-discipline tests)."""
+    for st in ("failed", "missing", "in_progress", "ambiguous", "unavailable"):
+        assert re.search(rf'\b{st}\s*:', COMPARE_JS), f"Workflow state vocabulary missing: {st}"
+    # Each non-available state carries its own explanation -- never an empty column.
+    assert "WORKFLOW_STATE_NOTES" in COMPARE_JS
+    assert "no comparable pass rates are shown" in COMPARE_JS
+
+
+def test_workflow_evidence_links_use_existing_route():
+    """Workflow evidence links point at the existing v2 Quality detail page -- no new
+    detail routes are introduced by this view."""
+    idx = COMPARE_JS.index("View Workflow evidence")
+    assert 'href="' in COMPARE_JS[max(0, idx - 200):idx], "deep link must be rendered as a real href"
+    assert "View Workflow evidence" in COMPARE_JS
+
+
+def test_workflow_comparison_is_responsive():
+    """Narrow viewports reflow the workflow table into stacked metric blocks -- no
+    page-level horizontal scrolling (mirrors the Speed responsive contract)."""
+    narrow = SHELL_CSS.split("@media (max-width: 820px)")[-1]
+    assert ".cmp-workflow-table" in narrow
+    assert "flex-direction: column" in narrow
+
+
 def test_compare_view_fetches_only_comparison_endpoints():
     """No independent joining of Speed / Workflow / Context or ranking APIs."""
     fetch_targets = re.findall(r'fetch\("([^"]+)"', COMPARE_JS)

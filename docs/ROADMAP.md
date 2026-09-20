@@ -70,7 +70,21 @@ Side-by-side comparison of exactly two selectable model/configurations across ev
     reflows into stacked metric blocks at narrow viewports without page-level horizontal scroll.
     Tests: `tests/test_comparison_read_model.py` (28 passing) + `tests/test_comparison_ui.py`
     (37 passing) + browser acceptance (agent-browser).
-- [ ] ST-005 — Implement Workflow side-by-side comparison
+- [x] ST-005 — Implement Workflow side-by-side comparison
+  - Implemented: the Compare pane renders a **Workflow** section beneath the identity header, sourced
+    exclusively from the authoritative `/api/comparison` projection (no independent Workflow API joins).
+    Read-model extension (`src/comparison_read_model.py`): an AVAILABLE Workflow run projects its
+    authoritative run-level pass rate (`checks_passed` / `checks_total` / `percentage`, read verbatim
+    from `v2_quality_read_model.build_read_model`'s `run` view) and the per-suite breakdown
+    (`suites[] = {suite, checks_passed, checks_total, failed_checks}`), with int/float coercion guards
+    that reject bools/NaN/inf so missing data stays an honest gap rather than a fabricated number.
+    Frontend (`static/results-compare.js`): `WORKFLOW_STATE_NOTES`, a dedicated `#compare-workflow`
+    container and a `renderWorkflow()` side-by-side table mirroring the ST-004 Speed discipline --
+    aggregate pass-rate row plus one row per suite, aligned by suite label, non-available sides
+    rendered as a single spanning state cell with explanation and evidence link (never an empty
+    numeric column), no winner/leader/composite language. Responsive reflow in the shared 820px
+    breakpoint alongside Speed (`static/results-shell.css`). Tests:
+    `tests/test_comparison_read_model.py` + `tests/test_comparison_ui.py` (+11); full suite 808 passed.
 - [ ] ST-006 — Implement Context side-by-side comparison
 - [ ] ST-007 — Preserve N/A, validity, failures and unsuccessful-run controls
 - [ ] ST-008 — Implement evidence drill-down from comparison

@@ -79,6 +79,17 @@
         unavailable: "Speed evidence exists but cannot be represented on this surface; open the run for details."
     };
 
+    // Workflow (v2 Quality) state explanations. Every non-available state renders its
+    // own text -- never an empty numeric column, never a fabricated pass rate.
+    var WORKFLOW_STATE_NOTES = {
+        failed: "The selected run failed; no comparable pass rates are shown.",
+        unsupported: "Workflow is not supported for this configuration.",
+        missing: "No Workflow evidence recorded for this subject.",
+        in_progress: "The Workflow benchmark is still running.",
+        ambiguous: AMBIGUOUS_NOTES.workflow,
+        unavailable: "Workflow evidence exists but cannot be represented on this surface; open the run for details."
+    };
+
     var state = {
         subjects: [],      // catalogue entries, in authoritative order
         byKey: {},        // subject_key -> catalogue entry
@@ -256,6 +267,7 @@
                 setNotice("");
                 renderIdentity(data);
                 renderSpeed(data && data.comparison); // ST-004: Speed metrics beneath the identity header
+                renderWorkflow(data && data.comparison); // Workflow (v2 Quality) pass-rate + per-suite breakdown
             })
             .catch(function (err) {
                 if (seq !== fetchSeq) { return; }
@@ -663,6 +675,169 @@
     }
 
     // -----------------------------------------------------------------------
+    // Workflow side-by-side comparison (v2 Quality).
+    //
+    // Renders ONLY the authoritative workflow dimension projection: the run-level
+    // pass-rate aggregate plus the per-suite breakdown, aligned by suite label.
+    // Values are read verbatim from build_read_model -- never recomputed here. No
+    // overall-verdict language exists anywhere in this view.
+    // -----------------------------------------------------------------------
+
+    // Row template for the Workflow table: one Overall pass-rate row plus one row
+    // per authoritative suite (the suite set is shared for one base model).
+    function workflowRows(dimA, dimB) {
+        // Use whichever side carries suites as the row template; fall back to any
+        // available dimension so a non-available side still gets its state cell.
+        var source = ((dimA && dimA.state === "available" && dimA.suites) ? dimA : null)
+            || ((dimB && dimB.state === "available" && dimB.suites) ? dimB : null)
+            || dimA || dimB;
+        var suites = (source && Array.isArray(source.suites)) ? source.suites : [];
+        var rows = [{ group: "Overall", label: "Pass rate", kind: "overall" }];
+        suites.forEach(function (s) {
+            if (s && s.suite != null) {
+                rows.push({ group: "Per-suite checks", label: esc(String(s.suite)), kind: "suite", suite: s });
+            }
+        });
+        return rows;
+    }
+
+    /** One Workflow value cell: aggregate pass rate (overall) or passed/total + failed
+     *  (per suite). Honest gap (—) for missing fields -- never a fabricated zero. */
+    function workflowValueCell(slot, dim, rowKind, suite) {
+        if (!dim || dim.state !== "available") {
+            return '<td class="cmp-workflow-cell cmp-cell-' + slot + '" data-side="' + slot.toUpperCase() + '">'
+                + '<span class="cmp-workflow-state">\u2014</span></td>';
+        }
+        var main, sub;
+        if (rowKind === "overall") {
+            var pct = dim.percentage;
+            var passed = dim.checks_passed;
+            var total = dim.checks_total;
+            main = (pct != null) ? Number(pct).toFixed(1) + "%" : "\u2014";
+            if (passed != null && total != null) { sub = passed + " / " + total + " checks"; }
+            else if (passed != null) { sub = String(passed) + " / \u2014 checks"; }
+            else { sub = "\u2014"; }
+        } else {
+            var sp = suite.checks_passed;
+            var st = suite.checks_total;
+            var failed = suite.failed_checks;
+            main = (sp != null && st != null) ? (sp + " / " + st) : "\u2014";
+            sub = (failed != null) ? String(failed) + " failed" : "\u2014";
+        }
+        return '<td class="cmp-workflow-cell cmp-cell-' + slot + '" data-side="' + slot.toUpperCase() + '">'
+            + '<span class="cmp-workflow-num">' + esc(main) + "</span>"
+            + (sub ? '<span class="cmp-workflow-sub">' + esc(sub) + "</span>" : "")
+            + "</td>";
+    }
+
+    /** The non-available side renders ONE spanning cell with its state, explanation and
+     *  evidence link -- never an empty numeric column. */
+    function workflowStateCell(slot, dim, span) {
+        var st = (dim && STATE_LABELS[dim.state]) ? dim.state : "missing";
+        var html = '<td class="cmp-workflow-statecell cmp-cell-' + slot + '" data-side="' + slot.toUpperCase() + '"'
+            + (span > 1 ? ' rowspan="' + span + '"' : "")
+            + ' aria-label="Subject ' + slot.toUpperCase() + ': ' + esc(STATE_LABELS[st]) + '">';
+        html += '<span class="rs-badge ' + (STATE_BADGE[st] || STATE_BADGE.unavailable) + '">' + esc(STATE_LABELS[st]) + "</span>";
+        html += '<p class="cmp-workflow-note">' + esc(WORKFLOW_STATE_NOTES[st] || "") + "</p>";
+        if (dim && dim.run_id && dim.deep_link) {
+            html += '<a class="rs-view-link cmp-evidence" href="' + esc(dim.deep_link) + '">View Workflow evidence (' + esc(String(dim.run_id)) + ') &rarr;</a>';
+        }
+        return html + "</td>";
+    }
+
+    /** Per-side evidence identity line: configuration fingerprint chip, run ID and the
+     *  deep link into the existing v2 Quality detail page. */
+    function workflowEvidenceLine(slot, dim) {
+        var out = '<div class="cmp-workflow-side" aria-label="Subject ' + slot.toUpperCase() + ' Workflow evidence">';
+        out += "<span class='cmp-workflow-slot'>Subject " + slot.toUpperCase() + "</span>";
+        if (!dim || !STATE_LABELS[dim.state]) { return out + "</div>"; }
+        var cfg = dim.config || {};
+        if (cfg.configuration_fingerprint) {
+            out += '<code class="cmp-workflow-chip" title="' + esc(cfg.configuration_fingerprint) + '">'
+                + esc(String(cfg.configuration_fingerprint).slice(0, 16)) + "&hellip;</code>";
+        }
+        if (dim.run_id) { out += "<code class='cmp-workflow-runid'>" + esc(String(dim.run_id)) + "</code>"; }
+        if (dim.deep_link) {
+            out += '<a class="rs-view-link cmp-evidence" href="' + esc(dim.deep_link) + '">View Workflow evidence &rarr;</a>';
+        }
+        return out + "</div>";
+    }
+
+    function renderWorkflow(cmp) {
+        var container = document.getElementById("compare-workflow");
+        if (!container) { return; }
+        var dims = (cmp && cmp.dimensions) || {};
+        var dimA = dims.workflow ? dims.workflow.subject_a : null;
+        var dimB = dims.workflow ? dims.workflow.subject_b : null;
+
+        // No workflow dimension at all -> nothing to render (never fabricated).
+        if (!dimA && !dimB) { container.innerHTML = ""; return; }
+
+        var aAvail = dimA && dimA.state === "available";
+        var bAvail = dimB && dimB.state === "available";
+        var rows = workflowRows(dimA, dimB);
+
+        var html = '<section class="rs-panel cmp-workflow" aria-labelledby="cmp-workflow-title">';
+        html += '<h3 id="cmp-workflow-title" class="cmp-family-title">Workflow</h3>';
+        html += '<div class="cmp-workflow-evidence">' + workflowEvidenceLine("a", dimA) + workflowEvidenceLine("b", dimB) + "</div>";
+
+        if (!aAvail && !bAvail) {
+            // Neither side carries comparable Workflow evidence: say so plainly.
+            html += '<p class="cmp-workflow-note">No comparable Workflow evidence for this subject pair. '
+                + "Each side\u2019s state and evidence link above remain inspectable.</p>";
+        } else if (rows.length <= 1) {
+            // Rows exist only as the Overall placeholder: neither side recorded any
+            // pass rates to present -- honest gap, never a fabricated zero.
+            html += '<p class="cmp-workflow-note">Workflow runs for this subject pair have no recorded pass '
+                + "rates to compare.</p>";
+        } else {
+            var both = aAvail && bAvail;
+            html += '<table class="cmp-workflow-table" aria-label="Workflow comparison: Subject A versus Subject B">';
+            if (both) {
+                html += "<thead><tr><th scope='col'>Subject A</th><th scope='col'>Metric</th><th scope='col'>Subject B</th></tr></thead>";
+            }
+            html += "<tbody>";
+            var totalRows = rows.length;
+            // A non-available side emits its spanning state cell exactly ONCE -- in the
+            // first data row overall (never once per group).
+            var aStateEmitted = false;
+            var bStateEmitted = false;
+            rows.forEach(function (row) {
+                if (both) {
+                    html += '<tr class="cmp-workflow-group"><th colspan="3" scope="colgroup">' + esc(row.group) + "</th></tr>";
+                }
+                html += '<tr class="cmp-workflow-row">';
+                if (aAvail) {
+                    html += workflowValueCell("a", dimA, row.kind, row.suite);
+                } else if (!aStateEmitted) {
+                    html += workflowStateCell("a", dimA, totalRows);
+                    aStateEmitted = true;
+                }
+                html += '<th scope="row" class="cmp-workflow-metric-cell">' + esc(row.label) + "</th>";
+                if (bAvail) {
+                    html += workflowValueCell("b", dimB, row.kind, row.suite);
+                } else if (!bStateEmitted) {
+                    html += workflowStateCell("b", dimB, totalRows);
+                    bStateEmitted = true;
+                }
+                html += "</tr>";
+            });
+            html += "</tbody></table>";
+            html += '<p class="cmp-workflow-footnote">Pass rate is the authoritative run aggregate from the v2 Quality '
+                + "read model (checks passed / checks total); per-suite counts are reported verbatim. It is a "
+                + "presentation of recorded evidence, not a recomputed score.</p>";
+        }
+
+        html += "</section>";
+        container.innerHTML = html;
+    }
+
+    function clearWorkflow() {
+        var container = document.getElementById("compare-workflow");
+        if (container) { container.innerHTML = ""; }
+    }
+
+    // -----------------------------------------------------------------------
     // Controls: two labelled selectors + accessible Swap button.
     // -----------------------------------------------------------------------
 
@@ -672,7 +847,7 @@
         container.innerHTML =
             '<div class="rs-panel">' +
             '  <div class="rs-panel-title">Compare</div>' +
-            "  <p class='cmp-hint'>Select two model configurations to compare. Identities, configuration truth and dimension availability are shown first, with Speed metrics side by side beneath the identity header.</p>" +
+            "  <p class='cmp-hint'>Select two model configurations to compare. Identities, configuration truth and dimension availability are shown first, with Speed metrics and Workflow pass rates side by side beneath the identity header.</p>" +
             "  <div class='cmp-controls'>" +
             "    <div class='cmp-field'>" +
             "      <label for='compare-subject-a'>Subject A</label>" +
@@ -687,7 +862,8 @@
             "  <p id='compare-notice' role='status' aria-live='polite' hidden></p>" +
             "</div>" +
             '<div id="compare-identity"></div>' +
-            '<div id="compare-speed"></div>';
+            '<div id="compare-speed"></div>' +
+            '<div id="compare-workflow"></div>';
 
         ["a", "b"].forEach(function (slot) {
             var sel = document.getElementById("compare-subject-" + slot);
