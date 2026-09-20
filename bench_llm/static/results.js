@@ -96,7 +96,7 @@ function isNonLegacyVersion(v) {
 function renderResults() {
     // One representative row per model/config, then sort by the current control.
     var rows = buildBenchmarkRuns(filteredSpeedRuns);
-    var mode = speedSort ? speedSort.value : "model";
+    var mode = speedSort ? speedSort.value : "avg";
     rows = sortRows(rows, mode);
 
     if (rows.length === 0) {
