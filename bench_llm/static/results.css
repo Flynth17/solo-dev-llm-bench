@@ -190,9 +190,27 @@
     border-radius: 999px;
 }
 
-/* Details button in the last column. */
+/* Details button in the last column.
+   Dark ghost override: .btn-secondary (shared.css) is a light-theme style that reads as
+   a bright block inside the dark shell, so it is fully overridden here. Ghost/outline
+   keeps per-row buttons calm; hover gives the clickable affordance. */
 .rs-detail-btn {
     white-space: nowrap;
+    background: transparent;
+    color: var(--rs-text-muted);
+    border: 1px solid var(--rs-border-soft);
+    padding: 0.3rem 0.85rem;
+    font-size: 0.82rem;
+    border-radius: 6px;
+}
+.rs-detail-btn:hover {
+    background: var(--rs-accent-hover);
+    color: var(--rs-text);
+    border-color: var(--rs-border);
+}
+.rs-detail-btn:focus-visible {
+    outline: 2px solid var(--rs-accent);
+    outline-offset: 1px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -242,6 +260,29 @@
     font-size: 1.1rem;
     font-weight: 700;
     color: #f4f8ff;
+}
+
+/* Modal Close button: same dark ghost language as .rs-detail-btn (its .btn-secondary
+   base is light-themed and clashes with the dark header). */
+#speed-detail-close {
+    background: transparent;
+    color: var(--rs-text-muted);
+    border: 1px solid var(--rs-border-soft);
+    padding: 0.35rem 1rem;
+    font-size: 0.85rem;
+}
+#speed-detail-close:hover {
+    background: var(--rs-accent-hover);
+    color: var(--rs-text);
+}
+
+/* <code> inside the modal (e.g. Run ID): the global light code chip from shared.css puts
+   near-white text on a near-white background here, making values invisible -- override
+   to a dark chip with readable text. */
+#speed-detail-content code {
+    background: var(--rs-surface-2);
+    color: var(--rs-text);
+    border: 1px solid var(--rs-border);
 }
 
 .rs-modal-body {
