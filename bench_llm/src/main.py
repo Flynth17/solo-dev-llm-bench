@@ -28,7 +28,7 @@ logger = logging.getLogger("solo_dev_llm_bench")
 # App setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Solo Dev LLM Bench", version="1.2.0")
+app = FastAPI(title="Solo Dev LLM Bench", version="1.3.0")
 
 # Serve static files from the static/ directory
 STATIC_DIR = Path(__file__).parent.parent / "static"
